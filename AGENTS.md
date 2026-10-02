@@ -22,6 +22,7 @@
 - Default to HWP-only. In the legacy COM prototype, generate PDF/DOCX only on an explicit request or opt-in test option; this does not add export to the new product scope.
 - Default requested edits to verified, recoverable, conflict-checked same-file saving; use Save As only when requested. Do not interpret a save request as permission to overwrite unrelated files. Keep the legacy COM prototype's new-output-only behavior separate from the native storage path.
 - Prevent unintended data loss and preserve previous versions for authorized replacement. Use synthetic fixtures for tests; never commit personal documents, Hancom engines, or security DLLs.
+- Use ignored `testdocs/` for local user-supplied HWP checks. Default to read-only inspection; never upload these files, print document content, or overwrite originals as part of testing. Synthetic fixtures remain separate and reproducible in CI.
 - Do not register MCP, change global Codex configuration, edit the registry, approve popups, or terminate unrelated Hancom sessions automatically.
 - Hancom Automation is an external Windows application, not a security sandbox. Use trusted documents only.
 - Native content checks do not certify visual fidelity; report unverified layout honestly.
