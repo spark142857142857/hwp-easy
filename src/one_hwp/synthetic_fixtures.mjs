@@ -1,0 +1,56 @@
+/** Internal synthetic test inputs only; never a document request handler. */
+export function syntheticFixture(HwpDocument, exportChecked, options = {}) {
+  const document = HwpDocument.createEmpty();
+  try {
+    document.createBlankDocument();
+    const paragraphs = options.paragraphs || ['첫 합성 문단', '중간 합성 문단', '마지막 합성 문단'];
+    document.insertText(0, 0, 0, paragraphs[0]);
+    for (let index = 1; index < paragraphs.length; index++) {
+      document.splitParagraph(0, index - 1, document.getParagraphLength(0, index - 1));
+      document.insertText(0, index, 0, paragraphs[index]);
+    }
+    if (options.bold) {
+      document.applyCharFormat(0, 0, 0, [...paragraphs[0]].length, JSON.stringify({ bold: true }));
+    }
+    if (options.mixed) document.applyCharFormat(0, 0, 0, 1, JSON.stringify({ bold: true }));
+    if (options.table !== false) {
+      const cells = options.cells || [['문항', '합성 답변 원문'], ['반복 문구', '반복 문구']];
+      const location = JSON.parse(document.createTable(0, 0, document.getParagraphLength(0, 0), cells.length, cells[0].length));
+      for (let row = 0; row < cells.length; row++) {
+        for (let column = 0; column < cells[0].length; column++) {
+          const cell = row * cells[0].length + column;
+          const cellParagraphs = cells[row][column].split('\n');
+          document.insertTextInCell(0, location.paraIdx, location.controlIdx, cell, 0, 0, cellParagraphs[0]);
+          for (let index = 1; index < cellParagraphs.length; index++) {
+            document.splitParagraphInCell(0, location.paraIdx, location.controlIdx, cell, index - 1,
+              document.getCellParagraphLength(0, location.paraIdx, location.controlIdx, cell, index - 1));
+            document.insertTextInCell(0, location.paraIdx, location.controlIdx, cell, index, 0, cellParagraphs[index]);
+          }
+          if (options.boldCell) document.applyCharFormatInCell(0, location.paraIdx, location.controlIdx,
+            cell, 0, 0, [...cells[row][column]].length, JSON.stringify({ bold: true }));
+        }
+      }
+      if (options.merged) document.mergeTableCells(0, location.paraIdx, location.controlIdx, 0, 0, 0, 1);
+    }
+    if (options.header) {
+      document.createHeaderFooter(0, true, 0);
+      document.insertTextInHeaderFooter(0, true, 0, 0, 0, '합성 머리말');
+    }
+    return exportChecked(document);
+  } finally { document.free(); }
+}
+
+export const corpus = [
+  { table: false }, {}, { paragraphs: ['반복 문구', '반복 문구', '끝'] },
+  { paragraphs: ['😀 한글', '수치 123.45', '끝 🚀'] }, { paragraphs: ['', '중간', '끝'] },
+  { paragraphs: ['가'.repeat(12_345), '중간', '끝'] }, { paragraphs: ['e\u0301 한글', '중간', '끝'] },
+  { bold: true }, { boldCell: true }, { merged: true },
+  { cells: [['', '원문'], ['질문', '답변']] }, { cells: [['😀', '답변 🚀'], ['한글', '보존']] },
+  { cells: [['질문1', '답변1'], ['질문2', '답변2'], ['질문3', '답변3']] },
+  { cells: [['가', '나', '다'], ['라', '마', '바']] },
+  { paragraphs: ['처음', '중간1', '중간2', '마지막'] },
+  { paragraphs: ['공백   유지', '\t탭 포함', '끝'] },
+  { paragraphs: ['영문 English', '日本語', '中文'] },
+  { cells: [['질문', '여러\n문단 답변'], ['보존', '끝']] },
+  { bold: true, boldCell: true }, { table: false, paragraphs: ['한 문단만'] },
+];

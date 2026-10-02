@@ -1,0 +1,225 @@
+/**
+ * In-memory browser/Node document contract. No paths, auth, uploads or storage.
+ * The host owns file transfer, isolation and conditional durable saves.
+ */
+import { createEngineApi } from '../../../src/one_hwp/rhwp_api.mjs';
+import { readHwp } from '../guard/container.mjs';
+import { GuardError, parseRecords } from '../guard/records.mjs';
+import { verifyPreservation } from '../guard/preservation.mjs';
+
+const fail = (code) => { throw new GuardError(code); };
+const copy = (value) => JSON.parse(JSON.stringify(value));
+const hashPattern = /^[0-9a-f]{64}$/;
+const limits = Object.freeze({ max_chars: 64000, max_blocks: 128, max_operations: 100,
+  max_new_chars: 500000, max_edit_chars: 100000 });
+function object(value, keys) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)
+    || ![Object.prototype, null].includes(Object.getPrototypeOf(value))
+    || Object.keys(value).some((key) => !keys.includes(key))) fail('INVALID_ARGUMENTS');
+}
+function positive(value, maximum) {
+  if (!Number.isSafeInteger(value) || value < 1 || value > maximum) fail('INVALID_LIMIT');
+  return value;
+}
+async function sha256(bytes) {
+  const hash = new Uint8Array(await crypto.subtle.digest('SHA-256', bytes));
+  return [...hash].map((byte) => byte.toString(16).padStart(2, '0')).join('');
+}
+function targetId(version, id) {
+  // Engine IDs are ASCII coordinates, matching the existing Python contract.
+  return `hwp5:${version}:${btoa(id).replaceAll('+', '-').replaceAll('/', '_').replace(/=+$/, '')}`;
+}
+
+// Only this pinned binding calls console.error with WASM strings. Suppress it
+// across SYNCHRONOUS engine calls, restoring in finally before any await/yield.
+// This is not a sandbox or proof of platform-wide log confidentiality.
+function quietEngine(action) {
+  const previous = console.error;
+  try {
+    console.error = () => {};
+    return action();
+  } catch {
+    fail('ENGINE_OPERATION_FAILED');
+  } finally { console.error = previous; }
+}
+
+function visibleText(payload) {
+  if (payload.length % 2) fail('TARGET_MAPPING_UNVERIFIED');
+  const view = new DataView(payload.buffer, payload.byteOffset, payload.byteLength);
+  const visible = new Uint8Array(payload.length);
+  let offset = 0, size = 0;
+  while (offset < payload.length) {
+    const code = view.getUint16(offset, true);
+    const extended = (code >= 1 && code <= 9) || code === 11 || code === 12 || (code >= 14 && code <= 23);
+    const width = extended ? 16 : 2;
+    if (offset + width > payload.length) fail('TARGET_MAPPING_UNVERIFIED');
+    if (code >= 32 || code === 9 || code === 10) {
+      visible[size++] = payload[offset]; visible[size++] = payload[offset + 1];
+    } else if (!extended && code !== 0 && code !== 13) fail('TARGET_MAPPING_UNVERIFIED');
+    offset += width;
+  }
+  try { return new TextDecoder('utf-16le', { fatal: true }).decode(visible.subarray(0, size)); }
+  catch { fail('TARGET_MAPPING_UNVERIFIED'); }
+}
+
+/** Full ordered coverage, not a first-match text search. Duplicates are valid. */
+export function mapRawTargets(decoded, blocks) {
+  const mapping = new Map();
+  let covered = 0;
+  for (let section = 0; section < decoded.profile.sections.length; section++) {
+    const paragraphs = [];
+    for (const record of parseRecords(decoded.streams.get(`BodyText/Section${section}`))) {
+      if (record.tag === 66) paragraphs.push({ level: record.level, text: '' });
+      if (record.tag === 67) {
+        if (!paragraphs.length) fail('TARGET_MAPPING_UNVERIFIED');
+        const last = paragraphs.at(-1);
+        if (record.level !== last.level + 1) fail('TARGET_MAPPING_UNVERIFIED');
+        last.text += visibleText(record.payload);
+      }
+    }
+    const sectionBlocks = blocks.filter((block) => block.section === section);
+    if (paragraphs.length !== sectionBlocks.length) fail('TARGET_MAPPING_UNVERIFIED');
+    sectionBlocks.forEach((block, index) => {
+      const raw = paragraphs[index];
+      // The supported profile has only root body lists and first-level cells.
+      if (raw.text !== block.text || raw.level !== (block.kind === 'paragraph' ? 0 : 2)
+        || mapping.has(block.id)) fail('TARGET_MAPPING_UNVERIFIED');
+      mapping.set(block.id, { section, record_index: index });
+    });
+    covered += paragraphs.length;
+  }
+  if (covered !== decoded.profile.paragraph_records || covered !== blocks.length) fail('TARGET_MAPPING_UNVERIFIED');
+  return mapping;
+}
+
+export function createDocumentEngine(HwpDocument) {
+  const api = createEngineApi(HwpDocument);
+  function inspect(bytes) {
+    return quietEngine(() => {
+      const document = api.openDocument(bytes);
+      try { return api.inspectDocument(document); }
+      finally { document.free(); }
+    });
+  }
+  async function open(input) {
+    if (!(input instanceof Uint8Array)) fail('INVALID_INPUT_BYTES');
+    // Bound before cloning or calling the WASM reader. Copy before async hashing.
+    if (input.length > 4 * 1024 * 1024) fail('INPUT_LIMIT_EXCEEDED');
+    const bytes = new Uint8Array(input);
+    const raw = readHwp(bytes), inspection = inspect(bytes);
+    let mapping, mappingVerified = false;
+    try { mapping = mapRawTargets(raw, inspection.blocks); mappingVerified = true; }
+    catch (error) {
+      if (!(error instanceof GuardError) || error.code !== 'TARGET_MAPPING_UNVERIFIED') throw error;
+    }
+    const unsupported = [...inspection.unsupported, ...raw.profile.unsupported];
+    const version = await sha256(bytes);
+    const targets = new Map(inspection.blocks.map((block) => [targetId(version, block.id), block]));
+    const editableProfile = mappingVerified && unsupported.length === 0;
+    const base = () => ({ source_sha256: version, scope: 'supported_paragraph_and_cell_blocks',
+      supported_blocks: inspection.blocks.length, table_count: inspection.tables.length,
+      all_content_supported: unsupported.length === 0 && mappingVerified,
+      unsupported: copy(unsupported), target_mapping_verified: mappingVerified,
+      warnings: [...inspection.warnings, ...(!mappingVerified ? ['Raw paragraph coverage could not be matched; editing is disabled.'] : [])],
+      layout_verified: false, persistence: 'none' });
+    function checkVersion(expected) {
+      if (typeof expected !== 'string' || !hashPattern.test(expected)) fail('INVALID_VERSION');
+      if (expected !== version) fail('VERSION_CONFLICT');
+    }
+    function read(options = {}) {
+      object(options, ['expected_sha256', 'cursor', 'max_chars', 'max_blocks']);
+      checkVersion(options.expected_sha256);
+      let budget = positive(options.max_chars ?? 8000, limits.max_chars);
+      const maximum = positive(options.max_blocks ?? 128, limits.max_blocks);
+      let index = 0, offset = 0;
+      if (options.cursor != null) {
+        const cursor = options.cursor;
+        object(cursor, ['sha256', 'block_index', 'offset']);
+        if (cursor.sha256 !== version) fail('CURSOR_VERSION_CONFLICT');
+        index = cursor.block_index; offset = cursor.offset;
+        const block = inspection.blocks[index];
+        if (!Number.isSafeInteger(index) || !block || !Number.isSafeInteger(offset)
+          || offset < 0 || offset > [...block.text].length) fail('INVALID_CURSOR');
+      }
+      const start = { block_index: index, offset }, fragments = [];
+      while (index < inspection.blocks.length && fragments.length < maximum) {
+        const block = inspection.blocks[index], text = [...block.text];
+        if (text.length && budget === 0) break;
+        const end = Math.min(text.length, offset + budget);
+        fragments.push({ ...copy(block), target_id: targetId(version, block.id),
+          editable: editableProfile && block.editable, text: text.slice(offset, end).join(''),
+          start_offset: offset, end_offset: end, total_chars: text.length, fragment_complete: end === text.length });
+        budget -= end - offset;
+        if (end < text.length) { offset = end; break; }
+        index += 1; offset = 0;
+      }
+      const complete = index === inspection.blocks.length;
+      return { ...base(), blocks: fragments, complete, content_complete: complete && editableProfile,
+        content_complete_scope: 'unmodified_cursor_chain_from_start_not_this_page_alone',
+        cursor_kind: 'validated_version_bound_position_not_authorization_or_issued_token',
+        offsets: 'unicode_code_points', page_starts_at: start,
+        next_cursor: complete ? null : { sha256: version, block_index: index, offset },
+        edit_expected_old_scope: 'whole_block' };
+    }
+    function plans(options) {
+      object(options, ['expected_sha256', 'operations']);
+      checkVersion(options.expected_sha256);
+      if (!editableProfile) fail('UNSUPPORTED_EDIT_PROFILE');
+      const operations = options.operations;
+      if (!Array.isArray(operations) || !operations.length || operations.length > limits.max_operations) fail('INVALID_OPERATIONS');
+      const seen = new Set(); let count = 0;
+      return operations.map((operation) => {
+        object(operation, ['target_id', 'expected_old', 'new_text']);
+        if (Object.keys(operation).length !== 3 || typeof operation.target_id !== 'string'
+          || typeof operation.expected_old !== 'string' || typeof operation.new_text !== 'string'
+          || !operation.new_text.isWellFormed() || /[\r\n\u0000-\u0008\u000b-\u001f]/.test(operation.new_text)) fail('INVALID_OPERATION');
+        const length = [...operation.new_text].length;
+        count += length;
+        if (length > limits.max_edit_chars || count > limits.max_new_chars) fail('EDIT_LIMIT_EXCEEDED');
+        if (seen.has(operation.target_id)) fail('DUPLICATE_TARGET');
+        seen.add(operation.target_id);
+        const block = targets.get(operation.target_id);
+        if (!block) fail('TARGET_VERSION_OR_ID_INVALID');
+        if (!block.editable || (!length && block.style.char_shape_ids[0] !== 0)) fail('TARGET_NOT_EDITABLE');
+        if (block.text !== operation.expected_old) fail('EXPECTED_OLD_MISMATCH');
+        return { target_id: block.id, expected_old: operation.expected_old, new_text: operation.new_text };
+      });
+    }
+    function plan(options) {
+      const operations = plans(options);
+      return { source_sha256: version, valid: true, operation_count: operations.length,
+        file_changed: false, persistence: 'none', layout_verified: false };
+    }
+    async function edit(options) {
+      const operations = plans(options);
+      const output = quietEngine(() => api.editDocument(bytes, operations));
+      const after = readHwp(output);
+      // api.editDocument already reopens and compares exact text/style/table model.
+      // Independently match raw AFTER text and nesting to that reopened model.
+      // The raw preservation canonicalizer intentionally does not prove text.
+      const afterMapping = mapRawTargets(after, inspect(output).blocks);
+      for (const [id, position] of mapping) {
+        const saved = afterMapping.get(id);
+        if (!saved || saved.section !== position.section || saved.record_index !== position.record_index) fail('TARGET_MAPPING_UNVERIFIED');
+      }
+      const preservation = verifyPreservation(raw.streams, after.streams,
+        operations.map((operation) => ({ ...mapping.get(operation.target_id), new_text: operation.new_text })));
+      const outputVersion = await sha256(output);
+      return { bytes: output, source_sha256: version, output_sha256: outputVersion,
+        content_verified: true, raw_preservation_verified: preservation.verified,
+        raw_preservation_scope: preservation.scope, layout_verified: false,
+        saved: false, persistence: 'none' };
+    }
+    function preview(options) {
+      object(options, ['expected_sha256', 'page']); checkVersion(options.expected_sha256);
+      const result = quietEngine(() => {
+        const document = api.openDocument(bytes);
+        try { return api.previewDocument(document, options.page); }
+        finally { document.free(); }
+      });
+      return { ...result, source_sha256: version };
+    }
+    return Object.freeze({ source_sha256: version, read, plan, edit, preview });
+  }
+  return Object.freeze({ open, limits });
+}

@@ -4,6 +4,7 @@ import { HwpDocument, initSync } from '@rhwp/core';
 import { readHwp } from '../guard/container.mjs';
 import { GuardError, parseRecords, profileSections } from '../guard/records.mjs';
 import { verifyPreservation } from '../guard/preservation.mjs';
+import { createDocumentEngine } from '../engine/document.mjs';
 const wasm = initSync({ module: wasmModule });
 const json = JSON.parse;
 const checked = (value) => { if (json(value).ok !== true) throw new Error('operation'); };
@@ -161,9 +162,64 @@ function sample(long = false) {
   } finally { reopened.free(); }
 }
 
-export function runProbe() {
+async function portableContractProbe() {
+  // This calls the general in-memory implementation, but accepts NO user input.
+  const created = HwpDocument.createEmpty(); let data;
+  try {
+    created.createBlankDocument();
+    created.insertText(0, 0, 0, '반복 문구');
+    created.splitParagraph(0, 0, created.getParagraphLength(0, 0));
+    created.insertText(0, 1, 0, '반복 문구');
+    const table = json(created.createTable(0, 0, created.getParagraphLength(0, 0), 1, 2));
+    invariant(table.ok === true);
+    created.insertTextInCell(0, table.paraIdx, table.controlIdx, 0, 0, 0, '반복 문구');
+    created.insertTextInCell(0, table.paraIdx, table.controlIdx, 1, 0, 0, '반복 문구');
+    data = exported(created);
+  } finally { created.free(); }
+  const engine = createDocumentEngine(HwpDocument), snapshot = await engine.open(data);
+  const all = []; let cursor = null, pages = 0, latest;
+  do {
+    latest = snapshot.read({ expected_sha256: snapshot.source_sha256, cursor, max_chars: 3 });
+    for (const block of latest.blocks) {
+      const prior = all.find((item) => item.id === block.id);
+      if (prior) prior.text += block.text; else all.push({ ...block });
+    }
+    cursor = latest.next_cursor;
+    invariant(++pages < 100);
+  } while (cursor);
+  invariant(latest.content_complete && latest.target_mapping_verified && pages > 1);
+  const block = all.findLast((item) => item.kind === 'paragraph' && item.editable && item.text);
+  const cell = all.find((item) => item.kind === 'cell' && item.editable && item.text);
+  invariant(block && cell && block.text === cell.text);
+  const operations = [block, cell].map((item, index) => ({ target_id: item.target_id,
+    expected_old: item.text, new_text: index ? '수정된 셀 😀' : '수정된 문단 😀' }));
+  const request = { expected_sha256: snapshot.source_sha256, operations };
+  invariant(snapshot.plan(request).file_changed === false);
+  expectGuardRejection(() => snapshot.plan({ ...request, expected_sha256: 'f'.repeat(64) }), 'VERSION_CONFLICT');
+  expectGuardRejection(() => snapshot.plan({ ...request, operations: [{ ...operations[0], expected_old: '' }] }), 'EXPECTED_OLD_MISMATCH');
+  expectGuardRejection(() => snapshot.plan({ ...request, operations: [operations[0], operations[0]] }), 'DUPLICATE_TARGET');
+  const result = await snapshot.edit(request);
+  invariant(result.content_verified && result.raw_preservation_verified && result.saved === false);
+  const reopened = await engine.open(result.bytes);
+  const after = reopened.read({ expected_sha256: reopened.source_sha256 });
+  invariant(after.complete && reopened.source_sha256 !== snapshot.source_sha256);
+  for (const item of all) {
+    const expected = item.id === block.id ? operations[0].new_text : item.id === cell.id ? operations[1].new_text : item.text;
+    invariant(after.blocks.find((candidate) => candidate.id === item.id)?.text === expected);
+  }
+  expectGuardRejection(() => reopened.plan({ expected_sha256: reopened.source_sha256, operations }), 'TARGET_VERSION_OR_ID_INVALID');
+  invariant(reopened.preview({ expected_sha256: reopened.source_sha256, page: 0 }).svg.includes('<svg'));
+  return { passed: true, scope: 'in_memory_fixed_synthetic_bytes_only', repeated_text_locations_distinguished: true,
+    paged_full_text: true, version_conflict_rejected: true, stale_target_rejected: true,
+    whole_old_value_checked: true, duplicate_target_rejected: true, content_and_raw_preservation_verified: true,
+    pages, persistence: 'none', saved: false, codex_cloud_client_verified: false };
+}
+
+export async function runProbe() {
   const cases = [sample(), sample(true)];
+  const portable = await portableContractProbe();
   return { engine: '@rhwp/core', engine_version: '0.8.6', engine_execution_passed: true,
+    portable_document_contract_probe: portable,
     raw_preservation_probe_passed: true, raw_preservation_probe_scope: rawProbeScope,
     raw_preservation_target_mapping_scope: rawTargetMappingScope,
     runtime: 'worker-esm-precompiled-wasm', cases, initial_wasm_memory_bytes: initialMemoryBytes,
@@ -171,10 +227,12 @@ export function runProbe() {
     hancom_required: false, cloud_documents_enabled: false, document_upload_supported: false,
     independent_preservation_guard_ported: false, storage_contract_verified: false,
     user_isolation_verified: false, layout_verified: false,
-    warning: 'Fixed synthetic engine/raw-preservation test only; not a production document editing service, general locator, or memory/layout/auth/storage certification.' };
+    warning: 'Fixed synthetic engine/raw-preservation and in-memory contract checks only; no production uploads, durable saves, Codex Cloud client, or memory/layout/auth/storage certification.' };
 }
 let cached;
-function probeOnce() { return cached ??= runProbe(); }
+function probeOnce() {
+  return cached ??= runProbe().catch((error) => { cached = undefined; throw error; });
+}
 function response(value, status = 200) {
   return Response.json(value, { status, headers: { 'Cache-Control': 'no-store',
     'X-Content-Type-Options': 'nosniff' } });
@@ -190,7 +248,7 @@ export default {
     // /runtime-probe is a fixed synthetic diagnostic behind the PRIVATE Site
     // access boundary. Platform service access conveys no user document rights.
     if (request.method === 'GET' && (path === '/' || path === '/runtime-probe')) {
-      try { return response(probeOnce()); }
+      try { return response(await probeOnce()); }
       catch { return response({ error: 'Synthetic engine runtime check failed' }, 500); }
     }
     if (path !== '/mcp') return response({ error: 'Not found; uploads are disabled' }, 404);
@@ -228,7 +286,7 @@ export default {
       || Array.isArray(rpc.params.arguments) || typeof rpc.params.arguments !== 'object'
       || Object.keys(rpc.params.arguments).length) return error(-32602, 'Invalid tool arguments');
     try {
-      const result = probeOnce();
+      const result = await probeOnce();
       return reply({ content: [{ type: 'text', text: JSON.stringify(result) }], structuredContent: result });
     } catch {
       return reply({ isError: true, content: [{ type: 'text', text: 'Synthetic engine runtime check failed' }] });

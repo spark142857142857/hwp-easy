@@ -14,6 +14,16 @@ try {
   assert.equal(report.raw_preservation_probe_scope, 'fixed_synthetic_fixtures_only');
   assert.equal(report.raw_preservation_target_mapping_scope, 'unique_old_visible_text_to_section0_tag66_ordinal');
   assert.equal(report.cloud_documents_enabled, false);
+  const portable = report.portable_document_contract_probe;
+  assert.equal(portable.passed, true);
+  assert.equal(portable.scope, 'in_memory_fixed_synthetic_bytes_only');
+  assert.equal(portable.saved, false);
+  assert.equal(portable.persistence, 'none');
+  assert.equal(portable.codex_cloud_client_verified, false);
+  assert.ok(portable.pages > 1);
+  for (const key of ['repeated_text_locations_distinguished', 'paged_full_text', 'version_conflict_rejected',
+    'stale_target_rejected', 'whole_old_value_checked', 'duplicate_target_rejected',
+    'content_and_raw_preservation_verified']) assert.equal(portable[key], true, key);
   for (const key of ['document_upload_supported', 'independent_preservation_guard_ported', 'storage_contract_verified',
     'user_isolation_verified', 'layout_verified', 'total_isolate_memory_measured']) assert.equal(report[key], false, key);
   assert.equal(report.cases.length, 2);

@@ -59,6 +59,15 @@ try {
   assert.equal(report.raw_preservation_probe_passed, true);
   assert.equal(report.raw_preservation_probe_scope, 'fixed_synthetic_fixtures_only');
   assert.equal(report.raw_preservation_target_mapping_scope, 'unique_old_visible_text_to_section0_tag66_ordinal');
+  const portable = report.portable_document_contract_probe;
+  assert.equal(portable.passed, true);
+  assert.equal(portable.scope, 'in_memory_fixed_synthetic_bytes_only');
+  assert.equal(portable.persistence, 'none');
+  assert.equal(portable.saved, false);
+  assert.equal(portable.codex_cloud_client_verified, false);
+  for (const key of ['repeated_text_locations_distinguished', 'paged_full_text', 'version_conflict_rejected',
+    'stale_target_rejected', 'whole_old_value_checked', 'duplicate_target_rejected',
+    'content_and_raw_preservation_verified']) assert.equal(portable[key], true, key);
   assert.equal(report.cases.length, 2);
   for (const scenario of report.cases) {
     assert.equal(scenario.raw_preservation_probe_passed, true);
