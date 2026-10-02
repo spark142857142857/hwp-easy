@@ -1,0 +1,6 @@
+interface:
+  display_name: "HWP Easy"
+  short_description: "명시 호출로 한글 양식을 최소 수정하고 새 파일로 내보내기"
+  default_prompt: "$one-hwp를 사용해 기존 한글 양식의 지정 항목만 수정하고 원본을 보존해 새 파일로 저장해줘."
+policy:
+  allow_implicit_invocation: false
