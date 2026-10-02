@@ -18,7 +18,7 @@ function boundedOptions(options) {
   if (!options || typeof options !== 'object' || Array.isArray(options)) fail('invalid_limits');
   const result = { ...defaults };
   for (const [key, value] of Object.entries(options)) {
-    if (!(key in defaults) || !Number.isSafeInteger(value) || value < 0 || value > defaults[key]) fail('invalid_limits');
+    if (!Object.hasOwn(defaults, key) || !Number.isSafeInteger(value) || value < 0 || value > defaults[key]) fail('invalid_limits');
     result[key] = value;
   }
   return result;

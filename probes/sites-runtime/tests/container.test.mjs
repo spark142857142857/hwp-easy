@@ -295,7 +295,8 @@ test('CFB/HWP options may only lower known integer budgets and reject non-object
   const bytes = writeCfb(hwpStreams());
   for (const options of [null, [], true, 0, 'synthetic', { unknown: 0 }, { maxBodyBytes: -1 },
     { maxBodyBytes: 0.5 }, { maxDocumentBytes: 4 * 1024 * 1024 + 1 },
-    { maxDirectoryEntries: 2049 }, { maxPathChars: 65537 }]) {
+    { maxDirectoryEntries: 2049 }, { maxPathChars: 65537 }, { constructor: 0 },
+    { toString: 0 }, JSON.parse('{"__proto__":0}')]) {
     guardCode(() => readCfb(bytes, options), 'invalid_limits');
     guardCode(() => readHwp(bytes, options), 'invalid_limits');
   }
