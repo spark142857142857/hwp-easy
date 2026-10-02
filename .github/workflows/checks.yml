@@ -30,8 +30,19 @@ jobs:
         with:
           python-version: ${{ matrix.python }}
       - name: Install source test dependencies
-        run: python -m pip install ".[mcp,pdf,hancom]" PyYAML
-      - name: Run regressions without native Hancom
+        run: python -m pip install ".[mcp,pdf,hancom,native]" PyYAML
+      - name: Set up pinned WASM host
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: '22'
+      - name: Install exact engine runtime without lifecycle scripts
+        run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Test real HWP WASM engine without Hancom
+        run: npm run test:engine
+      - name: Run regressions and real HWP MCP flows without Hancom
+        env:
+          HWP_EASY_NATIVE_TESTS: '1'
+          HWP_EASY_RUNTIME_DIR: ${{ github.workspace }}
         run: python -B -m unittest discover -s tests -p "test_*.py" -v
       - name: Check explicit-only skill policy
         run: python -c "import pathlib,yaml; p=pathlib.Path('.agents/skills/one-hwp/agents/openai.yaml'); assert yaml.safe_load(p.read_text(encoding='utf-8'))['policy']['allow_implicit_invocation'] is False"
