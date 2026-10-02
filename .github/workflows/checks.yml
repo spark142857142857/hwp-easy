@@ -48,3 +48,30 @@ jobs:
         run: python -c "import pathlib,yaml; p=pathlib.Path('.agents/skills/one-hwp/agents/openai.yaml'); assert yaml.safe_load(p.read_text(encoding='utf-8'))['policy']['allow_implicit_invocation'] is False"
       - name: Build Python package only
         run: python -m pip wheel --no-deps --wheel-dir dist .
+
+  worker-runtime:
+    name: Synthetic Worker / ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 5
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    defaults:
+      run:
+        working-directory: probes/sites-runtime
+    steps:
+      - name: Check out source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - name: Set up Worker test host
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: '22'
+      - name: Install exact synthetic probe dependencies
+        run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Build precompiled WASM module artifact
+        run: node scripts/build.mjs
+      - name: Verify synthetic HWP in actual workerd without Hancom
+        run: node scripts/check-workerd.mjs
