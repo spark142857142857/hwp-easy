@@ -1,0 +1,39 @@
+name: Source checks
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  regression:
+    name: Python ${{ matrix.python }} / ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 5
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            python: '3.11'
+          - os: windows-latest
+            python: '3.12'
+    steps:
+      - name: Check out source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - name: Set up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7
+        with:
+          python-version: ${{ matrix.python }}
+      - name: Install source test dependencies
+        run: python -m pip install ".[mcp,pdf,hancom]" PyYAML
+      - name: Run regressions without native Hancom
+        run: python -B -m unittest discover -s tests -p "test_*.py" -v
+      - name: Check explicit-only skill policy
+        run: python -c "import pathlib,yaml; p=pathlib.Path('.agents/skills/one-hwp/agents/openai.yaml'); assert yaml.safe_load(p.read_text(encoding='utf-8'))['policy']['allow_implicit_invocation'] is False"
+      - name: Build Python package only
+        run: python -m pip wheel --no-deps --wheel-dir dist .
