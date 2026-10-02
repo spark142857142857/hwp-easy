@@ -1,10 +1,12 @@
-// Runtime gate only. No uploaded bytes, document IDs, file paths or persistence.
+// Fixed diagnostics only. No personal upload/document API is exposed.
 import wasmModule from './rhwp_bg.wasm';
+import { env } from 'cloudflare:workers';
 import { HwpDocument, initSync } from '@rhwp/core';
 import { readHwp } from '../guard/container.mjs';
 import { GuardError, parseRecords, profileSections } from '../guard/records.mjs';
 import { verifyPreservation } from '../guard/preservation.mjs';
 import { createDocumentEngine } from '../engine/document.mjs';
+import { runStorageProbe } from '../storage/probe.mjs';
 const wasm = initSync({ module: wasmModule });
 const json = JSON.parse;
 const checked = (value) => { if (json(value).ok !== true) throw new Error('operation'); };
@@ -245,6 +247,24 @@ const tools = [{ name: 'hwp_runtime_probe',
 export default {
   async fetch(request) {
     const path = new URL(request.url).pathname;
+    if (path === '/storage-probe') {
+      if (request.method !== 'POST') return new Response(null, { status: 405, headers: { Allow: 'POST' } });
+      // Owner-private Sites boundary authorizes fixed diagnostics, not identity.
+      // No body or query input; every owner namespace is generated internally.
+      if (new URL(request.url).search) return response({ error: 'No input accepted' }, 400);
+      if (request.body) {
+        const reader = request.body.getReader();
+        try {
+          while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            if (value.byteLength) { await reader.cancel(); return response({ error: 'No input accepted' }, 400); }
+          }
+        } catch { return response({ error: 'No input accepted' }, 400); }
+      }
+      try { return response(await runStorageProbe(env.DB, env.BUCKET, createDocumentEngine(HwpDocument), HwpDocument)); }
+      catch { return response({ error: 'Synthetic storage check failed' }, 500); }
+    }
     // /runtime-probe is a fixed synthetic diagnostic behind the PRIVATE Site
     // access boundary. Platform service access conveys no user document rights.
     if (request.method === 'GET' && (path === '/' || path === '/runtime-probe')) {

@@ -3,11 +3,24 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "engines": { "node": ">=22" },
+  "engines": {
+    "node": ">=22"
+  },
   "scripts": {
     "build": "node scripts/build.mjs",
-    "test": "node --test tests/*.test.mjs && node scripts/check-workerd.mjs"
+    "test": "node --test tests/*.test.mjs && node scripts/build.mjs && node scripts/check-workerd.mjs && node scripts/check-storage.mjs",
+    "test:storage": "node scripts/check-storage.mjs",
+    "db:generate": "drizzle-kit generate"
   },
-  "dependencies": { "@rhwp/core": "0.8.6", "pako": "3.0.2" },
-  "devDependencies": { "esbuild": "0.28.2", "miniflare": "5.20261001.0-alpha", "cfb": "1.2.2" }
+  "dependencies": {
+    "@rhwp/core": "0.8.6",
+    "pako": "3.0.2"
+  },
+  "devDependencies": {
+    "cfb": "1.2.2",
+    "drizzle-kit": "0.31.11",
+    "drizzle-orm": "0.45.3",
+    "esbuild": "0.28.2",
+    "miniflare": "5.20261001.0-alpha"
+  }
 }

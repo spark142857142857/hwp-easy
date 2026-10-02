@@ -9,7 +9,7 @@ const version = JSON.parse(fs.readFileSync(path.join(path.dirname(core), 'packag
 if (version !== '0.8.6') throw new Error('Pinned engine version required');
 fs.mkdirSync('dist/server', { recursive: true });
 await build({ entryPoints: ['worker/index.js'], bundle: true, format: 'esm',
-  platform: 'browser', target: 'es2022', external: ['./rhwp_bg.wasm'],
+  platform: 'browser', target: 'es2022', external: ['./rhwp_bg.wasm', 'cloudflare:workers'],
   outfile: 'dist/server/index.js', legalComments: 'eof' });
 fs.copyFileSync(path.join(path.dirname(core), 'rhwp_bg.wasm'), 'dist/server/rhwp_bg.wasm');
 fs.copyFileSync(path.join(path.dirname(core), 'LICENSE'), 'dist/server/RHWP-LICENSE.txt');
@@ -19,4 +19,6 @@ if (fs.existsSync('.openai/hosting.json')) {
   fs.mkdirSync('dist/.openai', { recursive: true });
   fs.copyFileSync('.openai/hosting.json', 'dist/.openai/hosting.json');
 }
+fs.mkdirSync('dist/.openai', { recursive: true });
+fs.cpSync('drizzle', 'dist/.openai/drizzle', { recursive: true });
 console.log('Pinned ESM + precompiled WASM module artifact built');

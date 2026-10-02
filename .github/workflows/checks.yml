@@ -82,3 +82,5 @@ jobs:
         run: node scripts/build.mjs
       - name: Verify synthetic HWP in actual workerd without Hancom
         run: node scripts/check-workerd.mjs
+      - name: Verify durable D1 and R2 save, restart, restore and failure handling
+        run: node scripts/check-storage.mjs

@@ -34,7 +34,8 @@ try {
   assert.equal(site.pathname, '/');
   assert.equal(typeof token, 'string');
   assert(token.length > 0 && !/[\r\n\0]/.test(token));
-  const options = { redirect: 'manual', signal: AbortSignal.timeout(30000) };
+  // A fresh deadline per request; a long storage probe must not expire all later checks.
+  const options = { redirect: 'manual', get signal() { return AbortSignal.timeout(30000); } };
   const isDiagnostic = async (response) => {
     try { return (await response.json()).engine_execution_passed === true; } catch { return false; }
   };
@@ -50,6 +51,25 @@ try {
   assert([401, 403].includes(spoofed.status));
   assert.equal(await isDiagnostic(spoofed), false);
   const authorization = { 'OAI-Sites-Authorization': `Bearer ${token}` };
+  phase = 'storage_private_boundary';
+  for (const headers of [{}, { 'oai-authenticated-user-id': 'synthetic-untrusted-client' }]) {
+    const denied = await fetch(new URL('/storage-probe', site), { ...options, method: 'POST', headers });
+    assert([401, 403].includes(denied.status));
+  }
+  phase = 'authorized_synthetic_storage';
+  const storage = await fetch(new URL('/storage-probe', site), { ...options, method: 'POST', headers: authorization });
+  console.log(JSON.stringify({ phase, status: storage.status }));
+  assert.equal(storage.status, 200);
+  const storageReport = await storage.json();
+  assert.equal(storageReport.passed, true);
+  assert.equal(storageReport.persistence, 'd1-r2');
+  assert.equal(storageReport.synthetic_cleanup_complete, true);
+  assert.equal(storageReport.real_oauth_multi_user_verified, false);
+  assert.equal(storageReport.dots_client_verified, false);
+  assert.equal(storageReport.document_upload_supported, false);
+  const rejectedInput = await fetch(new URL('/storage-probe', site), { ...options, method: 'POST',
+    headers: authorization, body: 'No document input permitted' });
+  assert.equal(rejectedInput.status, 400);
   phase = 'authorized_synthetic_runtime';
   const runtime = await fetch(new URL('/runtime-probe', site), { ...options, headers: authorization });
   console.log(JSON.stringify({ phase, status: runtime.status, content_type: runtime.headers.get('content-type') }));
@@ -108,7 +128,7 @@ try {
     spoofed_identity_status: spoofed.status, mcp_service_initialize_status: init.status,
     remote_mcp_discovery_verified: discoveryVerified, user_mcp_connection_verified: false,
     checks: ['private_boundary', 'fixed_runtime', 'fixed_fixture_raw_preservation', 'raw_guard_fixed_negatives',
-      'service_does_not_bypass_user_auth'], report }));
+      'service_does_not_bypass_user_auth', 'fixed_durable_storage', 'storage_no_document_input'], report, storage_report: storageReport }));
 } catch {
   // Do not print exception objects, fetch request metadata or credential input.
   console.error(`Remote synthetic diagnostic failed at ${phase}; no credential or document data logged.`);
