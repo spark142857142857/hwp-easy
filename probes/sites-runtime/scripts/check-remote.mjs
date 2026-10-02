@@ -51,6 +51,13 @@ try {
   assert([401, 403].includes(spoofed.status));
   assert.equal(await isDiagnostic(spoofed), false);
   const authorization = { 'OAI-Sites-Authorization': `Bearer ${token}` };
+  phase = 'document_private_boundary';
+  const documentPath = '/documents/00000000-0000-4000-8000-000000000000/versions/00000000-0000-4000-8000-000000000000.hwp';
+  for (const headers of [{}, { ...authorization, 'oai-authenticated-user-id': 'synthetic-untrusted-client',
+    'oai-authenticated-user-email': 'untrusted@example.invalid' }]) {
+    const denied = await fetch(new URL(documentPath, site), { ...options, headers });
+    assert([401, 403].includes(denied.status));
+  }
   phase = 'storage_private_boundary';
   for (const headers of [{}, { 'oai-authenticated-user-id': 'synthetic-untrusted-client' }]) {
     const denied = await fetch(new URL('/storage-probe', site), { ...options, method: 'POST', headers });
@@ -112,11 +119,11 @@ try {
   // Sites may require user OAuth on /mcp even for initialization. A service
   // credential working on fixed diagnostics must not bypass that boundary.
   if (init.status === 200) {
-    assert.deepEqual((await init.json()).result.serverInfo, { name: 'HWP Easy', version: '0.2.0' });
+    assert.deepEqual((await init.json()).result.serverInfo, { name: 'HWP Easy', version: '0.3.0' });
     phase = 'mcp_discovery';
     const listing = await call('tools/list', {});
     const tools = (await listing.json()).result.tools;
-    assert.equal(tools.length, 1);
+    assert.equal(tools.length, 11);
     assert.equal(tools[0].name, 'hwp_runtime_probe');
     discoveryVerified = true;
     phase = 'service_without_user';
@@ -128,7 +135,7 @@ try {
     spoofed_identity_status: spoofed.status, mcp_service_initialize_status: init.status,
     remote_mcp_discovery_verified: discoveryVerified, user_mcp_connection_verified: false,
     checks: ['private_boundary', 'fixed_runtime', 'fixed_fixture_raw_preservation', 'raw_guard_fixed_negatives',
-      'service_does_not_bypass_user_auth', 'fixed_durable_storage', 'storage_no_document_input'], report, storage_report: storageReport }));
+      'service_does_not_bypass_user_auth', 'document_user_auth_required', 'fixed_durable_storage', 'storage_no_document_input'], report, storage_report: storageReport }));
 } catch {
   // Do not print exception objects, fetch request metadata or credential input.
   console.error(`Remote synthetic diagnostic failed at ${phase}; no credential or document data logged.`);
