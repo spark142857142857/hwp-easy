@@ -11,6 +11,12 @@ The native release tag with the same version number is not assumed to be the npm
 
 The Python wheel contains our adapter and bridge, not the npm runtime or a Hancom engine. Optional Python SDK/library and Node runtime distributions retain their own licenses. No Hancom engine, security DLL or format manual is redistributed by this repository. This notice does not relicense the repository.
 
+## Synthetic Worker dependencies
+
+The Worker guard uses `pako` **3.0.2**, pinned by `probes/sites-runtime/package-lock.json`, for low-level bounded raw-DEFLATE. Its declared license is `MIT AND Zlib`. Source provenance is `32be8f8e0ead1e6e8a74a1586a34f84734382d01` in [nodeca/pako](https://github.com/nodeca/pako/tree/32be8f8e0ead1e6e8a74a1586a34f84734382d01). The build copies the npm MIT license and the unchanged [pinned inflater Zlib notice](https://github.com/nodeca/pako/blob/32be8f8e0ead1e6e8a74a1586a34f84734382d01/src/zlib/inflate.mjs) into the deployment artifact. HWP Easy authors the surrounding validation adapter, not the inflater.
+
+`cfb` **1.2.2** is a dev-only synthetic fixture writer under Apache-2.0. It is not imported by the deployed Worker, used as its production reader, or bundled as a runtime dependency. esbuild and Miniflare are also build/test dependencies only; their installed package license notices remain applicable.
+
 ## @rhwp/core MIT license
 
 The following is the license shipped in the installed npm package:

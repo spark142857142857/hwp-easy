@@ -121,7 +121,25 @@ Windows의 Node 22.17.0/Python 3.13.2와 WSL2 Linux의 Node 22.23.3/Python 3.12.
 
 Python wheel을 빌드해 저장소 전용 venv에 설치한 뒤 소스 경로를 제외한 import, 명시적 npm 런타임 위치, 실제 HWP 읽기·균일 스타일 편집·재열기·SVG도 확인했다. Linux에서도 명시적 런타임 위치로 실제 capabilities를 조회했다. 테스트 의존성은 MCP 1.30.0과 olefile 0.47이었다. Linux 시험은 화면 없는 WSL에서 이루어졌다. 소스를 push한 뒤 [GitHub CI의 Windows·Ubuntu 검사](https://github.com/spark142857142857/hwp-easy/actions/runs/37011081648)도 모두 통과했다. Docker 컨테이너와 운영 문서 경로의 개별 클라이언트 설치 검증은 남아 있다.
 
-별도 [Sites 실행 시험](../probes/sites-runtime/README.md)은 실제 workerd와 비공개 Sites에서 동일 WASM의 합성 HWP 두 사례를 확인했다. 사용자가 설치한 시험용 플러그인의 도구를 Codex Desktop에서 실제 호출하고 성공 결과를 받았다. 이 직접 엔진 시험에는 Python의 독립 보존·저장 검사가 없으므로 본 로컬 경로와 동등한 운영용 원격 편집 기능으로 설명하지 않는다. 개인 문서의 업로드와 저장은 비활성 상태이며 다른 클라이언트 연결과 운영 권한·격리는 미검증이다.
+별도 [Sites 실행 시험](../probes/sites-runtime/README.md)은 실제 workerd와 비공개 Sites에서 동일 WASM의 합성 HWP 두 사례를 확인했다. 사용자가 설치한 시험용 플러그인의 도구를 Codex Desktop에서 실제 호출하고 성공 결과를 받았다. browser ESM의 독립 CFB·압축·레코드 보존 검사도 고정 합성 사례에 연결했지만, 일반 문서 대상·버전·저장 계약까지 이식한 것은 아니다. 본 로컬 경로와 동등한 운영용 원격 편집 기능으로 설명하지 않는다. 개인 문서의 업로드와 저장은 비활성 상태이며 다른 클라이언트 연결과 운영 권한·격리는 미검증이다.
+
+## 로컬 실사용 문서 검사
+
+사용자가 제공하는 HWP는 저장소의 `testdocs/`에 둔다. 폴더 전체를 Git에서 제외하며, 로컬 검사에 사용한 파일을 Site·CI·다른 원격 서비스로 전달하지 않는다. 합성 fixture는 이 폴더와 분리한다.
+
+내부 검사기는 최상위 `.hwp`만 읽어 구조와 미지원 요소 수를 확인한다. 편집·저장하지 않으며 검사 전후 원본 해시가 같은지 확인한다. 선택한 첫 페이지 미리보기도 메모리에서 생성 가능 여부만 확인한 뒤 버린다. 결과는 Git에서 제외되는 `outputs/local-corpus.json`에 쓰고, 파일명·경로·본문·SVG·해시값·upstream 오류 문구를 기록하지 않는다. 이는 적대적인 파일시스템 교체에 대한 OS sandbox나 시각적 배치 인증은 아니다.
+
+개발자용 실행은 아래와 같다. 일반 사용자는 Codex에 로컬 검사 요청을 하면 되며 이 명령을 익힐 필요가 없다.
+
+```powershell
+.\.venv\Scripts\python.exe -B tests\local_corpus.py
+# 첫 페이지만 메모리에서 렌더 가능 여부를 확인할 때
+.\.venv\Scripts\python.exe -B tests\local_corpus.py --preview
+```
+
+빈 폴더·부분 지원·실패는 종료 코드 2를 반환한다. `no_documents`는 호환성 검사 성공이 아니라 검사할 문서가 없다는 뜻이다. 실제 문서 편집 시험은 사용자가 요청한 경우에만 별도 복사본과 복구·검증 조건을 정하고 수행한다.
+
+로컬 검사기 추가 후 Windows 전체 Python 회귀는 259개 실행, 실패 0개와 환경별 skip 4개였다. 로컬 검사기 자체의 19개 회귀는 합성 파일·mock 기반이며 실제 `testdocs/`의 호환성 결과와 구분한다. 이 시점의 빈 폴더 검사 결과는 `no_documents`였다.
 
 ## 다음 제품 단계
 
