@@ -119,9 +119,9 @@ Python은 경로·백업·저장 실패·버전 충돌·조회 조각·재시도
 
 Windows의 Node 22.17.0/Python 3.13.2와 WSL2 Linux의 Node 22.23.3/Python 3.12.3에서 실제 검사를 통과했다. 두 환경 모두 Node 34개가 통과했다. Windows 전체 Python 회귀는 240개 실행, 실패 0개와 환경별 skip 3개였다. Linux에서는 새 경로의 Python 124개를 실행해 실패 0개, Windows 접합점 전용 skip 1개를 확인했다. 이 숫자는 서로 다른 테스트 범위이며 합산한 호환성 성공률이 아니다.
 
-Python wheel을 빌드해 저장소 전용 venv에 설치한 뒤 소스 경로를 제외한 import, 명시적 npm 런타임 위치, 실제 HWP 읽기·균일 스타일 편집·재열기·SVG도 확인했다. Linux에서도 명시적 런타임 위치로 실제 capabilities를 조회했다. 테스트 의존성은 MCP 1.30.0과 olefile 0.47이었다. Linux 시험은 화면 없는 WSL에서 이루어졌다. 소스를 push한 뒤 [GitHub CI의 Windows·Ubuntu 검사](https://github.com/spark142857142857/hwp-easy/actions/runs/37011081648)도 모두 통과했다. Docker 컨테이너와 개별 클라이언트 설치 검증은 남아 있다.
+Python wheel을 빌드해 저장소 전용 venv에 설치한 뒤 소스 경로를 제외한 import, 명시적 npm 런타임 위치, 실제 HWP 읽기·균일 스타일 편집·재열기·SVG도 확인했다. Linux에서도 명시적 런타임 위치로 실제 capabilities를 조회했다. 테스트 의존성은 MCP 1.30.0과 olefile 0.47이었다. Linux 시험은 화면 없는 WSL에서 이루어졌다. 소스를 push한 뒤 [GitHub CI의 Windows·Ubuntu 검사](https://github.com/spark142857142857/hwp-easy/actions/runs/37011081648)도 모두 통과했다. Docker 컨테이너와 운영 문서 경로의 개별 클라이언트 설치 검증은 남아 있다.
 
-별도 [Sites 실행 시험](../probes/sites-runtime/README.md)은 실제 workerd와 비공개 Sites에서 동일 WASM의 합성 HWP 두 사례를 확인했다. 이 직접 엔진 시험에는 Python의 독립 보존·저장 검사가 없으므로 본 로컬 경로와 동등한 운영용 원격 편집 기능으로 설명하지 않는다. 개인 문서의 업로드와 저장은 비활성 상태다.
+별도 [Sites 실행 시험](../probes/sites-runtime/README.md)은 실제 workerd와 비공개 Sites에서 동일 WASM의 합성 HWP 두 사례를 확인했다. 사용자가 설치한 시험용 플러그인의 도구를 Codex Desktop에서 실제 호출하고 성공 결과를 받았다. 이 직접 엔진 시험에는 Python의 독립 보존·저장 검사가 없으므로 본 로컬 경로와 동등한 운영용 원격 편집 기능으로 설명하지 않는다. 개인 문서의 업로드와 저장은 비활성 상태이며 다른 클라이언트 연결과 운영 권한·격리는 미검증이다.
 
 ## 다음 제품 단계
 
