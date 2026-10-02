@@ -1,0 +1,10 @@
+{
+  "name": "hwp-easy-engine-runtime",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Pinned WASM runtime for the HWP Easy document engine; not a user CLI",
+  "type": "module",
+  "engines": { "node": ">=22" },
+  "dependencies": { "@rhwp/core": "0.8.6" },
+  "scripts": { "test:engine": "node --test tests/test_rhwp_bridge.mjs" }
+}

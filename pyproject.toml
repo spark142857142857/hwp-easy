@@ -5,20 +5,25 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "one-hwp"
 version = "0.1.0"
-description = "Explicit local Hancom document inspection, guarded editing, and export"
-readme = "docs/development.md"
+description = "Agent-first HWP editing with a Hancom-free WASM engine and a preserved COM prototype"
+readme = "README.md"
 requires-python = ">=3.11"
 dependencies = []
 
 [project.optional-dependencies]
 hancom = ["pywin32>=306; platform_system == 'Windows'"]
 mcp = ["mcp>=1.26,<2"]
+native = ["olefile>=0.47,<1"]
 pdf = ["pypdf>=6,<7"]
 
 [project.scripts]
 one-hwp = "one_hwp.cli:main"
 one-hwp-mcp = "one_hwp.mcp_server:main"
+hwp-easy-mcp = "one_hwp.native_mcp:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]
 include = ["one_hwp*"]
+
+[tool.setuptools.package-data]
+one_hwp = ["*.mjs"]
