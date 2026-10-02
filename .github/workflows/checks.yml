@@ -39,6 +39,11 @@ jobs:
         run: npm ci --ignore-scripts --no-audit --no-fund
       - name: Test real HWP WASM engine without Hancom
         run: npm run test:engine
+      - name: Install exact browser guard test dependencies
+        working-directory: probes/sites-runtime
+        run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Compare browser guard with independent Python reader and canonical checks
+        run: node probes/sites-runtime/scripts/check-python-guard.mjs
       - name: Run regressions and real HWP MCP flows without Hancom
         env:
           HWP_EASY_NATIVE_TESTS: '1'
@@ -71,6 +76,8 @@ jobs:
           node-version: '22'
       - name: Install exact synthetic probe dependencies
         run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Verify independent byte record and container guards
+        run: node --test tests/*.test.mjs
       - name: Build precompiled WASM module artifact
         run: node scripts/build.mjs
       - name: Verify synthetic HWP in actual workerd without Hancom

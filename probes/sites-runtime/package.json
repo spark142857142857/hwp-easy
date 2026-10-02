@@ -6,8 +6,8 @@
   "engines": { "node": ">=22" },
   "scripts": {
     "build": "node scripts/build.mjs",
-    "test": "node scripts/check-workerd.mjs"
+    "test": "node --test tests/*.test.mjs && node scripts/check-workerd.mjs"
   },
-  "dependencies": { "@rhwp/core": "0.8.6" },
-  "devDependencies": { "esbuild": "0.28.2", "miniflare": "5.20261001.0-alpha" }
+  "dependencies": { "@rhwp/core": "0.8.6", "pako": "3.0.2" },
+  "devDependencies": { "esbuild": "0.28.2", "miniflare": "5.20261001.0-alpha", "cfb": "1.2.2" }
 }

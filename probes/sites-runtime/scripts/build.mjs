@@ -13,6 +13,8 @@ await build({ entryPoints: ['worker/index.js'], bundle: true, format: 'esm',
   outfile: 'dist/server/index.js', legalComments: 'eof' });
 fs.copyFileSync(path.join(path.dirname(core), 'rhwp_bg.wasm'), 'dist/server/rhwp_bg.wasm');
 fs.copyFileSync(path.join(path.dirname(core), 'LICENSE'), 'dist/server/RHWP-LICENSE.txt');
+fs.copyFileSync(path.join(path.dirname(require.resolve('pako/package.json')), 'LICENSE'), 'dist/server/PAKO-LICENSE.txt');
+fs.copyFileSync('guard/ZLIB-LICENSE.txt', 'dist/server/PAKO-ZLIB-LICENSE.txt');
 if (fs.existsSync('.openai/hosting.json')) {
   fs.mkdirSync('dist/.openai', { recursive: true });
   fs.copyFileSync('.openai/hosting.json', 'dist/.openai/hosting.json');

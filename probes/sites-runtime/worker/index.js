@@ -1,6 +1,9 @@
 // Runtime gate only. No uploaded bytes, document IDs, file paths or persistence.
 import wasmModule from './rhwp_bg.wasm';
 import { HwpDocument, initSync } from '@rhwp/core';
+import { readHwp } from '../guard/container.mjs';
+import { GuardError, parseRecords, profileSections } from '../guard/records.mjs';
+import { verifyPreservation } from '../guard/preservation.mjs';
 const wasm = initSync({ module: wasmModule });
 const json = JSON.parse;
 const checked = (value) => { if (json(value).ok !== true) throw new Error('operation'); };
@@ -8,6 +11,84 @@ const invariant = (condition) => { if (!condition) throw new Error('verification
 const memoryBytes = () => wasm.memory.buffer.byteLength;
 const initialMemoryBytes = memoryBytes();
 const isHwp = (data) => [...data.slice(0, 8)].join(',') === '208,207,17,224,161,177,26,225';
+const rawProbeScope = 'fixed_synthetic_fixtures_only';
+const rawTargetMappingScope = 'unique_old_visible_text_to_section0_tag66_ordinal';
+
+// This deliberately fixture-only mapping is NOT a product document locator.
+// It accepts just Section0 of our built-in documents, with all raw paragraph
+// headers covered by the already-fixed body+cell expectations below.
+function visibleRecordText(payload) {
+  invariant(payload.length % 2 === 0);
+  const view = new DataView(payload.buffer, payload.byteOffset, payload.byteLength);
+  const visible = new Uint8Array(payload.length);
+  let offset = 0, size = 0;
+  while (offset < payload.length) {
+    const code = view.getUint16(offset, true);
+    const extended = (code >= 1 && code <= 9) || code === 11 || code === 12 || (code >= 14 && code <= 23);
+    const width = extended ? 16 : 2;
+    invariant(offset + width <= payload.length);
+    if (code >= 32) { visible[size++] = payload[offset]; visible[size++] = payload[offset + 1]; }
+    offset += width;
+  }
+  return new TextDecoder('utf-16le', { fatal: true }).decode(visible.subarray(0, size));
+}
+function fixtureTargets(decoded, oldBody, oldCell, paragraphCount) {
+  invariant(decoded.profile.unsupported.length === 0 && decoded.profile.sections.length === 1);
+  const paragraphs = [];
+  let paragraph = -1;
+  for (const record of parseRecords(decoded.streams.get('BodyText/Section0'))) {
+    if (record.tag === 66) { paragraph += 1; paragraphs.push(''); }
+    if (record.tag === 67) { invariant(paragraph >= 0); paragraphs[paragraph] += visibleRecordText(record.payload); }
+  }
+  invariant(paragraphs.length === paragraphCount && paragraphs.length === decoded.profile.paragraph_records);
+  const targets = [oldBody, oldCell].map((oldText, index) => {
+    const matches = paragraphs.flatMap((text, record_index) => text === oldText ? [record_index] : []);
+    invariant(matches.length === 1);
+    return { section: 0, record_index: matches[0],
+      new_text: index === 0 ? '수정된 합성 문단 😀' : '수정된 합성 답변' };
+  });
+  invariant(targets[0].record_index !== targets[1].record_index);
+  return targets;
+}
+function encodeRecords(records) {
+  const length = records.reduce((sum, record) => sum + record.payload.length + (record.payload.length >= 0xfff ? 8 : 4), 0);
+  const bytes = new Uint8Array(length), view = new DataView(bytes.buffer);
+  let offset = 0;
+  for (const record of records) {
+    const size = record.payload.length, extended = size >= 0xfff;
+    view.setUint32(offset, record.tag | (record.level << 10) | ((extended ? 0xfff : size) << 20), true);
+    offset += 4;
+    if (extended) { view.setUint32(offset, size, true); offset += 4; }
+    bytes.set(record.payload, offset); offset += size;
+  }
+  return bytes;
+}
+function expectGuardRejection(action, code) {
+  let rejected = false;
+  try { action(); } catch (error) { rejected = error instanceof GuardError && error.code === code; }
+  invariant(rejected);
+}
+function preservationNegatives(before, after, targets) {
+  const records = [...parseRecords(after.get('BodyText/Section0'))];
+  const targeted = new Set(targets.map((target) => target.record_index));
+  let paragraph = -1, drop = -1;
+  records.forEach((record, index) => {
+    if (record.tag === 66) paragraph += 1;
+    if (drop < 0 && record.tag === 69 && paragraph >= 0 && !targeted.has(paragraph)) drop = index;
+  });
+  invariant(drop >= 0);
+  // Negatives mutate decoded synthetic maps, not stored or uploaded documents.
+  const lost = new Map(after);
+  lost.set('BodyText/Section0', encodeRecords(records.filter((_, index) => index !== drop)));
+  expectGuardRejection(() => verifyPreservation(before, lost, targets), 'PRESERVATION_MISMATCH');
+  const unknown = new Map(before);
+  unknown.set('BodyText/Section0', encodeRecords([...parseRecords(before.get('BodyText/Section0')),
+    { tag: 1000, level: 0, payload: new Uint8Array() }]));
+  invariant(profileSections(unknown).unsupported.length === 1);
+  // Refuse this fixed unsupported input without asking the WASM writer to edit.
+  expectGuardRejection(() => verifyPreservation(unknown, unknown, targets), 'UNSUPPORTED_BODY_RECORD');
+  return { non_target_record_loss_rejected: true, unknown_record_edit_rejected: true };
+}
 function cells(document, table) {
   return Array.from({ length: 4 }, (_, cell) => document.getTextInCell(0, table.paraIdx, table.controlIdx, cell, 0, 0,
     document.getCellParagraphLength(0, table.paraIdx, table.controlIdx, cell, 0)));
@@ -43,7 +124,7 @@ function sample(long = false) {
   } finally { created.free(); }
   invariant(isHwp(data));
   const loaded = new HwpDocument(data);
-  let output, before, target;
+  let output, before, target, rawBefore, rawTargets;
   try {
     before = body(loaded);
     invariant(JSON.stringify(before) === JSON.stringify([original[0], '', '', '', original[1], original[2]]));
@@ -53,6 +134,8 @@ function sample(long = false) {
     const oldCell = loaded.getTextInCell(0, table.paraIdx, table.controlIdx, 1, 0, 0,
       loaded.getCellParagraphLength(0, table.paraIdx, table.controlIdx, 1, 0));
     invariant(oldCell === '합성 답변 원문');
+    rawBefore = readHwp(data);
+    rawTargets = fixtureTargets(rawBefore, original[1], oldCell, before.length + originalCells.length);
     checked(loaded.deleteText(0, target, 0, [...original[1]].length));
     checked(loaded.insertText(0, target, 0, '수정된 합성 문단 😀'));
     checked(loaded.deleteTextInCell(0, table.paraIdx, table.controlIdx, 1, 0, 0, [...oldCell].length));
@@ -60,6 +143,10 @@ function sample(long = false) {
     output = exported(loaded);
   } finally { loaded.free(); }
   invariant(isHwp(output));
+  const rawAfter = readHwp(output);
+  const preservation = verifyPreservation(rawBefore.streams, rawAfter.streams, rawTargets);
+  invariant(preservation.verified === true && preservation.text_verified === false && preservation.layout_verified === false);
+  const negativeChecks = preservationNegatives(rawBefore.streams, rawAfter.streams, rawTargets);
   const reopened = new HwpDocument(output);
   try {
     const expected = [...before];
@@ -69,19 +156,22 @@ function sample(long = false) {
     invariant(reopened.renderPageSvg(0).includes('<svg'));
     return { scenario: long ? '100k_Korean_paragraph_and_table' : 'three_paragraphs_and_table',
       input_bytes: data.length, output_bytes: output.length,
-      binary_hwp: true, read_edit_reopen_svg: true, wasm_memory_bytes: memoryBytes() };
+      binary_hwp: true, read_edit_reopen_svg: true, raw_preservation_probe_passed: true,
+      raw_preservation_negative_checks: negativeChecks, wasm_memory_bytes: memoryBytes() };
   } finally { reopened.free(); }
 }
 
 export function runProbe() {
   const cases = [sample(), sample(true)];
   return { engine: '@rhwp/core', engine_version: '0.8.6', engine_execution_passed: true,
+    raw_preservation_probe_passed: true, raw_preservation_probe_scope: rawProbeScope,
+    raw_preservation_target_mapping_scope: rawTargetMappingScope,
     runtime: 'worker-esm-precompiled-wasm', cases, initial_wasm_memory_bytes: initialMemoryBytes,
     retained_wasm_memory_bytes: memoryBytes(), total_isolate_memory_measured: false,
     hancom_required: false, cloud_documents_enabled: false, document_upload_supported: false,
     independent_preservation_guard_ported: false, storage_contract_verified: false,
     user_isolation_verified: false, layout_verified: false,
-    warning: 'Synthetic runtime test only; not a production document editing service.' };
+    warning: 'Fixed synthetic engine/raw-preservation test only; not a production document editing service, general locator, or memory/layout/auth/storage certification.' };
 }
 let cached;
 function probeOnce() { return cached ??= runProbe(); }
@@ -128,7 +218,7 @@ export default {
     const reply = (result) => response({ jsonrpc: '2.0', id: rpc.id, result });
     const error = (code, message) => response({ jsonrpc: '2.0', id: rpc.id, error: { code, message } });
     if (rpc.method === 'initialize') return reply({ protocolVersion: '2025-06-18', capabilities: { tools: {} },
-      serverInfo: { name: 'hwp-easy-runtime-probe', version: '0.1.0' },
+      serverInfo: { name: 'HWP Easy', version: '0.2.0' },
       instructions: 'Synthetic runtime checks only. Personal documents, storage, editing and uploads are not enabled.' });
     if (rpc.method === 'ping') return reply({});
     if (rpc.method === 'tools/list') return reply({ tools });

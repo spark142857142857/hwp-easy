@@ -56,7 +56,18 @@ try {
   assert.equal(runtime.status, 200);
   const report = await runtime.json();
   assert.equal(report.engine_execution_passed, true);
+  assert.equal(report.raw_preservation_probe_passed, true);
+  assert.equal(report.raw_preservation_probe_scope, 'fixed_synthetic_fixtures_only');
+  assert.equal(report.raw_preservation_target_mapping_scope, 'unique_old_visible_text_to_section0_tag66_ordinal');
   assert.equal(report.cases.length, 2);
+  for (const scenario of report.cases) {
+    assert.equal(scenario.raw_preservation_probe_passed, true);
+    assert.equal(scenario.binary_hwp, true);
+    assert.equal(scenario.read_edit_reopen_svg, true);
+    assert.deepEqual(scenario.raw_preservation_negative_checks, {
+      non_target_record_loss_rejected: true, unknown_record_edit_rejected: true,
+    });
+  }
   for (const key of ['cloud_documents_enabled', 'document_upload_supported', 'independent_preservation_guard_ported',
     'storage_contract_verified', 'user_isolation_verified', 'layout_verified', 'total_isolate_memory_measured']) {
     assert.equal(report[key], false, key);
@@ -66,13 +77,13 @@ try {
     body: JSON.stringify({ jsonrpc: '2.0', id: 1, method, params }) });
   phase = 'mcp_initialize';
   const init = await call('initialize', { protocolVersion: '2025-06-18', capabilities: {},
-    clientInfo: { name: 'synthetic-service-diagnostic', version: '0.1.0' } });
+    clientInfo: { name: 'synthetic-service-diagnostic', version: '0.2.0' } });
   console.log(JSON.stringify({ phase, status: init.status }));
   let discoveryVerified = false;
   // Sites may require user OAuth on /mcp even for initialization. A service
   // credential working on fixed diagnostics must not bypass that boundary.
   if (init.status === 200) {
-    assert.equal((await init.json()).result.serverInfo.name, 'hwp-easy-runtime-probe');
+    assert.deepEqual((await init.json()).result.serverInfo, { name: 'HWP Easy', version: '0.2.0' });
     phase = 'mcp_discovery';
     const listing = await call('tools/list', {});
     const tools = (await listing.json()).result.tools;
@@ -87,7 +98,8 @@ try {
   console.log(JSON.stringify({ remote_sites: 'passed', anonymous_status: anonymous.status,
     spoofed_identity_status: spoofed.status, mcp_service_initialize_status: init.status,
     remote_mcp_discovery_verified: discoveryVerified, user_mcp_connection_verified: false,
-    checks: ['private_boundary', 'fixed_runtime', 'service_does_not_bypass_user_auth'], report }));
+    checks: ['private_boundary', 'fixed_runtime', 'fixed_fixture_raw_preservation', 'raw_guard_fixed_negatives',
+      'service_does_not_bypass_user_auth'], report }));
 } catch {
   // Do not print exception objects, fetch request metadata or credential input.
   console.error(`Remote synthetic diagnostic failed at ${phase}; no credential or document data logged.`);
