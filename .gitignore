@@ -1,0 +1,15 @@
+__pycache__/
+*.pyc
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.venv/
+work/
+outputs/
+build/
+dist/
+src/*.egg-info/
+.one-hwp-*/
+*.log
+Thumbs.db
+.DS_Store
