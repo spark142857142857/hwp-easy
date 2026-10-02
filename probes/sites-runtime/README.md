@@ -1,6 +1,6 @@
 # Sites 합성 HWP 실행 검증
 
-한글 없는 엔진과 독립 레코드 검사가 실제 Worker 환경에서 실행되는지 확인하는 개발용 시험이다. **사용자의 HWP를 읽고 편집하는 서비스가 아니다.** 고정 합성 문서에 좁은 보존 검사를 붙였으며, 문서 업로드·사용자 저장소·운영용 편집 도구는 포함하지 않는다. 표시 이름은 `HWP Easy`이며 기존 비공개 Site와 연결을 유지한다.
+한글 없는 엔진과 독립 레코드 검사, D1/R2 저장 계약이 실제 Worker 환경에서 실행되는지 확인하는 개발용 시험이다. **사용자의 HWP를 읽고 편집하는 서비스가 아니다.** 고정 합성 문서에 좁은 보존 검사와 저장 시험을 붙였으며, 사용자 업로드·운영용 편집 도구는 포함하지 않는다. 표시 이름은 `HWP Easy`이며 기존 비공개 Site와 연결을 유지한다.
 
 ## 확인한 결과
 
@@ -28,6 +28,14 @@ Node와 browser ESM은 `src/one_hwp/rhwp_api.mjs`의 같은 읽기·편집·미�
 
 ## 재현 방법
 
+2026년 10월 3일에는 내부 `storage/service.mjs`와 `storage/store.mjs`를 추가했다. 실제 로컬 workerd의 D1/R2에서 저장 후 runtime을 폐기·재생성해 현재 HWP·이전 버전·요청 영수증을 다시 읽고 복구했다. 동시 저장의 한 요청만 성공하는 조건부 저장, 복구 후 새 UUID 버전과 ABA 차단, 같은 요청 재시도도 검사한다. 주입한 DB 응답 유실·영수증 조회 실패·R2 실패와 실제 blob 손상은 고정 오류로 처리한다. 이 실패 주입과 합성 소유자 범위 시험은 실제 OAuth 두 사용자 격리·운영 장애 인증이 아니다. [저장 계약](../../docs/durable-storage.md)
+
+새 `/storage-probe`는 개인 문서나 소유자 인수를 받지 않는 개발용 POST 진단이다. 생성한 두 합성 이름공간만 쓰고 시험 종료 시 그 데이터만 지운다. 기존 MCP의 읽기 전용 `hwp_runtime_probe`에 쓰기 부작용을 추가하지 않았다. 메모리 내 진단과 별개로 실행하며 사용자 업로드와 운영 지원 플래그는 아직 꺼져 있다.
+
+같은 날 비공개 버전 5에서도 D1/R2 합성 저장·편집·이전 버전 조회·복구·동시 저장·재시도를 통과했고 시험 데이터 정리가 완료됐다. 비로그인과 임의 신원 헤더의 storage 요청은 401, 입력 본문은 400이었다. 기존 메모리 내 runtime 진단도 200으로 통과했으며 서비스 자격의 MCP 초기화는 여전히 401이다. 첫 통합 진단은 전체 요청에 공유한 30초 deadline이 뒤의 runtime 호출을 취소해 실패했고, 개발용 검사기에 요청별 deadline을 적용한 재검사에서는 전 과정이 통과했다. 소유자 전용 접근, 플러그인 ID·주소는 유지했다.
+
+이 세션의 설치된 MCP 연결은 여전히 `UNAUTHORIZED`와 재인증 요청을 반환했다. 표시 이름 변경과 이 오류의 인과관계는 확인하지 못했다. 사용자가 Plugins의 기존 HWP Easy 연결을 다시 인증한 뒤 실제 도구 왕복을 확인해야 한다. 고정 합성 HTTP 진단 성공을 사용자 연결 성공으로 대체하지 않는다. Dots 지원 목표와 실제 검증 기준은 [클라이언트 안내](../../docs/codex-cloud.md)에 반영했다.
+
 Node.js 22 이상을 준비한 개발자가 이 디렉터리에서 실행한다. 일반 사용자 설치 절차가 아니다.
 
 ```powershell
@@ -35,9 +43,10 @@ npm ci --ignore-scripts --no-audit --no-fund
 node scripts/build.mjs
 node --test tests/*.test.mjs
 node scripts/check-workerd.mjs
+node scripts/check-storage.mjs
 ```
 
-`build.mjs`는 고정 패키지 버전을 확인하고 ESM, WASM과 라이선스 고지를 `dist/server`에 작성한다. pako 3.0.2의 low-level inflater를 런타임에 사용한다. cfb 1.2.2는 합성 시험 파일을 만드는 개발 의존성일 뿐 배포 parser가 아니다. Miniflare와 esbuild도 시험·빌드 의존성이지 배포 런타임 의존성이 아니다. Miniflare 5 alpha의 공식 V4 옵션 변환기로 명시적 ESM/WASM 모듈 목록을 전달한다.
+`build.mjs`는 고정 패키지 버전을 확인하고 ESM, WASM과 라이선스 고지를 `dist/server`에 작성한다. 생성된 migration은 `dist/.openai/drizzle`에도 포함한다. Drizzle은 개발용 스키마·migration 생성에만 사용하고 Worker 쿼리는 raw D1 prepared statement와 원자적인 batch를 사용한다. pako 3.0.2의 low-level inflater를 런타임에 사용한다. cfb 1.2.2는 합성 시험 파일을 만드는 개발 의존성일 뿐 배포 parser가 아니다. Miniflare와 esbuild도 시험·빌드 의존성이지 배포 런타임 의존성이 아니다. Miniflare 5 alpha의 공식 V4 옵션 변환기로 명시적 ESM/WASM 모듈 목록을 전달한다.
 
 로컬 검사는 실제 workerd 엔진 실행 외에 MCP 초기화·정확히 한 도구의 조회, **모의 신원 헤더의 존재 검사**, 빈 인수만 허용하는 호출과 upload 거부를 확인한다. 신원 헤더를 직접 넣은 로컬 검사를 실제 사용자 인증이나 tenant 격리 검증으로 해석하지 않는다.
 
@@ -60,7 +69,7 @@ Windows에서는 워크플로 프로세스에만 Git Bash의 PATH와 `TAR_OPTION
 1. 좁은 browser ESM 검사기를 운영 문서의 편집 계약에 연결하고 Python과의 대조·실사용 호환성 검사를 확대한다. 현재 고정 합성 성공과 bounded parser만으로 Python 로컬 경로 전체와 동등하다고 표시하지 않는다.
 2. 메모리 내 계약을 사용자 파일 저장층에 연결한다. 현재 위치 cursor는 버전과 경계만 검증하는 조회 위치이며 인증이나 지속 세션이 아니다. 동기 WASM은 `Promise.race`만으로 중단할 수 없으므로 실제 자원 한도도 검사한다. 공통 모델 검사는 4,096블록·UTF-16 text 합계 2,000,000 code units를 넘으면 거부하고, 누적 style scan 800,000자를 넘는 대상은 읽기 전용으로 표시한다. 요청당 새 텍스트 합계는 500,000 코드 포인트로 제한한다. 이 한도들은 전체 isolate 메모리·CPU 인증이 아니다.
 3. upstream의 `console.error` binding을 확인했고 동기 엔진 호출 중에만 차단해 `finally`에서 복원한다. 엔진의 문자열 오류는 고정 오류 코드로 감싼다. 비동기 await 중에는 전역 logger를 변경하지 않는다. 이 검사와 회귀가 원격 플랫폼 전체의 원문 없는 로그 정책·보관 정책 인증을 뜻하지 않으며 실제 배포의 로그 경계도 확인해야 한다.
-4. 사용자·문서별 immutable version, 기대 현재 버전에 대한 조건부 갱신, 복구·재시도·삭제 정책과 파일 전달을 실제 저장소에서 검사한다. 로컬 파일 교체나 프로세스 lock을 분산 저장 계약으로 재사용하지 않는다.
+4. 내부 D1/R2의 immutable 버전·조건부 갱신·복구·재시도는 고정 합성 문서로 검증했다. 사용자 파일 전달·운영 삭제 정책·실제 OAuth 격리는 추가 검사한다. 로컬 파일 교체나 프로세스 lock을 분산 저장 계약으로 재사용하지 않는다.
 
 이 조건 전에는 `cloud_documents_enabled`, `document_upload_supported`, `independent_preservation_guard_ported`, `storage_contract_verified`, `user_isolation_verified`, `layout_verified`, `total_isolate_memory_measured`를 모두 `false`로 유지한다. 별도 외부 호스팅으로의 변경은 사용자와 확인한다.
 
