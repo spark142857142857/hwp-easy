@@ -1,4 +1,6 @@
-# HWP Easy 개발자 안내
+# 이전 Windows COM 프로토타입 개발자 안내
+
+> 이 문서는 보존된 `one-hwp` / `one-hwp-mcp` COM 경로의 안내입니다. 한글 없는 새 HWP 처리와 `hwp-easy-mcp`는 [새 엔진 개발자 안내](native-engine.md)를 따릅니다. 아래 CLI·새 출력 전용 저장·선택 내보내기는 새 제품의 기본 사용 흐름이나 기능 범위가 아닙니다.
 
 이 문서는 개발자·기여자를 위한 소스 실행 안내입니다. 일반 사용자를 위한 설치형 앱과 연결 마법사는 아직 제공되지 않습니다. 제품 설명은 [README](../README.md), 예정된 설치·배포 방식은 [배포 계획](distribution-plan.md)을 참고하세요. 내부 Python 패키지와 CLI 이름은 기존 호환성을 위해 `one-hwp`를 유지합니다.
 
