@@ -9,6 +9,7 @@ import { syntheticFixture, corpus } from '../../../src/one_hwp/synthetic_fixture
 import { createDocumentEngine, mapRawTargets } from '../engine/document.mjs';
 import { readHwp } from '../guard/container.mjs';
 import { GuardError } from '../guard/records.mjs';
+import { withCheckedDeflateTrailers } from './trailer-fixtures.mjs';
 const require = createRequire(import.meta.url);
 initSync({ module: fs.readFileSync(new URL('./rhwp_bg.wasm', pathToFileURL(require.resolve('@rhwp/core')))) });
 const api = createEngineApi(HwpDocument), engine = createDocumentEngine(HwpDocument);
@@ -57,6 +58,25 @@ for (const [index, spec] of corpus.entries()) {
     assert.equal(reopened.preview(options(reopened, { page: 0 })).svg.includes('<svg'), true);
   });
 }
+
+test('checked compression trailers survive the read-plan-edit-reopen preservation flow', async () => {
+  const bytes = withCheckedDeflateTrailers(fixture()), original = bytes.slice();
+  const snapshot = await engine.open(bytes), before = readAll(snapshot, 97);
+  assert.equal(before.last.content_complete, true);
+  const targets = ['paragraph', 'cell'].map((kind) => before.blocks.find((b) => b.kind === kind && b.editable));
+  const operations = targets.map((b, i) => ({ target_id: b.target_id, expected_old: b.text, new_text: `합성 꼬리 수정 ${i} 😀` }));
+  assert.equal(snapshot.plan(options(snapshot, { operations })).file_changed, false);
+  const result = await snapshot.edit(options(snapshot, { operations }));
+  assert.equal(result.raw_preservation_verified, true);
+  assert.equal(result.content_verified, true);
+  assert.equal(result.layout_verified, false);
+  const reopened = await engine.open(result.bytes), after = readAll(reopened).blocks;
+  assert.deepEqual(after.map(({ id, text }) => ({ id, text })), before.blocks.map(({ id, text }) => {
+    const index = targets.findIndex((b) => b.id === id);
+    return { id, text: index < 0 ? text : `합성 꼬리 수정 ${index} 😀` };
+  }));
+  assert.deepEqual(bytes, original);
+});
 
 test('long paragraph chain includes the tail without splitting surrogate pairs', async () => {
   const text = '😀가'.repeat(35000) + '끝';

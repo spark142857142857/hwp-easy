@@ -9,11 +9,13 @@ import fs from 'node:fs';
 import { createRequire } from 'node:module';
 import { pathToFileURL } from 'node:url';
 import test from 'node:test';
+import { gzipSync } from 'node:zlib';
 import CFB from 'cfb';
 import { deflate, deflateRaw } from 'pako';
 import { HwpDocument, initSync } from '@rhwp/core';
 import { inflateBoundedRaw, readCfb, readHwp } from '../guard/container.mjs';
 import { GuardError } from '../guard/records.mjs';
+import { withCheckedDeflateTrailers } from './trailer-fixtures.mjs';
 
 const FREE = 0xffffffff, END = 0xfffffffe, FAT = 0xfffffffd;
 const require = createRequire(import.meta.url);
@@ -109,6 +111,7 @@ function entry(bytes, name) {
   return found;
 }
 function changed(bytes, mutate) { const copy = bytes.slice(); mutate(copy); return copy; }
+const withCheckedTrailer = (raw) => new Uint8Array(gzipSync(raw).subarray(10));
 function v4EmptyCfb() {
   const bytes = new Uint8Array(3 * 4096);
   bytes.set(Uint8Array.of(208, 207, 17, 224, 161, 177, 26, 225));
@@ -159,6 +162,35 @@ test('raw inflate validates byte-array input and finite nonnegative bounded limi
     guardCode(() => inflateBoundedRaw(Uint8Array.of(3, 0), limit), 'invalid_limits');
   }
   guardCode(() => inflateBoundedRaw('synthetic', 5), 'invalid_limits');
+});
+test('raw inflate validates a gzip-style CRC32/ISIZE trailer without a gzip header', () => {
+  for (const raw of [new Uint8Array(), new TextEncoder().encode('123456789'),
+    new Uint8Array(3 * 16384 + 37).fill(0x41)]) {
+    const encoded = withCheckedTrailer(raw), copy = encoded.slice();
+    assert.deepEqual(inflateBoundedRaw(encoded, raw.length), raw);
+    assert.deepEqual(inflateBoundedRaw(encoded, raw.length, { allowZeroPadding: false }), raw);
+    assert.deepEqual(encoded, copy);
+    const offset = concat(Uint8Array.of(9), encoded, Uint8Array.of(9)).subarray(1, encoded.length + 1);
+    assert.deepEqual(inflateBoundedRaw(offset, raw.length), raw);
+  }
+  const known = withCheckedTrailer(new TextEncoder().encode('123456789'));
+  assert.equal(get32(known, known.length - 8), 0xcbf43926);
+});
+test('raw inflate rejects corrupt CRC, ISIZE, swapped byte order, and extra trailer bytes', () => {
+  const raw = new TextEncoder().encode('synthetic trailer'), encoded = withCheckedTrailer(raw);
+  const crcOffset = encoded.length - 8, sizeOffset = encoded.length - 4;
+  const cases = [changed(encoded, (x) => x[crcOffset] ^= 1),
+    changed(encoded, (x) => x[sizeOffset] ^= 1),
+    changed(encoded, (x) => view(x).setUint32(crcOffset, get32(x, crcOffset), false)),
+    encoded.slice(0, -1), concat(encoded, Uint8Array.of(0)), concat(encoded, deflateRaw(raw))];
+  for (const bytes of cases) guardCode(() => inflateBoundedRaw(bytes, raw.length), 'compressed_tail');
+});
+test('valid CRC32/ISIZE trailer does not bypass decompression size or end-of-stream checks', () => {
+  const raw = new Uint8Array(1000).fill(0x41), encoded = withCheckedTrailer(raw);
+  guardCode(() => inflateBoundedRaw(encoded, raw.length - 1), 'expanded_limit');
+  for (const bytes of [encoded.slice(0, 1), encoded.slice(0, -9)]) {
+    guardCode(() => inflateBoundedRaw(bytes, raw.length), 'invalid_deflate');
+  }
 });
 
 const cfbFixture = () => writeCfb(new Map([
@@ -326,6 +358,27 @@ test('HWP body accepts compressed zero padding, but DocInfo accepts no compresse
   assert.equal(readHwp(writeCfb(streams)).profile.paragraph_records, 1);
   streams.set('DocInfo', concat(streams.get('DocInfo'), Uint8Array.of(0)));
   guardCode(() => readHwp(writeCfb(streams)), 'compressed_tail');
+});
+test('HWP accepts only verified CRC32/ISIZE trailers on body and DocInfo streams', () => {
+  const streams = hwpStreams(), expected = readHwp(writeCfb(streams));
+  set32(streams.get('FileHeader'), 36, 1);
+  for (const name of ['DocInfo', 'BodyText/Section0']) streams.set(name, withCheckedTrailer(streams.get(name)));
+  const actual = readHwp(writeCfb(streams));
+  assert.deepEqual(actual.profile, expected.profile);
+  assert.deepEqual(actual.streams.get('DocInfo'), expected.streams.get('DocInfo'));
+  for (const name of ['DocInfo', 'BodyText/Section0']) {
+    const corrupt = new Map(streams);
+    corrupt.set(name, changed(corrupt.get(name), (x) => x[x.length - 8] ^= 1));
+    guardCode(() => readHwp(writeCfb(corrupt)), 'compressed_tail');
+  }
+});
+test('generated real HWP keeps decoded streams and profile with checked trailers', () => {
+  // Buffer.slice aliases its input; the fixture mutator must still make a copy.
+  const source = Buffer.from(realHwp({ table: true }).bytes), copy = Buffer.from(source);
+  const expected = readHwp(source), actual = readHwp(withCheckedDeflateTrailers(source));
+  assert.deepEqual(actual.profile, expected.profile);
+  assert.deepEqual(actual.streams, expected.streams);
+  assert.deepEqual(source, copy);
 });
 test('HWP rejects nonzero body compressed tails and truncated compressed DocInfo', () => {
   const streams = hwpStreams({ compressed: true });

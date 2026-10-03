@@ -147,10 +147,10 @@ class RhwpEngine:
         """
         limit = 8 * 1024 * 1024
         if compressed:
-            decoder = zlib.decompressobj(-15)
-            data = decoder.decompress(data, limit + 1)
-            if len(data) > limit or not decoder.eof or decoder.unused_data:
-                raise EngineError("DocInfo exceeds the supported validation profile")
+            try:
+                data = RhwpEngine._inflate(data, True, limit, allow_zero_padding=False)
+            except UnsupportedDocumentError as exc:
+                raise EngineError("DocInfo exceeds the supported validation profile") from exc
         if len(data) < 30 or len(data) > limit:
             raise EngineError("Unsupported DocInfo record layout")
         header = struct.unpack_from("<I", data)[0]
@@ -277,12 +277,32 @@ class RhwpEngine:
         return self._call("preview", data, page=page)
 
     @staticmethod
-    def _inflate(data: bytes, compressed: bool, limit: int) -> bytes:
+    def _inflate(data: bytes, compressed: bool, limit: int, *,
+                 allow_zero_padding: bool = True) -> bytes:
+        """Bound raw DEFLATE and verify an optional CRC32/ISIZE trailer.
+
+        Some local HWP streams have the 8-byte little-endian gzip trailer,
+        without a gzip header. Recognize only its exact length AND both values
+        (RFC 1952 section 2.3.1), not arbitrary tail bytes or another member.
+        Existing zero padding remains body-only; DocInfo opts out explicitly.
+        CRC32 detects accidental corruption, not authenticity or edit safety.
+        """
         if compressed:
             decoder = zlib.decompressobj(-15)
-            expanded = decoder.decompress(data, limit + 1)
-            if len(expanded) > limit or not decoder.eof or any(decoder.unused_data):
+            try:
+                expanded = decoder.decompress(data, limit + 1)
+            except zlib.error as exc:
+                raise UnsupportedDocumentError("Invalid HWP compressed stream") from exc
+            if len(expanded) > limit:
                 raise UnsupportedDocumentError("Compressed HWP stream exceeds the supported processing profile")
+            if not decoder.eof:
+                raise UnsupportedDocumentError("Truncated HWP compressed stream")
+            tail = decoder.unused_data
+            if tail:
+                verified_trailer = (len(tail) == 8
+                    and struct.unpack("<II", tail) == (zlib.crc32(expanded), len(expanded) & 0xffffffff))
+                if not verified_trailer and not (allow_zero_padding and not any(tail)):
+                    raise UnsupportedDocumentError("Unverified HWP compressed stream tail")
             return expanded
         if len(data) > limit:
             raise UnsupportedDocumentError("HWP stream exceeds the supported processing limit")

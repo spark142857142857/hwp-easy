@@ -8,6 +8,7 @@ Passing these tests does not certify all named HWP records or visual fidelity.
 from __future__ import annotations
 
 import base64
+import gzip
 import hashlib
 import importlib.util
 import io
@@ -41,6 +42,62 @@ def record(tag, payload=b"", *, level=0, extended=False):
 def deflate(data, level=9):
     codec = zlib.compressobj(level, zlib.DEFLATED, -15)
     return codec.compress(data) + codec.flush()
+
+
+class BoundedInflateTests(unittest.TestCase):
+    """Standard-library generated streams, not user document fixtures."""
+
+    def test_exact_crc32_and_size_trailer_with_empty_and_multichunk_output(self):
+        for raw in (b"", b"123456789", "한글 😀".encode() * 10_000):
+            # Fixed gzip header removed; independent gzip writer supplies CRC/size.
+            packed = gzip.compress(raw, mtime=0)[10:]
+            with self.subTest(size=len(raw)):
+                self.assertEqual(RhwpEngine._inflate(packed, True, len(raw)), raw)
+                self.assertEqual(RhwpEngine._inflate(packed, True, len(raw),
+                                                   allow_zero_padding=False), raw)
+        self.assertEqual(struct.unpack("<I", gzip.compress(b"123456789", mtime=0)[-8:-4])[0],
+                         0xcbf43926)
+
+    def test_crc_size_byte_order_and_extra_data_are_checked(self):
+        raw = b"SYNTHETIC_TRAILER_PAYLOAD"
+        packed = gzip.compress(raw, mtime=0)[10:]
+        crc, size = struct.unpack("<II", packed[-8:])
+        tails = (struct.pack("<II", crc ^ 1, size), struct.pack("<II", crc, size + 1),
+                 struct.pack(">II", crc, size), packed[-8:-1], packed[-8:] + b"\0",
+                 packed[-8:] + deflate(b"second member"))
+        for tail in tails:
+            with self.subTest(length=len(tail)), self.assertRaisesRegex(UnsupportedDocumentError, "stream tail"):
+                RhwpEngine._inflate(packed[:-8] + tail, True, len(raw))
+
+    def test_limit_and_end_marker_are_not_bypassed_by_a_valid_trailer(self):
+        raw = b"a" * 1000
+        packed = gzip.compress(raw, mtime=0)[10:]
+        with self.assertRaises(UnsupportedDocumentError):
+            RhwpEngine._inflate(packed, True, len(raw) - 1)
+        for truncated in (packed[:1], packed[:-9]):
+            with self.subTest(length=len(truncated)), self.assertRaises(UnsupportedDocumentError):
+                RhwpEngine._inflate(truncated, True, len(raw))
+
+    def test_old_body_padding_and_strict_docinfo_padding_remain_distinct(self):
+        raw = b"synthetic"
+        packed = deflate(raw)
+        self.assertEqual(RhwpEngine._inflate(packed + b"\0" * 16, True, len(raw)), raw)
+        with self.assertRaises(UnsupportedDocumentError):
+            RhwpEngine._inflate(packed + b"\0" * 16, True, len(raw), allow_zero_padding=False)
+        with self.assertRaises(UnsupportedDocumentError):
+            RhwpEngine._inflate(packed + deflate(b"other"), True, len(raw))
+
+    def test_docinfo_checks_trailer_before_canonicalizing_caret(self):
+        raw = record(16, b"\0" * 26)
+        packed = gzip.compress(raw, mtime=0)[10:]
+        self.assertEqual(RhwpEngine._docinfo_content(packed, True), raw)
+        changed = packed[:-8] + bytes([packed[-8] ^ 1]) + packed[-7:]
+        with self.assertRaises(EngineError):
+            RhwpEngine._docinfo_content(changed, True)
+
+    def test_invalid_deflate_is_a_fixed_safe_adapter_error(self):
+        with self.assertRaisesRegex(UnsupportedDocumentError, "^Invalid HWP compressed stream$"):
+            RhwpEngine._inflate(b"\x07", True, 100)
 
 
 class _EnvelopeContainer:

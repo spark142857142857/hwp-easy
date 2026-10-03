@@ -37,6 +37,7 @@ MALFORMED_ERRORS = frozenset({
     "HWP body streams are missing", "Truncated HWP body record",
     "Truncated extended HWP record", "HWP body record exceeds its stream",
     "HWP section sequence is incomplete", "Malformed HWP body record stream",
+    "Invalid HWP compressed stream", "Truncated HWP compressed stream",
 })
 
 

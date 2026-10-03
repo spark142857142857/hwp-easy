@@ -108,12 +108,13 @@ $env:HWP_EASY_RUNTIME_DIR = (Get-Location).Path
 
 ```powershell
 npm run test:engine
+$env:PYTHONPATH = (Join-Path (Get-Location).Path "src")
 $env:HWP_EASY_NATIVE_TESTS = "1"
 $env:HWP_EASY_RUNTIME_DIR = (Get-Location).Path
 .\.venv\Scripts\python.exe -B -m unittest discover -s tests -p "test_*.py" -v
 ```
 
-Linux에서는 `HWP_EASY_NATIVE_TESTS=1 HWP_EASY_RUNTIME_DIR="$PWD" .venv/bin/python -B -m unittest discover -s tests -p 'test_*.py' -v`로 실행한다. Python 패키지와 선택 의존성이 해당 venv에 설치돼 있어야 SDK의 별도 stdio 자식 프로세스도 모듈을 찾을 수 있다. opt-in 환경변수가 없으면 실제 WASM 통합만 건너뛰고 모의·경로·검증 회귀는 계속 실행한다.
+Linux에서는 `PYTHONPATH="$PWD/src" HWP_EASY_NATIVE_TESTS=1 HWP_EASY_RUNTIME_DIR="$PWD" .venv/bin/python -B -m unittest discover -s tests -p 'test_*.py' -v`로 실행한다. `PYTHONPATH`는 이미 설치한 이전 wheel이 아니라 현재 수정 중인 소스를 검사하기 위한 설정이다. Python 패키지와 선택 의존성이 해당 venv에 설치돼 있어야 SDK의 별도 stdio 자식 프로세스도 모듈을 찾을 수 있다. opt-in 환경변수가 없으면 실제 WASM 통합만 건너뛰고 모의·경로·검증 회귀는 계속 실행한다.
 
 Node 34개 검사는 합성 HWP 20종의 읽기·무수정 저장·재열기·SVG, 10개 편집 사례 및 4개 미지원/오류 사례로 구성된다. 코퍼스에는 한글, 다국어, emoji, 긴 문단, 빈 값, 반복 문구, 균일 bold, 일반/병합 표와 한 셀의 여러 문단이 포함된다. 혼합 스타일과 머리말은 거부 사례이며, 여러 구역·필드·이미지가 포함된 실사용 양식 전체를 검증한 코퍼스가 아니다.
 
@@ -134,6 +135,7 @@ Python wheel을 빌드해 저장소 전용 venv에 설치한 뒤 소스 경로�
 개발자용 실행은 아래와 같다. 일반 사용자는 Codex에 로컬 검사 요청을 하면 되며 이 명령을 익힐 필요가 없다.
 
 ```powershell
+$env:PYTHONPATH = (Join-Path (Get-Location).Path "src")
 .\.venv\Scripts\python.exe -B tests\local_corpus.py
 # 첫 페이지만 메모리에서 렌더 가능 여부를 확인할 때
 .\.venv\Scripts\python.exe -B tests\local_corpus.py --preview
@@ -142,6 +144,16 @@ Python wheel을 빌드해 저장소 전용 venv에 설치한 뒤 소스 경로�
 빈 폴더·부분 지원·실패는 종료 코드 2를 반환한다. `no_documents`는 호환성 검사 성공이 아니라 검사할 문서가 없다는 뜻이다. 실제 문서 편집 시험은 사용자가 요청한 경우에만 별도 복사본과 복구·검증 조건을 정하고 수행한다.
 
 로컬 검사기 추가 후 Windows 전체 Python 회귀는 259개 실행, 실패 0개와 환경별 skip 4개였다. 로컬 검사기 자체의 19개 회귀는 합성 파일·mock 기반이며 실제 `testdocs/`의 호환성 결과와 구분한다. 이 시점의 빈 폴더 검사 결과는 `no_documents`였다.
+
+### 2026-10-03 압축 꼬리 호환성 개선
+
+로컬 HWP 3개는 raw-DEFLATE 본문 뒤에 8바이트가 더 있어 기존 검사가 거부했다. 세 파일 모두 이 값은 압축 해제된 본문의 CRC32와 길이에 정확히 일치했다. [RFC 1952 §2.3.1](https://www.rfc-editor.org/rfc/rfc1952#section-2.3.1)의 little-endian CRC32/ISIZE 구조와 같지만 gzip 헤더는 없다. 이 관찰을 모든 HWP 압축 스트림의 표준 형식이라고 일반화하지 않는다.
+
+현재 소스는 **꼬리 길이가 정확히 8바이트이고 CRC32·길이가 모두 일치하는 경우**를 본문과 DocInfo에 허용한다. 기존 본문 전용 zero padding 허용은 유지하고 DocInfo에는 적용하지 않는다. 임의 nonzero 꼬리, 잘못된 CRC/길이, 추가 압축 member, 잘린 deflate와 압축 해제 한도 초과를 계속 거부한다. CRC는 인증이나 안전한 편집의 증거가 아니며 레코드·비대상 스트림·편집 보존 검사를 대체하지 않는다.
+
+읽기 전용 재검사에서 HWP 3개 모두 읽기와 첫 페이지 SVG 생성이 가능했다. 2개는 현재 읽기 profile 안에 있고 1개는 미지원 control이 1개 있어 부분 조회로 표시된다. 세 원본의 검사 전후 해시는 같았고 이름·본문·해시값은 보고서에 남기지 않았다. HWPX 3개는 대상에서 제외했다. 이 결과는 개인 문서의 편집·저장 성공이나 시각적 배치 인증이 아니다.
+
+Windows 현재 소스의 Python 266개 회귀는 실패 0개, skip 4개였고 기존 Node 엔진 34개도 통과했다. 꼬리를 넣은 실제 **합성 HWP**로 본문·셀의 계획 검사, 기본 저장·재시도·재열기·비대상 보존과 정확한 원본 복구를 검사했다. browser ESM 검사기도 같은 규칙을 사용하며 Node 214개 회귀와 로컬 실제 workerd/D1/R2의 해당 합성 문서 왕복을 통과했다. Worker 신원은 모의 헤더이므로 실제 OAuth·Cloud 클라이언트 연결 검증이 아니다. 이 개선은 로컬 소스 기준이며 기존 wheel의 재설치나 비공개 Site 재게시까지 완료한 결과는 아니다.
 
 ## 다음 제품 단계
 

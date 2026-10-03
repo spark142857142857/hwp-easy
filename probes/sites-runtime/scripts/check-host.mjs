@@ -11,6 +11,7 @@ import { createDocumentEngine } from '../engine/document.mjs';
 import { createHostApp } from '../host/app.mjs';
 import { authenticatedOwner, boundedBytes, fetchInputFile } from '../host/transfer.mjs';
 import { applyTestMigrations } from './migrations.mjs';
+import { withCheckedDeflateTrailers } from '../tests/trailer-fixtures.mjs';
 const require = createRequire(import.meta.url);
 initSync({ module: fs.readFileSync(new URL('./rhwp_bg.wasm', pathToFileURL(require.resolve('@rhwp/core')))) });
 const origin = 'https://probe.invalid';
@@ -118,6 +119,49 @@ try {
   assert(history.versions.some((v) => v.version_id === history.current_version));
   checks.push('protected_passive_svg_unverified_layout', 'restore_as_new_revision');
   checks.push('version_list_explicitly_marks_current_not_last_timestamp');
+
+  // A generated HWP with verified CRC32/ISIZE footers must pass the actual
+  // workerd path, not just the Node engine and independent guard unit tests.
+  const footerBytes = withCheckedDeflateTrailers(syntheticFixture(HwpDocument, api.exportChecked));
+  const footerOriginal = footerBytes.slice();
+  const footerAccepted = await upload({}, headers, footerBytes);
+  assert.equal(footerAccepted.status, 200);
+  const footerCreated = await footerAccepted.json();
+  const footerArgs = { document_id: footerCreated.document_id, version_id: footerCreated.version_id };
+  const footerBefore = await call('hwp_read', footerArgs);
+  assert.equal(footerBefore.content_complete, true);
+  const footerTargets = ['paragraph', 'cell'].map((kind) =>
+    footerBefore.blocks.find((b) => b.kind === kind && b.editable && b.text));
+  assert(footerTargets.every(Boolean));
+  const footerEdits = { expected_sha256: footerCreated.sha256, operations: footerTargets.map((b, i) => ({
+    target_id: b.target_id, expected_old: b.text, new_text: `검증 꼬리 수정 ${i}` })) };
+  assert.equal((await call('hwp_plan', { ...footerArgs, ...footerEdits })).file_changed, false);
+  const footerEdited = await call('hwp_edit', { document_id: footerCreated.document_id,
+    expected_version: footerCreated.version_id, request_id: crypto.randomUUID(), ...footerEdits });
+  assert.equal(footerEdited.saved, true);
+  assert.equal(footerEdited.raw_preservation_verified, true);
+  assert.equal(footerEdited.layout_verified, false);
+  const footerLink = await call('hwp_download', { document_id: footerCreated.document_id,
+    version_id: footerEdited.version_id });
+  const footerDownload = await mf.dispatchFetch(footerLink.download_url, { headers });
+  assert.equal(footerDownload.status, 200);
+  const footerOutput = new Uint8Array(await footerDownload.arrayBuffer());
+  const footerReopened = (await engine.open(footerOutput)).read({ expected_sha256: footerEdited.sha256 });
+  for (const target of footerBefore.blocks) {
+    const operation = footerEdits.operations.find((op) => op.target_id === target.target_id);
+    assert.equal(footerReopened.blocks.find((b) => b.id === target.id).text, operation?.new_text ?? target.text);
+  }
+  const footerRestored = await call('hwp_restore', { document_id: footerCreated.document_id,
+    expected_version: footerEdited.version_id, source_version: footerCreated.version_id,
+    request_id: crypto.randomUUID() });
+  assert.equal(footerRestored.sha256, footerCreated.sha256);
+  const footerRestoreLink = await call('hwp_download', { document_id: footerCreated.document_id,
+    version_id: footerRestored.version_id });
+  const footerRestoreDownload = await mf.dispatchFetch(footerRestoreLink.download_url, { headers });
+  assert.equal(footerRestoreDownload.status, 200);
+  assert.deepEqual(new Uint8Array(await footerRestoreDownload.arrayBuffer()), footerOriginal);
+  assert.deepEqual(footerBytes, footerOriginal);
+  checks.push('checked_crc32_isize_hwp_real_workerd_read_plan_edit_download_reopen_restore');
 
   const countBefore = (await db.prepare('SELECT count(*) AS n FROM hwp_documents').first()).n;
   const workflow = await call('hwp_workflow_probe', {});

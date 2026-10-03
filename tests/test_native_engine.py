@@ -40,6 +40,20 @@ def real_fixture(options=None):
     return base64.b64decode(process.stdout, validate=True)
 
 
+def real_trailer_fixture():
+    """Extend only stream padding of a generated HWP, using Node's stdlib."""
+    script = (
+        'import {fixture} from "./tests/rhwp_fixtures.mjs";'
+        'import {withCheckedDeflateTrailers} from "./probes/sites-runtime/tests/trailer-fixtures.mjs";'
+        'const bytes=withCheckedDeflateTrailers(fixture());'
+        'process.stdout.write(Buffer.from(bytes).toString("base64"));'
+    )
+    process = subprocess.run([shutil.which("node"), "--input-type=module", "-e", script],
+                             text=True, encoding="utf-8",
+                             capture_output=True, cwd=ROOT, timeout=30, check=True)
+    return base64.b64decode(process.stdout, validate=True)
+
+
 class EngineFailureTests(unittest.TestCase):
     def test_no_runtime_does_not_install_or_start_anything(self):
         engine = RhwpEngine(node="unused")
@@ -120,6 +134,39 @@ class RealEngineTests(unittest.TestCase):
             container.write_stream("FileHeader", bytes(header))
         with self.assertRaises(UnsupportedDocumentError):
             self.engine.inspect(stream.getvalue())
+
+    def test_real_checked_trailer_hwp_read_edit_save_restore(self):
+        from one_hwp.native_service import NativeService
+        from one_hwp.native_storage import PathPolicy, SafeStore
+        data = real_trailer_fixture()
+        original = self.engine.inspect(data)
+        self.assertEqual(original["unsupported"], [])
+        # Both body and DocInfo trailers reach the independent guards.
+        self.assertIn("<svg", self.engine.preview(data, 0)["svg"])
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            source = root / "synthetic-trailer.hwp"
+            source.write_bytes(data)
+            service = NativeService(self.engine, SafeStore(PathPolicy([root]), root / "backup"))
+            page = service.read(source)
+            targets = [next(block for block in page["blocks"] if block["kind"] == kind and block["editable"])
+                       for kind in ("paragraph", "cell")]
+            operations = [{"target_id": block["target_id"], "expected_old": block["text"],
+                           "new_text": "꼬리 정보 검증 후 합성 수정 😀"} for block in targets]
+            self.assertFalse(service.plan(source, page["source_sha256"], operations)["write_performed"])
+            saved = service.edit(source, page["source_sha256"], operations, "synthetic-trailer-save")
+            self.assertEqual(saved["mode"], "save")
+            after = self.engine.inspect(source.read_bytes())
+            target_ids = {service._raw_id(target["target_id"], page["source_sha256"]) for target in targets}
+            self.assertEqual(len(target_ids), 2)
+            values = {block["id"]: block["text"] for block in after["blocks"]}
+            for block in original["blocks"]:
+                self.assertEqual(values[block["id"]], "꼬리 정보 검증 후 합성 수정 😀"
+                                 if block["id"] in target_ids else block["text"])
+            self.assertEqual(after["tables"], original["tables"])
+            self.assertEqual(service.edit(source, page["source_sha256"], operations, "synthetic-trailer-save"), saved)
+            service.restore(source, saved["backup_id"], saved["sha256"])
+            self.assertEqual(source.read_bytes(), data)
 
     def test_real_large_single_paragraph_reads_to_end_without_mutation(self):
         from one_hwp.native_service import NativeService

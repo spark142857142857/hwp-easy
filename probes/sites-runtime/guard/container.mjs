@@ -24,6 +24,17 @@ function boundedOptions(options) {
   return result;
 }
 
+// RFC 1952 CRC32, over bounded inflated bytes. No authenticity claim.
+const crcTable = Uint32Array.from({ length: 256 }, (_, value) => {
+  for (let bit = 0; bit < 8; bit++) value = (value >>> 1) ^ ((value & 1) ? 0xedb88320 : 0);
+  return value >>> 0;
+});
+function crc32(bytes) {
+  let crc = 0xffffffff;
+  for (const byte of bytes) crc = (crc >>> 8) ^ crcTable[(crc ^ byte) & 0xff];
+  return (crc ^ 0xffffffff) >>> 0;
+}
+
 export function inflateBoundedRaw(input, limit, { allowZeroPadding = true } = {}) {
   if (!(input instanceof Uint8Array) || !Number.isSafeInteger(limit) || limit < 0
     || limit > defaults.maxBodyBytes) fail('invalid_limits');
@@ -42,8 +53,15 @@ export function inflateBoundedRaw(input, limit, { allowZeroPadding = true } = {}
       if (stream.next_out) chunks.push(output.subarray(0, stream.next_out));
       if (status === Z_STREAM_END) {
         const tail = input.subarray(stream.next_in);
-        if (allowZeroPadding ? tail.some((value) => value !== 0) : tail.length !== 0) fail('compressed_tail');
-        return join(chunks, total);
+        const expanded = join(chunks, total);
+        // Observed HWP raw-DEFLATE variant: exactly CRC32 + ISIZE, no gzip
+        // header. Validate both fields; never ignore an arbitrary 8-byte tail.
+        const trailer = tail.length === 8 ? new DataView(tail.buffer, tail.byteOffset, 8) : null;
+        const verifiedTrailer = trailer && trailer.getUint32(4, true) === total
+          && trailer.getUint32(0, true) === crc32(expanded);
+        if (tail.length && !verifiedTrailer
+          && !(allowZeroPadding && !tail.some((value) => value !== 0))) fail('compressed_tail');
+        return expanded;
       }
       if (status !== Z_OK || (stream.next_in === previousInput && stream.next_out === 0)) fail('invalid_deflate');
     }
