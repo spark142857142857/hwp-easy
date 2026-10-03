@@ -82,6 +82,8 @@ DB 응답·영수증 조회가 확정되지 않으면 완료로 보고하지 않
 
 같은 버전 8의 기존 ChatGPT Work Cloud 채팅에서 첫 기능 조회가 `oauth_token_invalid_grant`로 실패했다. 사용자가 재인증한 뒤 native `hwp_capabilities`, `hwp_runtime_probe`, `hwp_workflow_probe`를 각각 한 번 호출해 모두 성공했고, 이후 Codex Desktop의 기능 조회도 성공했다. 그 사이 재배포·OAuth 설정·접근 대상·환경값 변경은 없었다. 이는 두 실행 환경의 합성 진단과 연결 복구를 확인한 결과이며, 실제 HWP 첨부·다운로드나 저장소 기반 Codex Cloud 작업을 검증한 결과는 아니다. [Cloud 실행 기록과 한계](codex-cloud.md#2026-10-03-chatgpt-work-cloud-native-진단)
 
+후속 버전 9에는 검증된 압축 꼬리 규칙과 전송 본문의 전체 deadline을 반영했다. 원격 고정 엔진·D1/R2 저장 진단과 접근 거부 검사가 통과했고, Desktop 기능 조회·합성 workflow 및 기존 ChatGPT Work Cloud의 native 진단 세 가지도 추가 재인증 없이 성공했다. 기능 조회는 `transfer_body_timeout_ms=30000`을 반환했다. OAuth 클라이언트·플러그인 ID·주소·접근 및 환경 revision은 유지했다. 개인 파일 업로드와 빈 파일 origin 설정도 그대로다. 실제 첨부 바이트·외부 HWP 회수·개인 문서·두 OAuth 사용자·Dots·배치 검증을 완료했다고 표시하지 않는다. [버전 9 검증](../probes/sites-runtime/README.md#비공개-버전-9-전송-시간-제한과-호환성-반영)
+
 ## 연결 오류를 다루는 순서
 
 배포 버전 변경과 인증 실패를 같은 사건으로 취급하지 않는다. 버전 8 게시 직후에는 추가 재인증 없이 Desktop 호출이 성공했고, 나중의 Cloud 인증 실패는 새 배포 없이 발생했다. 따라서 매 배포가 재인증을 필수로 만든다는 설명은 현재 관찰과 맞지 않는다. 반대로 이 기록만으로 모든 배포가 인증에 영향을 주지 않는다고 보장할 수도 없다.

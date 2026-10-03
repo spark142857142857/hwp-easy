@@ -27,6 +27,12 @@ Codex Cloud는 게시한 환경에서 도구·저장소·의존성을 준비하�
 
 실제 첨부 파일 바이트, 로그인한 브라우저의 외부 HTTP 다운로드, 사용자에게 HWP 결과를 돌려주는 경로, 두 OAuth 사용자 격리, Dots와 시각적 배치는 시험하지 않았다. 합성 서버 내부 handler 왕복이나 native 도구 호출을 이 항목의 성공으로 집계하지 않는다. `codex_cloud_client_verified`, `native_file_attachment_verified`, `dots_client_verified`, `layout_verified`는 계속 `false`이며 개인 업로드도 꺼 둔다. 로컬 압축 꼬리 호환성 개선은 이 진단 시점의 버전 8에 아직 게시하지 않았다.
 
+### 비공개 버전 9 배포 뒤 재검증
+
+같은 날 압축 꼬리 호환성과 전송 본문 deadline을 버전 9로 게시한 뒤, 기존 Desktop 연결의 기능 조회·합성 workflow가 성공했다. 같은 ChatGPT Work Cloud 채팅에서도 native `hwp_capabilities`, `hwp_runtime_probe`, `hwp_workflow_probe`를 각각 한 번 호출해 모두 완료됐다. 도구 기록의 소요 시간은 약 1.2초·13.3초·20.6초였다. 기능 조회는 새 `transfer_body_timeout_ms=30000`과 업로드 비활성화를 반환했고 합성 엔진·저장·복구·기록된 버전 삭제·자료 정리가 통과했다.
+
+추가 재인증은 없었다. OAuth 클라이언트·플러그인 ID·MCP 주소·접근 정책·환경 revision 1을 유지했다. 이는 이번 배포에서 기존 연결이 유지됐다는 근거이지 모든 배포·세션에서 연결 만료가 없다는 보장이 아니다. 실제 첨부 바이트·외부 HTTP 다운로드·HWP 회수·두 OAuth 사용자·저장소 기반 Codex Cloud·Dots·시각 배치의 미검증 상태와 개인 업로드 제한은 바꾸지 않았다. [배포와 로컬 검사](../probes/sites-runtime/README.md#비공개-버전-9-전송-시간-제한과-호환성-반영)
+
 ## 공통 엔진과 저장 계층
 
 `src/one_hwp/rhwp_api.mjs`는 경로·Node 파일 API 없이 문서 모델을 읽고 수정한다. Node JSON bridge와 browser ESM이 이 코드를 함께 사용한다. `probes/sites-runtime/engine/document.mjs`는 browser ESM에서 바이트 snapshot, SHA-256 기반 대상, 이어 읽기, 계획·편집·미리보기 계약을 제공한다.

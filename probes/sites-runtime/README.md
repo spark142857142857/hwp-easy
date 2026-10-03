@@ -56,7 +56,15 @@ Node.js 22 이상을 준비한 개발자가 이 디렉터리에서 실행한다.
 
 이후 같은 버전 8에서 기존 ChatGPT Work Cloud 연결의 첫 기능 조회가 인증 오류로 실패했다. 사용자가 재인증한 뒤 native 기능 조회·고정 엔진 진단·합성 workflow 세 가지가 모두 성공했고, 이어서 Desktop 기능 조회도 성공했다. 그 사이 재배포하지 않았으며 개인 업로드·인증·접근 설정도 바꾸지 않았다. 실제 첨부 바이트·외부 HWP 다운로드·저장소 Codex Cloud·Dots·시각 배치는 미검증으로 남긴다. [Cloud 진단 기록](../../docs/codex-cloud.md#2026-10-03-chatgpt-work-cloud-native-진단)
 
-후속 로컬 소스 개선에서 raw-DEFLATE 뒤의 정확한 8바이트 CRC32/ISIZE가 해제 결과와 일치할 때만 허용했다. 본문과 DocInfo에 같은 규칙을 쓰며 임의 nonzero 꼬리·잘못된 checksum/size·추가 member·확장 한도 초과는 계속 거부한다. Node 전체 214개, D1/R2 저장 14개, 호스트 23개, 실패 주입 7개와 명시적 삭제 8개가 통과했다. 호스트 검사에는 해당 꼬리를 가진 실제 합성 HWP의 workerd 입력 → 읽기·계획·본문/셀 편집 → 다운로드·재열기 → 정확한 원본 복구가 포함된다. 시험 fixture는 Node 표준 라이브러리로 생성 문서 사본의 여유 mini-sector에만 꼬리를 추가한다. 입력 원본은 바꾸지 않으며 CFB 트리·스트림 집합도 그대로 유지한다. 개인 `testdocs/`는 Worker에 전달하지 않는다. 이 변경은 아직 비공개 버전 8에 재게시하지 않았고 모의 신원 검사도 실제 OAuth·Cloud·Dots 연결 근거로 사용하지 않는다. [로컬 호환성 결과](../../docs/native-engine.md#2026-10-03-압축-꼬리-호환성-개선)
+후속 로컬 소스 개선에서 raw-DEFLATE 뒤의 정확한 8바이트 CRC32/ISIZE가 해제 결과와 일치할 때만 허용했다. 본문과 DocInfo에 같은 규칙을 쓰며 임의 nonzero 꼬리·잘못된 checksum/size·추가 member·확장 한도 초과는 계속 거부한다. Node 전체 214개, D1/R2 저장 14개, 호스트 23개, 실패 주입 7개와 명시적 삭제 8개가 통과했다. 호스트 검사에는 해당 꼬리를 가진 실제 합성 HWP의 workerd 입력 → 읽기·계획·본문/셀 편집 → 다운로드·재열기 → 정확한 원본 복구가 포함된다. 시험 fixture는 Node 표준 라이브러리로 생성 문서 사본의 여유 mini-sector에만 꼬리를 추가한다. 입력 원본은 바꾸지 않으며 CFB 트리·스트림 집합도 그대로 유지한다. 개인 `testdocs/`는 Worker에 전달하지 않는다. 당시에는 비공개 버전 8에 재게시하지 않았고 후속 버전 9에 반영했다. 모의 신원 검사를 실제 OAuth·Cloud·Dots 연결 근거로 사용하지 않는다. [로컬 호환성 결과](../../docs/native-engine.md#2026-10-03-압축-꼬리-호환성-개선)
+
+### 비공개 버전 9: 전송 시간 제한과 호환성 반영
+
+2026년 10월 3일 Site source `553061e973add0a3e8a150052f934363e7c76218`의 압축 꼬리 규칙과 전송 개선을 같은 비공개 Site에 게시했다. 본문 reader는 전체 수신에 30초 deadline을 적용하며 조각마다 제한을 다시 시작하지 않는다. 멈춘 스트림·끝나지 않는 취소·취소 거부에서도 고정 오류를 반환하고 reader 잠금을 해제한다. 외부 fetch의 응답 헤더 대기, OAuth, 엔진과 저장 작업 전체의 시간 제한은 별도다. 기능 조회는 `transfer_body_timeout_ms: 30000`을 반환한다.
+
+저장소 probe의 Node 222개 검사가 통과했다. 7개 새 Node 회귀와 6가지 스트림 시나리오를 실행하는 실제 workerd 검사 1개가 포함된다. 배포 checkout의 220개 검사는 같은 런타임 코드와 회귀를 사용하며 저장소 경로용 fixture helper 검사 2개는 포함하지 않는다. 실제 workerd/D1/R2 저장 14개, 호스트 23개, 실패 주입 7개와 명시적 삭제 8개도 통과했다. 시간 제한 검사는 개인정보·OAuth·외부 네트워크 없이 만든 스트림이며 인증 오류의 해결 근거가 아니다.
+
+게시 뒤 원격 고정 엔진·저장·시험 자료 정리와 비로그인·임의 신원·서비스 자격의 사용자 문서/MCP 접근 거부가 통과했다. 실제 Desktop의 기능 조회·합성 workflow와 기존 ChatGPT Work Cloud의 기능 조회·엔진·workflow native 호출도 성공했다. 양쪽 모두 추가 재인증이 없었으며 OAuth 클라이언트·플러그인 ID·주소·접근 revision·환경 revision 1을 유지했다. 개인 업로드는 계속 꺼져 있고 허용 파일 origin도 비어 있다. CRC 꼬리 HWP의 바이트 왕복은 로컬 workerd 근거로 구분하며 실제 첨부 바이트·외부 HWP 회수·두 OAuth 사용자 격리·저장소 Codex Cloud·Dots·시각 배치는 미검증이다. [Cloud 기록](../../docs/codex-cloud.md#비공개-버전-9-배포-뒤-재검증)
 
 ```powershell
 npm ci --ignore-scripts --no-audit --no-fund
