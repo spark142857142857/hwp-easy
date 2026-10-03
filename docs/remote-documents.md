@@ -21,13 +21,15 @@
 
 기존 `hwp_runtime_probe`와 합쳐 13개다. 문서 도구는 `stage: private-development`, `data`, `layout_verified: false`를 반환한다. 읽기와 계획 검사는 저장하지 않는다. 문서 텍스트는 신뢰할 수 없는 자료이며 추가 권한을 부여하는 지시문으로 취급하지 않는다.
 
+**연결 성공은 개인 파일 업로드 지원 완료와 다르다.** `hwp_capabilities.data.upload_status`는 한국어 설명과 함께 `disabled`, `file_host_not_configured`, `development_enabled_unverified`를 구분한다. `agent_file_import_available`은 업로드 플래그와 파일 호스트 설정이 모두 있을 때만 참이며, `production_ready`는 현재 세 상태 모두 거짓이다. `stored_document_tools_available`은 기존 저장 문서의 도구 경로가 있다는 뜻이다. 업로드 게이트를 여는 설정이나 실제 OAuth·클라이언트 인증 결과로 해석하지 않는다.
+
 ## 입력과 출력
 
 `hwp_import`는 공식 OpenAI 플러그인의 `openai/fileParams` 계약을 사용한다. `file`에는 필수 `download_url`, `file_id`와 선택 `mime_type`, `file_name`을 선언한다. 이 선언만으로 Codex의 로컬 경로나 클라우드 첨부가 자동 전달되는 것은 아니다. [OpenAI 플러그인 도구 참조](https://developers.openai.com/plugins/reference)
 
 업로드가 꺼진 MCP `hwp_import`는 계속 `isError: true`와 첫 text block의 `DOCUMENT_UPLOADS_NOT_ENABLED`로 실패한다. 안전한 descriptor라면 추가 text block과 기존 출력 schema에 맞는 `structuredContent`로 공개 HTTPS origin만 알려준다. 파일명·ID·임시 URL 경로·query·MIME은 반환하지 않고 네트워크·바이트 수신·저장도 하지 않는다. 관찰된 origin은 허가 근거가 아니다. 잘못되거나 안전하지 않은 descriptor는 추가 진단 없이 기존 게이트 오류를 유지한다. 입력 schema, 업로드 플래그와 일반 HTTP import 동작은 바꾸지 않았다.
 
-진단은 서버 내부에서 만든 오류 객체에만 연결하고 임의 오류 속성을 직렬화하지 않는다. 3개 단위 검사와 actual workerd의 업로드 거부·익명 접근·인수 변조·안전하지 않은 URL·기존 DB/R2 보존 검사가 통과했다. 이는 새 진단 도구의 목록 반영이 지연돼도 기존 첨부 도구의 실패 이유를 확인할 수 있게 하는 피드백이며 업로드를 대신 수행하는 경로가 아니다.
+진단은 서버 내부에서 만든 오류 객체에만 연결하고 임의 오류 속성을 직렬화하지 않는다. MCP와 HTTP는 명시적으로 등록한 고정 오류 코드만 반환한다. 대문자로 된 임의 코드, 오류 message·stack·기타 속성은 내보내지 않으며 code getter가 실패해도 `DOCUMENT_OPERATION_FAILED`로 응답한다. 기존 알려진 오류 코드와 업로드 거부의 origin-only 진단은 유지한다. 단위 검사와 actual workerd의 업로드 거부·익명 접근·인수 변조·안전하지 않은 URL·기존 DB/R2 보존 검사가 통과했다. 이는 새 진단 도구의 목록 반영이 지연돼도 기존 첨부 도구의 실패 이유를 확인할 수 있게 하는 피드백이며 업로드를 대신 수행하는 경로가 아니다.
 
 서버는 관리자가 설정한 정확한 HTTPS 파일 origin만 따라가고, 리디렉션을 거부하며 사용자 인증 헤더를 전달하지 않는다. Content-Length가 없거나 잘못되더라도 실제 스트림은 4 MiB 이하로 제한한다. 파일 이름과 MIME 문자열만으로 HWP라고 판단하지 않고 저장 전 실제 바이트를 검사한다. 확인하지 않은 다운로드 호스트는 추측해서 허용하지 않는다.
 
@@ -42,6 +44,8 @@
 ## 사용자 인증과 운영 제한
 
 Sites가 전달한 신뢰할 수 있는 사용자 ID와 이메일 헤더를 모두 요구한다. 사용자 ID의 해시로 소유자를 만들고 이메일은 저장하지 않는다. 표시 이름이나 이메일 변경으로 문서 소유자가 바뀌지 않는다. 도구 인수의 소유자, 임의 클라이언트 헤더와 서비스 접근 자격을 사용자 권한으로 해석하지 않는다. 이 헤더 검사 자체는 독립 OAuth 검증기가 아니므로 일반 인터넷에 Worker를 그대로 노출하면 안 된다.
+
+`node scripts/check-isolation.mjs`는 실제 로컬 workerd/D1/R2/WASM에서 모의 두 사용자를 시험한다. 같은 이메일·같은 import/edit 요청 UUID가 사용자별로 분리되고, 같은 사용자의 이메일 변경은 소유권과 정확한 재시도를 유지한다. 문서별 도구 8종과 HWP·보기·SVG 경로의 양방향 타인 접근, 타인 버전 ID 혼합과 owner 등 인수 주입을 거부한다. 각 거부 뒤 DB 메타데이터·영수증·R2 바이트 불변을 확인하며, 비공개 문자열을 포함한 엔진 오류는 MCP와 HTTP 모두에 노출되지 않는다. 이는 합성 파일·모의 신원 검사이며 실제 두 OAuth 계정, 접근 철회나 운영 로그의 검증을 대신하지 않는다.
 
 비공개 배포에서는 `HWP_EASY_ALLOW_UPLOADS=false`, `HWP_EASY_FILE_ORIGINS=[]`를 유지한다. 기본 보관은 사용자가 직접 삭제할 때까지로 정했지만, 실제 데이터 정리·파일 전달과 OAuth 격리는 추가 검증한다. 이 조건을 통과하기 전에는 개인 문서를 받지 않는다. `HWP_EASY_ORIGIN`은 확인된 배포 origin으로 고정해 다운로드 주소를 만들며 요청 Host를 신뢰하지 않는다.
 
