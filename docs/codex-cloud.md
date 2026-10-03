@@ -1,6 +1,6 @@
 # Codex Cloud 지원과 검증 기준
 
-HWP Easy는 로컬 Codex 세션뿐 아니라 새 Codex Cloud 작업에서 HWP를 읽고 수정해 결과를 돌려주는 것을 목표로 한다. 현재 한글 없는 엔진과 로컬 MCP는 구현되어 있고, 원격 Sites 플러그인은 합성 시험만 제공한다. **실제 Codex Cloud 작업의 연결과 파일 왕복은 아직 검증하지 않았다.**
+HWP Easy는 로컬 Codex 세션뿐 아니라 새 Codex Cloud 작업에서 HWP를 읽고 수정해 결과를 돌려주는 것을 목표로 한다. 현재 한글 없는 엔진과 로컬 MCP는 구현되어 있고, 원격 Sites 플러그인은 합성 시험만 제공한다. **ChatGPT Work Cloud 채팅의 native MCP 합성 진단은 통과했지만, 저장소를 준비한 Codex Cloud 작업의 연결과 실제 파일 왕복은 아직 검증하지 않았다.**
 
 ## 실행 환경과 연결의 구분
 
@@ -13,8 +13,19 @@ Codex Cloud는 게시한 환경에서 도구·저장소·의존성을 준비하�
 | 로컬 Node와 Python MCP | 합성 HWP 읽기·수정·기본 저장·복구, 실제 MCP SDK 왕복 | 사용자용 간편 연결, 실제 양식 호환성 |
 | Linux 실행과 CI | 한글·GUI 없는 합성 문서 처리 | 실제 Codex Cloud 작업과 파일 회수 |
 | Sites와 Codex Desktop 플러그인 | 실제 사용자 연결에서 고정 합성 HWP의 조회·계획·D1/R2 저장·복구·정리, 파일 descriptor 전달 후 업로드 게이트의 거부 | 실제 첨부 바이트·HWP 회수·개인 문서·두 OAuth 사용자 격리 |
+| ChatGPT Work Cloud 채팅 | 기존 사용자 연결의 native 기능 조회·고정 엔진 진단·합성 문서 저장·복구·기록된 버전 삭제·정리 | 실제 첨부 바이트·외부 다운로드·HWP 회수, 저장소 Codex Cloud와의 별도 검증 |
 | Codex Cloud 작업 | 지원 목표 및 검증 기준 정의 | 작업 환경 준비, 실제 도구 연결, 입력부터 HWP 회수까지 전 과정 |
 | Dots | 같은 원격 플러그인을 사용하는 지원 목표와 공식 연결 조건 확인 | 실제 Dot의 인증·문서 입력·편집·결과 HWP 회수 |
+
+## 2026-10-03 ChatGPT Work Cloud native 진단
+
+기존 Cloud 채팅 `HWP Easy 연결 검증`에서 설치된 HWP Easy 도구 12개가 노출된 것을 확인했다. 첫 기능 조회는 약 51분 뒤 `UNAUTHORIZED`, `oauth_token_invalid_grant`와 재인증 요청으로 실패했다. 실행 상태가 `inProgress`였다는 사실만으로 엔진이나 문서 작업이 진행 중이라고 판단하지 않는다.
+
+사용자가 기존 연결을 재인증한 뒤 같은 채팅에서 `hwp_capabilities`, `hwp_runtime_probe`, `hwp_workflow_probe`를 각각 한 번 native 호출했다. 세 호출이 모두 완료됐고, 도구 실행 기록의 소요 시간은 각각 약 5.7초·8.6초·23.3초였다. 기능 조회는 업로드 비활성화·빈 파일 origin·직접 삭제할 때까지 보관을 반환했다. 엔진 진단은 고정 합성 HWP의 읽기·편집·재열기·raw 보존·메모리 내 계약을, workflow는 로그인한 사용자 범위의 합성 문서 조회·편집·같은 문서 저장·복구·기록된 버전 삭제·시험 자료 정리를 통과했다.
+
+검증은 같은 비공개 버전 8에서 수행했다. 재시도 사이에 재배포하거나 OAuth 클라이언트·플러그인 ID·MCP 주소·접근 대상·업로드 환경값을 바꾸지 않았다. Cloud 진단 완료 후 Codex Desktop에서도 읽기 전용 기능 조회가 성공했다. 연결 복구를 확인한 것이며 반복 인증 실패의 세부 원인은 미확정이다. [연결 복구 기준](remote-documents.md#연결-오류를-다루는-순서)
+
+실제 첨부 파일 바이트, 로그인한 브라우저의 외부 HTTP 다운로드, 사용자에게 HWP 결과를 돌려주는 경로, 두 OAuth 사용자 격리, Dots와 시각적 배치는 시험하지 않았다. 합성 서버 내부 handler 왕복이나 native 도구 호출을 이 항목의 성공으로 집계하지 않는다. `codex_cloud_client_verified`, `native_file_attachment_verified`, `dots_client_verified`, `layout_verified`는 계속 `false`이며 개인 업로드도 꺼 둔다. 로컬 압축 꼬리 호환성 개선은 이 진단 시점의 버전 8에 아직 게시하지 않았다.
 
 ## 공통 엔진과 저장 계층
 

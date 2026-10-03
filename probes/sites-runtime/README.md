@@ -54,6 +54,8 @@ Node.js 22 이상을 준비한 개발자가 이 디렉터리에서 실행한다.
 
 비공개 버전 8 게시가 성공했다. 게시 후 실제 Codex Desktop의 기능 조회와 합성 workflow가 추가 재인증 없이 성공했고 기록된 버전의 명시적 삭제와 시험 데이터 정리도 통과했다. OAuth 클라이언트 ID·플러그인 ID·주소·접근 대상과 런타임 환경 revision은 유지했다. 새 삭제 도구 자체의 직접 네이티브 호출과 실제 첨부 바이트 왕복·운영 GC는 아직 미검증이다. [상세 검증 기록](../../docs/remote-documents.md)
 
+이후 같은 버전 8에서 기존 ChatGPT Work Cloud 연결의 첫 기능 조회가 인증 오류로 실패했다. 사용자가 재인증한 뒤 native 기능 조회·고정 엔진 진단·합성 workflow 세 가지가 모두 성공했고, 이어서 Desktop 기능 조회도 성공했다. 그 사이 재배포하지 않았으며 개인 업로드·인증·접근 설정도 바꾸지 않았다. 실제 첨부 바이트·외부 HWP 다운로드·저장소 Codex Cloud·Dots·시각 배치는 미검증으로 남긴다. [Cloud 진단 기록](../../docs/codex-cloud.md#2026-10-03-chatgpt-work-cloud-native-진단)
+
 후속 로컬 소스 개선에서 raw-DEFLATE 뒤의 정확한 8바이트 CRC32/ISIZE가 해제 결과와 일치할 때만 허용했다. 본문과 DocInfo에 같은 규칙을 쓰며 임의 nonzero 꼬리·잘못된 checksum/size·추가 member·확장 한도 초과는 계속 거부한다. Node 전체 214개, D1/R2 저장 14개, 호스트 23개, 실패 주입 7개와 명시적 삭제 8개가 통과했다. 호스트 검사에는 해당 꼬리를 가진 실제 합성 HWP의 workerd 입력 → 읽기·계획·본문/셀 편집 → 다운로드·재열기 → 정확한 원본 복구가 포함된다. 시험 fixture는 Node 표준 라이브러리로 생성 문서 사본의 여유 mini-sector에만 꼬리를 추가한다. 입력 원본은 바꾸지 않으며 CFB 트리·스트림 집합도 그대로 유지한다. 개인 `testdocs/`는 Worker에 전달하지 않는다. 이 변경은 아직 비공개 버전 8에 재게시하지 않았고 모의 신원 검사도 실제 OAuth·Cloud·Dots 연결 근거로 사용하지 않는다. [로컬 호환성 결과](../../docs/native-engine.md#2026-10-03-압축-꼬리-호환성-개선)
 
 ```powershell
