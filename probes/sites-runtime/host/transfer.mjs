@@ -1,27 +1,29 @@
 import { StorageError } from '../storage/store.mjs';
 const fail = (code) => { throw new StorageError(code); };
 export async function boundedBytes(body, maximum, length) {
+  if (!Number.isSafeInteger(maximum) || maximum < 1 || maximum > 4 * 1024 * 1024) fail('INVALID_TRANSFER_LIMIT');
   if (length !== null && length !== undefined && (!/^\d+$/.test(String(length)) || Number(length) > maximum)) {
     try { await body?.cancel(); } catch {}
     fail('TRANSFER_LIMIT_EXCEEDED');
   }
   if (!body?.getReader) fail('EMPTY_TRANSFER');
-  const reader = body.getReader(), chunks = []; let size = 0;
+  // Never retain every network chunk: millions of tiny chunks can exhaust the
+  // heap even when the accumulated byte count is below the input limit.
+  const reader = body.getReader(), bytes = new Uint8Array(maximum); let size = 0, chunks = 0;
   try {
     while (true) {
       const { value, done } = await reader.read(); if (done) break;
-      size += value.byteLength;
-      if (size > maximum) { await reader.cancel(); fail('TRANSFER_LIMIT_EXCEEDED'); }
-      chunks.push(value);
+      if (!(value instanceof Uint8Array)) fail('TRANSFER_READ_FAILED');
+      if (++chunks > 16384 || size + value.byteLength > maximum) fail('TRANSFER_LIMIT_EXCEEDED');
+      bytes.set(value, size); size += value.byteLength;
     }
   } catch (error) {
+    try { await reader.cancel(); } catch {}
     if (error instanceof StorageError) throw error;
     fail('TRANSFER_READ_FAILED');
-  }
+  } finally { reader.releaseLock(); }
   if (!size) fail('EMPTY_TRANSFER');
-  const bytes = new Uint8Array(size); let offset = 0;
-  for (const chunk of chunks) { bytes.set(chunk, offset); offset += chunk.length; }
-  return bytes;
+  return bytes.slice(0, size);
 }
 export async function authenticatedOwner(headers) {
   // Trusted ONLY behind Sites dispatch. Presence checks are not an OAuth verifier.

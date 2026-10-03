@@ -34,8 +34,12 @@ export function createHostApp(env, engine, HwpDocument, fetcher = fetch) {
     if (name === 'hwp_edit') return service.edit({ owner, ...args,
       request: { expected_sha256: args.expected_sha256, operations: args.operations } });
     if (name === 'hwp_restore') return service.restore({ owner, ...args });
-    if (name === 'hwp_versions') return { document_id: args.document_id,
-      versions: await service.history({ owner, document_id: args.document_id }) };
+    if (name === 'hwp_versions') {
+      const history = await service.history({ owner, document_id: args.document_id });
+      return { document_id: args.document_id, current_version: history[0].current_version, revision: history[0].revision,
+        order: 'created_at_then_id_not_revision_order',
+        versions: history.map(({ current_version, revision, ...entry }) => entry) };
+    }
     if (name === 'hwp_workflow_probe') return workflow(owner);
     const { snapshot, metadata } = await service.open({ owner, document_id: args.document_id, version_id: args.version_id });
     if (name === 'hwp_read') return { ...snapshot.read({ expected_sha256: metadata.sha256,
@@ -49,8 +53,15 @@ export function createHostApp(env, engine, HwpDocument, fetcher = fetch) {
     snapshot.preview({ expected_sha256: metadata.sha256, page: args.page });
     return { ...metadata, preview_url: `${base}/pages/${args.page}.svg`, requires_same_user_sign_in: true, layout_verified: false };
   }
-  async function removeGeneratedDocument(owner, documentId) {
-    // Called ONLY with the random id generated inside workflow(), never a tool argument.
+  async function removeGeneratedDocument(owner, documentId, createRequestId) {
+    // Both ids are generated ONLY inside workflow(), never supplied by a caller.
+    // If a document exists, require this run's creation receipt BEFORE deleting
+    // any blob. Corrupt/unavailable provenance must not erase another document.
+    const existing = await env.DB.prepare('SELECT id FROM hwp_documents WHERE owner = ? AND id = ?').bind(owner, documentId).first();
+    if (existing) {
+      const receipt = await env.DB.prepare('SELECT document_id FROM hwp_requests WHERE owner = ? AND id = ?').bind(owner, createRequestId).first();
+      if (receipt?.document_id !== documentId) fail('SYNTHETIC_CLEANUP_FAILED');
+    }
     const prefix = `hwp-easy/v1/${owner}/${documentId}/`; let cursor, count = 0;
     do {
       const page = await env.BUCKET.list({ prefix, limit: 1000, ...(cursor ? { cursor } : {}) });
@@ -68,10 +79,13 @@ export function createHostApp(env, engine, HwpDocument, fetcher = fetch) {
   async function workflow(owner) {
     const api = createEngineApi(HwpDocument);
     const bytes = syntheticFixture(HwpDocument, api.exportChecked, { paragraphs: ['합성 에이전트 문서', '합성 에이전트 문서'] });
-    let created, report;
+    let created, prepared, report;
+    const createRequestId = crypto.randomUUID();
     const check = (value) => { if (!value) fail('WORKFLOW_PROBE_FAILED'); };
     try {
-      created = await service.create({ owner, request_id: crypto.randomUUID(), bytes });
+      prepared = await service.prepareCreate({ owner, request_id: createRequestId, bytes });
+      created = await prepared.execute();
+      check(created.document_id === prepared.document_id);
       const input = { document_id: created.document_id, version_id: created.version_id, max_chars: 5 };
       const found = new Map(); let cursor, pages = 0;
       do {
@@ -110,8 +124,8 @@ export function createHostApp(env, engine, HwpDocument, fetcher = fetch) {
         real_two_user_oauth_verified: false, codex_cloud_client_verified: false, dots_client_verified: false,
         uploads_enabled: uploadsEnabled(), layout_verified: false };
     } finally {
-      if (created) {
-        try { await removeGeneratedDocument(owner, created.document_id); }
+      if (prepared) {
+        try { await removeGeneratedDocument(owner, prepared.document_id, createRequestId); }
         catch { fail('SYNTHETIC_CLEANUP_FAILED'); }
         if (report) report.synthetic_cleanup_complete = true;
       }

@@ -86,3 +86,5 @@ jobs:
         run: node scripts/check-storage.mjs
       - name: Verify authenticated document tool and binary transfer contracts
         run: node scripts/check-host.mjs
+      - name: Verify transfer limits and synthetic cleanup under injected failures
+        run: node scripts/check-host-failures.mjs

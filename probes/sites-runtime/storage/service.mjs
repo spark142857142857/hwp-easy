@@ -3,6 +3,11 @@ import { StorageError } from './store.mjs';
  * No upload/download route or OAuth fallback is enabled by this module.
  */
 export function createDocumentService(engine, store) {
+  async function prepareCreate({ owner, request_id, bytes }) {
+    const copied = bytes instanceof Uint8Array ? bytes.slice() : bytes;
+    await engine.open(copied);
+    return store.prepareCreate({ owner, request_id, bytes: copied });
+  }
   async function create({ owner, request_id, bytes }) {
     const copied = bytes instanceof Uint8Array ? bytes.slice() : bytes;
     await engine.open(copied); // Validate HWP before the first blob/metadata mutation.
@@ -39,5 +44,5 @@ export function createDocumentService(engine, store) {
     await open({ owner: args.owner, document_id: args.document_id, version_id: args.source_version });
     return store.restore(args);
   }
-  return Object.freeze({ create, open, read, edit, restore, history: store.history });
+  return Object.freeze({ create, prepareCreate, open, read, edit, restore, history: store.history });
 }

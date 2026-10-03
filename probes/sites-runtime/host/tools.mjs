@@ -24,7 +24,7 @@ export const documentTools = [
   tool('hwp_edit', 'Apply validated edits and save the SAME remote document. Keeps earlier versions. Requires expected current version and exact-request retry ID; does not update the PC original.', {
     document_id: uuid, expected_version: uuid, request_id: uuid, ...edits,
   }, undefined, true, true),
-  tool('hwp_versions', 'List versions of your document; no file changes.', { document_id: uuid }),
+  tool('hwp_versions', 'List versions and the explicitly marked current version of your document. Creation-time ties are not revision order. No file changes.', { document_id: uuid }),
   tool('hwp_restore', 'Restore your earlier HWP bytes as a NEW version of the SAME document. Requires current-version guard and request ID.', {
     document_id: uuid, expected_version: uuid, source_version: uuid, request_id: uuid,
   }, undefined, true, true),

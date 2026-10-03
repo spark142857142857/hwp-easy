@@ -49,6 +49,10 @@ try {
   assert.equal(firstOwner, renamedOwner); assert.match(firstOwner, /^user:[0-9a-f]{64}$/);
   assert.notEqual(firstOwner, await authenticatedOwner(new Headers(other)));
   checks.push('mock_headers_not_oauth_identity_checks', 'stable_owner_ignores_email_and_name_changes');
+  const oversized = await mf.dispatchFetch(`${origin}/mcp`, { method: 'POST',
+    headers: { ...headers, 'Content-Type': 'application/json' }, body: ' '.repeat(3 * 1024 * 1024 + 1) });
+  assert.equal(oversized.status, 413);
+  checks.push('rpc_actual_stream_over_three_mib_rejected');
   const upload = (extra = {}, identity = headers, input = bytes) => mf.dispatchFetch(`${origin}/documents/import`, {
     method: 'POST', headers: { ...identity, Origin: origin, 'Content-Type': 'application/x-hwp',
       'hwp-request-id': crypto.randomUUID(), ...extra }, body: input });
@@ -106,7 +110,13 @@ try {
   const restored = await call('hwp_restore', { document_id: created.document_id,
     expected_version: edited.version_id, source_version: created.version_id, request_id: crypto.randomUUID() });
   assert.equal(restored.sha256, created.sha256); assert.notEqual(restored.version_id, created.version_id);
+  const history = await call('hwp_versions', { document_id: created.document_id });
+  assert.equal(history.current_version, restored.version_id);
+  assert.equal(history.revision, 3); assert.equal(history.versions.length, 3);
+  assert.equal(history.order, 'created_at_then_id_not_revision_order');
+  assert(history.versions.some((v) => v.version_id === history.current_version));
   checks.push('protected_passive_svg_unverified_layout', 'restore_as_new_revision');
+  checks.push('version_list_explicitly_marks_current_not_last_timestamp');
 
   const countBefore = (await db.prepare('SELECT count(*) AS n FROM hwp_documents').first()).n;
   const workflow = await call('hwp_workflow_probe', {});
@@ -144,6 +154,13 @@ try {
     HWP_EASY_ALLOW_UPLOADS: 'true', HWP_EASY_FILE_ORIGINS: '["https://files.example.invalid"]' }, engine, HwpDocument, fetcher);
   const imported = await enabled.call('hwp_import', { file, request_id: crypto.randomUUID() }, authenticated);
   assert.equal(imported.structuredContent.data.saved, true);
+  const countBeforeInvalid = (await db.prepare('SELECT count(*) AS n FROM hwp_documents').first()).n;
+  const invalidFile = createHostApp({ DB: db, BUCKET: bucket, HWP_EASY_ORIGIN: origin,
+    HWP_EASY_ALLOW_UPLOADS: 'true', HWP_EASY_FILE_ORIGINS: '["https://files.example.invalid"]' },
+  engine, HwpDocument, async () => new Response(new Uint8Array([1, 2])));
+  await assert.rejects(() => invalidFile.call('hwp_import', { file, request_id: crypto.randomUUID() }, authenticated));
+  assert.equal((await db.prepare('SELECT count(*) AS n FROM hwp_documents').first()).n, countBeforeInvalid);
+  checks.push('fileparams_invalid_hwp_not_published');
   checks.push('fileparams_fake_fetch_contract', 'unconfigured_hosts_and_redirects_rejected_before_network',
     'bounded_stream_without_content_length', 'uploads_default_off');
   console.log(JSON.stringify({ authenticated_host_contract: 'passed', checks,

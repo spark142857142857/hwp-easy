@@ -91,14 +91,17 @@ export function createVersionStore(db, bucket) {
     if (c) try { await bucket.delete(c.key); } catch {}
     fail('VERSION_CONFLICT_OR_HISTORY_LIMIT');
   }
-  async function create({ owner, request_id, bytes }) {
+  async function prepareCreate({ owner, request_id, bytes }) {
     ownerKey(owner); id(request_id);
     const documentId = uuid(), c = await candidate(owner, documentId, bytes);
     const fp = await fingerprint(['create', c.sha256, c.size]);
-    const existing = await receipt(owner, request_id, fp); if (existing) return existing;
-    await writeBlob(c);
-    const fresh = `NOT EXISTS (SELECT 1 FROM hwp_requests WHERE owner = ? AND id = ?)`;
-    return settle(owner, request_id, fp, [
+    // No mutation before this handle is returned. ONLY internal synthetic
+    // workflows use it to retain the exact generated scope on a lost DB ack.
+    const execute = async () => {
+      const existing = await receipt(owner, request_id, fp); if (existing) return existing;
+      await writeBlob(c);
+      const fresh = `NOT EXISTS (SELECT 1 FROM hwp_requests WHERE owner = ? AND id = ?)`;
+      return settle(owner, request_id, fp, [
       statement(`INSERT INTO hwp_documents (owner,id,current_version,revision,created_at)
         SELECT ?,?,?,1,? WHERE ${fresh}`, [owner, documentId, c.version, c.now, owner, request_id]),
       statement(`INSERT INTO hwp_versions (owner,document_id,id,sha256,blob_key,byte_size,created_at)
@@ -108,7 +111,14 @@ export function createVersionStore(db, bucket) {
       statement(`INSERT INTO hwp_requests (owner,id,fingerprint,document_id,version_id,created_at)
         SELECT ?,?,?,?,?,? WHERE EXISTS (SELECT 1 FROM hwp_versions WHERE owner = ? AND document_id = ? AND id = ?)
         ON CONFLICT(owner,id) DO NOTHING`, [owner, request_id, fp, documentId, c.version, c.now, owner, documentId, c.version]),
-    ], c);
+      ], c);
+    };
+    let pending;
+    return Object.freeze({ document_id: documentId, execute: () => pending ??= execute() });
+  }
+  async function create(args) {
+    const prepared = await prepareCreate(args);
+    return prepared.execute();
   }
   async function read({ owner, document_id, version_id }) {
     ownerKey(owner); id(document_id); if (version_id !== undefined) id(version_id);
@@ -156,10 +166,15 @@ export function createVersionStore(db, bucket) {
   }
   async function history({ owner, document_id }) {
     ownerKey(owner); id(document_id);
-    const rows = await all(`SELECT v.id AS version_id,v.sha256,v.byte_size,v.created_at
+    const rows = await all(`SELECT v.id AS version_id,v.sha256,v.byte_size,v.created_at,d.current_version,d.revision
       FROM hwp_versions v JOIN hwp_documents d ON d.owner = v.owner AND d.id = v.document_id
       WHERE v.owner = ? AND v.document_id = ? ORDER BY v.created_at, v.id LIMIT ?`, [owner, document_id, MAX_VERSIONS]);
     if (!rows.length) fail('DOCUMENT_OR_VERSION_NOT_FOUND');
+    if (rows.some((row) => !uuidPattern.test(row.version_id) || !uuidPattern.test(row.current_version)
+      || !hashPattern.test(row.sha256) || !Number.isSafeInteger(row.byte_size) || row.byte_size < 1 || row.byte_size > MAX_BYTES
+      || !Number.isSafeInteger(row.revision) || row.revision < 1
+      || !Number.isSafeInteger(row.created_at) || row.created_at < 0)
+      || !rows.some((row) => row.version_id === rows[0].current_version)) fail('BLOB_MISSING_OR_CORRUPT');
     return rows;
   }
   async function restore({ owner, document_id, expected_version, source_version, request_id }) {
@@ -194,6 +209,6 @@ export function createVersionStore(db, bucket) {
     ]); } catch { fail('SYNTHETIC_CLEANUP_FAILED'); }
     return { synthetic_blobs_removed: count, cleanup_complete: true };
   }
-  return Object.freeze({ create, read, replace, history, restore, purgeSyntheticOwner,
+  return Object.freeze({ create, prepareCreate, read, replace, history, restore, purgeSyntheticOwner,
     limits: Object.freeze({ max_bytes: MAX_BYTES, max_versions_per_document: MAX_VERSIONS }) });
 }

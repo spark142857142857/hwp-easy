@@ -8,9 +8,9 @@
   },
   "scripts": {
     "build": "node scripts/build.mjs",
-    "test": "node --test tests/*.test.mjs && node scripts/build.mjs && node scripts/check-workerd.mjs && node scripts/check-storage.mjs && node scripts/check-host.mjs",
+    "test": "node --test tests/*.test.mjs && node scripts/build.mjs && node scripts/check-workerd.mjs && node scripts/check-storage.mjs && node scripts/check-host.mjs && node scripts/check-host-failures.mjs",
     "test:storage": "node scripts/check-storage.mjs",
-    "test:host": "node scripts/check-host.mjs",
+    "test:host": "node scripts/check-host.mjs && node scripts/check-host-failures.mjs",
     "db:generate": "drizzle-kit generate"
   },
   "dependencies": {
