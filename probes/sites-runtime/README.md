@@ -22,7 +22,7 @@ npm ci --ignore-scripts --no-audit --no-fund
 npm test
 ```
 
-`npm test`는 Node 회귀 → 빌드 → actual workerd 엔진 → D1/R2 저장 → 인증 헤더/바이너리 계약 → 타인 접근·요청 ID 격리·비공개 오류 노출 차단 → 실패 정리 → 명시적 삭제 → 고정 합성 전송 → 고정 다운로드와 저장 버전 보기 계약 검사를 실행한다. 격리 검사의 신원은 모의이며 실제 두 OAuth 계정 인증이 아니다. 루트에서 `node probes/sites-runtime/scripts/check-python-guard.mjs`를 실행하면 합성 HWP를 Python `olefile` reader와 대조한다. 루트 런타임과 native Python 의존성이 필요하며 `PYTHON`으로 venv 실행 파일을 지정할 수 있다. 입력은 생성한 합성 문서이며 `testdocs/`를 읽지 않는다.
+`npm test`는 Node 회귀 → 빌드 → actual workerd 엔진 → D1/R2 저장 → 인증 헤더/바이너리 계약 → 타인 접근·요청 ID 격리·비공개 오류 노출 차단 → 실패 정리 → 명시적 삭제와 읽기·저장 겹침 → 고정 합성 전송 → 고정 다운로드와 저장 버전 보기 계약 검사를 실행한다. 격리 검사의 신원과 삭제 겹침 시점은 모의이며 실제 OAuth 인증·철회가 아니다. 루트에서 `node probes/sites-runtime/scripts/check-python-guard.mjs`를 실행하면 합성 HWP를 Python `olefile` reader와 대조한다. 루트 런타임과 native Python 의존성이 필요하며 `PYTHON`으로 venv 실행 파일을 지정할 수 있다. 입력은 생성한 합성 문서이며 `testdocs/`를 읽지 않는다.
 
 `build.mjs`는 ESM·WASM·검증된 라이선스 고지를 `dist/server`에, migration을 `dist/.openai/drizzle`에 작성한다. pako 3.0.2는 bounded raw-DEFLATE runtime이다. cfb는 합성 fixture writer, Drizzle은 스키마/migration 생성, Miniflare·esbuild는 시험/빌드에만 사용한다. 이들은 배포 Worker의 별도 runtime 의존성이 아니다. [외부 구성요소 고지](../../THIRD_PARTY_NOTICES.md)
 
