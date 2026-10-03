@@ -76,12 +76,24 @@ export function createVersionStore(db, bucket) {
       try {
         const saved = await receipt(owner, requestId, expectedFingerprint);
         if (saved) return saved;
-      } catch (error) { if (error.code === 'REQUEST_ID_CONFLICT') throw error; }
+      } catch (error) {
+        if (error.code === 'DOCUMENT_DELETED' || error.code === 'DOCUMENT_DELETION_IN_PROGRESS') {
+          // A matching receipt proves explicit deletion won. This candidate is
+          // ours; its exact key is safe to discard even if the save ack was lost.
+          if (c) try { await bucket.delete(c.key); } catch {}
+          throw error;
+        }
+        if (error.code === 'REQUEST_ID_CONFLICT') throw error;
+      }
       fail('COMMIT_OUTCOME_UNKNOWN');
     }
     let saved;
     try { saved = await receipt(owner, requestId, expectedFingerprint); }
     catch (error) {
+      if (error.code === 'DOCUMENT_DELETED' || error.code === 'DOCUMENT_DELETION_IN_PROGRESS') {
+        if (c) try { await bucket.delete(c.key); } catch {}
+        throw error;
+      }
       if (error.code !== 'REQUEST_ID_CONFLICT') fail('COMMIT_OUTCOME_UNKNOWN');
       // A successful batch with a different pre-existing receipt cannot publish
       // our candidate; the guarded INSERT/UPDATE statements made no changes.
@@ -146,6 +158,14 @@ export function createVersionStore(db, bucket) {
     let bytes;
     try { bytes = new Uint8Array(await object.arrayBuffer()); } catch { fail('BLOB_READ_FAILED'); }
     if (bytes.length !== row.byte_size || await hash(bytes) !== row.sha256) fail('BLOB_MISSING_OR_CORRUPT');
+    // R2 I/O and hashing can overlap an explicit deletion. Do not return bytes
+    // from a document now revoked. This is not a lock or revocation of data
+    // already returned to another layer/client before this final check.
+    const readable = await first(`SELECT 1 AS allowed FROM hwp_documents d WHERE d.owner = ? AND d.id = ?
+      AND EXISTS (SELECT 1 FROM hwp_versions v WHERE v.owner = d.owner AND v.document_id = d.id AND v.id = ?)
+      AND NOT EXISTS (SELECT 1 FROM hwp_deletions x WHERE x.owner = d.owner AND x.document_id = d.id)`,
+      [owner, document_id, row.id]);
+    if (readable?.allowed !== 1) fail('DOCUMENT_OR_VERSION_NOT_FOUND');
     return { bytes, document_id, version_id: row.id, sha256: row.sha256,
       current_version: row.current_version, revision: row.revision, persistence: 'd1-r2' };
   }
@@ -155,6 +175,15 @@ export function createVersionStore(db, bucket) {
     const c = await candidate(owner, document_id, bytes);
     const fp = await fingerprint(['replace', document_id, expected_version, intent_sha256 ?? c.sha256]);
     const existing = await receipt(owner, request_id, fp); if (existing) return existing;
+    // Avoid creating another private blob when deletion/staleness/history limits
+    // are already known. The final batch still enforces the same guards, because
+    // this preflight is NOT a distributed lock. Exact replays returned above.
+    const writable = await first(`SELECT 1 AS allowed FROM hwp_documents d WHERE d.owner = ? AND d.id = ?
+      AND d.current_version = ?
+      AND NOT EXISTS (SELECT 1 FROM hwp_deletions x WHERE x.owner = d.owner AND x.document_id = d.id)
+      AND (SELECT count(*) FROM hwp_versions v WHERE v.owner = d.owner AND v.document_id = d.id) < ?`,
+      [owner, document_id, expected_version, MAX_VERSIONS]);
+    if (writable?.allowed !== 1) fail('VERSION_CONFLICT_OR_HISTORY_LIMIT');
     await writeBlob(c);
     const fresh = `NOT EXISTS (SELECT 1 FROM hwp_requests WHERE owner = ? AND id = ?)
       AND NOT EXISTS (SELECT 1 FROM hwp_deletions WHERE owner = ? AND (document_id = ? OR request_id = ?))`;
