@@ -35,12 +35,13 @@ try {
   assert.equal(await count(), 0);
   const seed = await mf.dispatchFetch(origin + seedRoute, { headers: a });
   assert.equal(seed.status, 200);
+  assert.equal(seed.headers.get('Referrer-Policy'), 'same-origin');
   const html = await seed.text();
   assert(html.includes('method="post"')); assert(html.includes('합성 시험 문서 저장하기'));
   assert.equal(await count(), 0); assert.equal((await bucket.list()).objects.length, 0);
   checks.push('anonymous_or_partial_identity_denied_get_seed_is_read_only');
 
-  for (const [body, headers] of [[validBody, { Origin: 'https://other.invalid' }], [validBody, { Origin: '' }],
+  for (const [body, headers] of [[validBody, { Origin: 'https://other.invalid' }], [validBody, { Origin: '' }], [validBody, { Origin: 'null' }],
     [validBody, { 'Content-Type': 'application/json' }], ['request_id=private', {}], [validBody + '&owner=other', {}],
     [validBody + '&request_id=' + requestId, {}], [validBody.replace('create_fixed_synthetic', 'upload_private'), {}]]) {
     assert.equal((await post(body, headers)).status, 400);
@@ -68,7 +69,7 @@ try {
     assert.equal(response.status, 200);
     if (suffix === '.hwp') await verifySyntheticDownload(new Uint8Array(await response.arrayBuffer()));
     if (suffix === '/pages/0.svg') { assert.equal(response.headers.get('Content-Type'), 'image/svg+xml; charset=utf-8'); assert((await response.text()).includes('<svg')); }
-    if (suffix === '/view') { const text = await response.text(); assert(text.includes('현재 저장본')); assert(text.includes('서식 정확성')); }
+    if (suffix === '/view') { assert.equal(response.headers.get('Referrer-Policy'), 'no-referrer'); const text = await response.text(); assert(text.includes('현재 저장본')); assert(text.includes('서식 정확성')); }
   }
   assert.deepEqual(await capture(), before);
   checks.push('exact_seed_retry_one_document_one_version_owner_scoped_view_hwp_svg_reads_without_mutation');
