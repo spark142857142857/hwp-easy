@@ -4,6 +4,8 @@ import { authenticatedOwner, boundedBytes, configuredOrigin, configuredFileOrigi
 import { SYNTHETIC_TRANSFER_BYTES, SYNTHETIC_TRANSFER_SHA256, verifyTransferFixture, syntheticOutputResource } from './synthetic-transfer.mjs';
 import { documentTools, validateArguments } from './tools.mjs';
 import { uploadDisabledError } from './error-feedback.mjs';
+import { publicErrorCode as errorCode } from './public-errors.mjs';
+import { uploadStatus } from './upload-status.mjs';
 import { documentViewerResponse, viewerMatch } from './document-viewer.mjs';
 import { storedSyntheticResponse } from './stored-synthetic.mjs';
 import { createEngineApi } from '../../../src/one_hwp/rhwp_api.mjs';
@@ -12,7 +14,6 @@ const fail = (code) => { throw new StorageError(code); };
 const uuid = '[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}';
 const jsonResponse = (data, status = 200) => Response.json(data, { status,
   headers: { 'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff' } });
-const errorCode = (error) => typeof error?.code === 'string' && /^[A-Z][A-Z0-9_]{0,80}$/.test(error.code) ? error.code : 'DOCUMENT_OPERATION_FAILED';
 
 export function createHostApp(env, engine, HwpDocument, fetcher = fetch) {
   const store = createVersionStore(env.DB, env.BUCKET), service = createDocumentService(engine, store);
@@ -26,6 +27,8 @@ export function createHostApp(env, engine, HwpDocument, fetcher = fetch) {
     if (name === 'hwp_capabilities') return { engine: '@rhwp/core', engine_version: '0.8.6', hwp_only: true,
       document_tools_implemented: true, uploads_enabled: uploadsEnabled(),
       file_url_origins_configured: fileOriginsConfigured(),
+      upload_status: uploadStatus(uploadsEnabled(), fileOriginsConfigured()),
+      stored_document_tools_available: true,
       synthetic_transfer_probe_implemented: true, synthetic_transfer_fixture_sha256: SYNTHETIC_TRANSFER_SHA256,
       synthetic_transfer_fixture_bytes: SYNTHETIC_TRANSFER_BYTES,
       synthetic_transfer_origins_configured: syntheticFileOriginsConfigured(),
@@ -225,7 +228,10 @@ export function createHostApp(env, engine, HwpDocument, fetcher = fetch) {
       if (request.method !== 'GET') return new Response(null, { status: 405, headers: { Allow: 'GET' } });
       if (viewerMatch(url.pathname)) return await documentViewerResponse(url, owner, service);
       return await download(request.url, owner);
-    } catch (error) { return jsonResponse({ error: errorCode(error) }, error?.code === 'DOCUMENT_OR_VERSION_NOT_FOUND' ? 404 : 400); }
+    } catch (error) {
+      const code = errorCode(error);
+      return jsonResponse({ error: code }, code === 'DOCUMENT_OR_VERSION_NOT_FOUND' ? 404 : 400);
+    }
   }
   async function call(name, args, request) {
     const owner = await authenticatedOwner(request.headers);

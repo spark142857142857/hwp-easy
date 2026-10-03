@@ -11,6 +11,7 @@ import { createHostApp } from '../host/app.mjs';
 import { documentTools } from '../host/tools.mjs';
 import { boundedBytes } from '../host/transfer.mjs';
 import { documentToolError } from '../host/error-feedback.mjs';
+import { publicErrorCode } from '../host/public-errors.mjs';
 import { syntheticDownloadBytes, syntheticDownloadResponse } from '../host/synthetic-download.mjs';
 const wasm = initSync({ module: wasmModule });
 const json = JSON.parse;
@@ -308,7 +309,7 @@ export default {
       try { return reply(await createHostApp(env, createDocumentEngine(HwpDocument), HwpDocument)
         .call(rpc.params?.name, rpc.params?.arguments, request)); }
       catch (err) {
-        if (err.code === 'AUTHENTICATION_REQUIRED') return response({ error: 'Authentication required' }, 401);
+        if (publicErrorCode(err) === 'AUTHENTICATION_REQUIRED') return response({ error: 'Authentication required' }, 401);
         return reply(documentToolError(err));
       }
     }

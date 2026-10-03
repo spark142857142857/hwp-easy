@@ -49,5 +49,16 @@ test('arbitrary error fields cannot forge diagnostics or leak private data', () 
   }
   const changed = uploadDisabledError(file);
   changed.code = 'OTHER_FIXED_ERROR';
-  assert.deepEqual(documentToolError(changed), { isError: true, content: [{ type: 'text', text: 'OTHER_FIXED_ERROR' }] });
+  assert.deepEqual(documentToolError(changed), { isError: true, content: [{ type: 'text', text: 'DOCUMENT_OPERATION_FAILED' }] });
+});
+
+test('uppercase private codes and hostile accessors never reach the MCP error response', () => {
+  const badGetter = Object.defineProperty({}, 'code', { get() { throw new Error('PRIVATE_SENTINEL'); } });
+  const revoked = Proxy.revocable({}, {}); revoked.revoke();
+  for (const error of [{ code: 'PRIVATE_DOCUMENT_TITLE' }, { code: 'PRIVATE_SIGNED_URL_TOKEN' },
+    { code: { toString() { throw new Error('PRIVATE_SENTINEL'); } } }, badGetter, revoked.proxy]) {
+    const result = documentToolError(error);
+    assert.deepEqual(result, { isError: true, content: [{ type: 'text', text: 'DOCUMENT_OPERATION_FAILED' }] });
+    assert(!JSON.stringify(result).includes('PRIVATE_'));
+  }
 });

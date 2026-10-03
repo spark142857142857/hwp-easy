@@ -1,5 +1,6 @@
 import { StorageError } from '../storage/store.mjs';
 import { fileDescriptorOrigin } from './transfer.mjs';
+import { publicErrorCode } from './public-errors.mjs';
 
 // Only errors made here carry diagnostics. Never serialize arbitrary error
 // properties: they can contain private document data or signed download URLs.
@@ -14,8 +15,7 @@ export function uploadDisabledError(file) {
 }
 
 export function documentToolError(error) {
-  const code = typeof error?.code === 'string' && /^[A-Z][A-Z0-9_]{0,80}$/.test(error.code)
-    ? error.code : 'DOCUMENT_OPERATION_FAILED';
+  const code = publicErrorCode(error);
   const result = { isError: true, content: [{ type: 'text', text: code }] };
   const origin = deniedImports.get(error);
   if (code !== 'DOCUMENT_UPLOADS_NOT_ENABLED' || !origin) return result;
