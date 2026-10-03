@@ -12,6 +12,7 @@ import { syntheticFixture } from '../../../src/one_hwp/synthetic_fixtures.mjs';
 import { createDocumentEngine } from '../engine/document.mjs';
 import { createVersionStore, StorageError } from '../storage/store.mjs';
 import { createDocumentService } from '../storage/service.mjs';
+import { applyTestMigrations } from './migrations.mjs';
 const require = createRequire(import.meta.url);
 initSync({ module: fs.readFileSync(new URL('./rhwp_bg.wasm', pathToFileURL(require.resolve('@rhwp/core')))) });
 const engine = createDocumentEngine(HwpDocument), api = createEngineApi(HwpDocument);
@@ -30,8 +31,7 @@ const owner = `probe:${crypto.randomUUID()}:a`;
 try {
   mf = new Miniflare(convertV4MiniflareOptions(options));
   let db = await mf.getD1Database('DB'), bucket = await mf.getR2Bucket('BUCKET');
-  const sql = fs.readFileSync('drizzle/0000_hwp_versions.sql', 'utf8');
-  await db.batch(sql.split('--> statement-breakpoint').map((s) => db.prepare(s.trim())));
+  await applyTestMigrations(db);
   let store = createVersionStore(db, bucket), service = createDocumentService(engine, store);
   const created = await service.create({ owner, request_id: crypto.randomUUID(), bytes });
   const original = await service.open({ owner, document_id: created.document_id });

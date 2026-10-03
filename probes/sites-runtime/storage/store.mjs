@@ -2,6 +2,7 @@
  * No HTTP routes, filename paths, auth fallbacks or arbitrary blob-key access.
  * HWP validation belongs to the service layer BEFORE mutation.
  */
+import { createDeletionStore } from './deletion.mjs';
 export class StorageError extends Error {
   constructor(code) { super(code); this.name = 'StorageError'; this.code = code; }
 }
@@ -35,11 +36,15 @@ export function createVersionStore(db, bucket) {
     catch { fail('STORAGE_UNAVAILABLE'); }
   }
   async function receipt(owner, requestId, expectedFingerprint) {
+    if (await first('SELECT document_id FROM hwp_deletions WHERE owner = ? AND request_id = ?', [owner, requestId])) fail('REQUEST_ID_CONFLICT');
     const row = await first(`SELECT r.fingerprint, r.document_id, r.version_id,
-      v.sha256, v.byte_size FROM hwp_requests r JOIN hwp_versions v
+      v.sha256, v.byte_size, x.phase AS deletion_phase FROM hwp_requests r LEFT JOIN hwp_versions v
       ON v.owner = r.owner AND v.document_id = r.document_id AND v.id = r.version_id
+      LEFT JOIN hwp_deletions x ON x.owner = r.owner AND x.document_id = r.document_id
       WHERE r.owner = ? AND r.id = ?`, [owner, requestId]);
     if (row && row.fingerprint !== expectedFingerprint) fail('REQUEST_ID_CONFLICT');
+    if (row?.deletion_phase) fail(row.deletion_phase === 'complete' ? 'DOCUMENT_DELETED' : 'DOCUMENT_DELETION_IN_PROGRESS');
+    if (row && !row.sha256) fail('BLOB_MISSING_OR_CORRUPT');
     return row ? { document_id: row.document_id, version_id: row.version_id,
       sha256: row.sha256, byte_size: row.byte_size, saved: true, persistence: 'd1-r2', replayed: true } : null;
   }
@@ -100,14 +105,15 @@ export function createVersionStore(db, bucket) {
     const execute = async () => {
       const existing = await receipt(owner, request_id, fp); if (existing) return existing;
       await writeBlob(c);
-      const fresh = `NOT EXISTS (SELECT 1 FROM hwp_requests WHERE owner = ? AND id = ?)`;
+      const fresh = `NOT EXISTS (SELECT 1 FROM hwp_requests WHERE owner = ? AND id = ?)
+        AND NOT EXISTS (SELECT 1 FROM hwp_deletions WHERE owner = ? AND request_id = ?)`;
       return settle(owner, request_id, fp, [
       statement(`INSERT INTO hwp_documents (owner,id,current_version,revision,created_at)
-        SELECT ?,?,?,1,? WHERE ${fresh}`, [owner, documentId, c.version, c.now, owner, request_id]),
+        SELECT ?,?,?,1,? WHERE ${fresh}`, [owner, documentId, c.version, c.now, owner, request_id, owner, request_id]),
       statement(`INSERT INTO hwp_versions (owner,document_id,id,sha256,blob_key,byte_size,created_at)
         SELECT ?,?,?,?,?,?,? WHERE EXISTS (SELECT 1 FROM hwp_documents WHERE owner = ? AND id = ?
         AND current_version = ?) AND ${fresh}`,
-        [owner, documentId, c.version, c.sha256, c.key, c.size, c.now, owner, documentId, c.version, owner, request_id]),
+        [owner, documentId, c.version, c.sha256, c.key, c.size, c.now, owner, documentId, c.version, owner, request_id, owner, request_id]),
       statement(`INSERT INTO hwp_requests (owner,id,fingerprint,document_id,version_id,created_at)
         SELECT ?,?,?,?,?,? WHERE EXISTS (SELECT 1 FROM hwp_versions WHERE owner = ? AND document_id = ? AND id = ?)
         ON CONFLICT(owner,id) DO NOTHING`, [owner, request_id, fp, documentId, c.version, c.now, owner, documentId, c.version]),
@@ -124,7 +130,8 @@ export function createVersionStore(db, bucket) {
     ownerKey(owner); id(document_id); if (version_id !== undefined) id(version_id);
     const row = await first(`SELECT v.id, v.sha256, v.blob_key, v.byte_size, d.current_version, d.revision
       FROM hwp_documents d JOIN hwp_versions v ON v.owner = d.owner AND v.document_id = d.id
-      AND v.id = ${version_id ? '?' : 'd.current_version'} WHERE d.owner = ? AND d.id = ?`,
+      AND v.id = ${version_id ? '?' : 'd.current_version'} WHERE d.owner = ? AND d.id = ?
+      AND NOT EXISTS (SELECT 1 FROM hwp_deletions x WHERE x.owner = d.owner AND x.document_id = d.id)`,
       [...(version_id ? [version_id] : []), owner, document_id]);
     if (!row) fail('DOCUMENT_OR_VERSION_NOT_FOUND');
     // A damaged metadata row must not turn this into arbitrary/cross-owner R2 access.
@@ -149,16 +156,17 @@ export function createVersionStore(db, bucket) {
     const fp = await fingerprint(['replace', document_id, expected_version, intent_sha256 ?? c.sha256]);
     const existing = await receipt(owner, request_id, fp); if (existing) return existing;
     await writeBlob(c);
-    const fresh = `NOT EXISTS (SELECT 1 FROM hwp_requests WHERE owner = ? AND id = ?)`;
+    const fresh = `NOT EXISTS (SELECT 1 FROM hwp_requests WHERE owner = ? AND id = ?)
+      AND NOT EXISTS (SELECT 1 FROM hwp_deletions WHERE owner = ? AND (document_id = ? OR request_id = ?))`;
     return settle(owner, request_id, fp, [
       statement(`INSERT INTO hwp_versions (owner,document_id,id,sha256,blob_key,byte_size,created_at)
         SELECT ?,?,?,?,?,?,? WHERE EXISTS (SELECT 1 FROM hwp_documents WHERE owner = ? AND id = ?
         AND current_version = ?) AND (SELECT count(*) FROM hwp_versions WHERE owner = ? AND document_id = ?) < ?
         AND ${fresh}`, [owner, document_id, c.version, c.sha256, c.key, c.size, c.now,
-          owner, document_id, expected_version, owner, document_id, MAX_VERSIONS, owner, request_id]),
+          owner, document_id, expected_version, owner, document_id, MAX_VERSIONS, owner, request_id, owner, document_id, request_id]),
       statement(`UPDATE hwp_documents SET current_version = ?, revision = revision + 1 WHERE owner = ? AND id = ?
         AND current_version = ? AND EXISTS (SELECT 1 FROM hwp_versions WHERE owner = ? AND document_id = ? AND id = ?)
-        AND ${fresh}`, [c.version, owner, document_id, expected_version, owner, document_id, c.version, owner, request_id]),
+        AND ${fresh}`, [c.version, owner, document_id, expected_version, owner, document_id, c.version, owner, request_id, owner, document_id, request_id]),
       statement(`INSERT INTO hwp_requests (owner,id,fingerprint,document_id,version_id,created_at)
         SELECT ?,?,?,?,?,? WHERE EXISTS (SELECT 1 FROM hwp_documents WHERE owner = ? AND id = ? AND current_version = ?)
         ON CONFLICT(owner,id) DO NOTHING`, [owner, request_id, fp, document_id, c.version, c.now, owner, document_id, c.version]),
@@ -168,7 +176,9 @@ export function createVersionStore(db, bucket) {
     ownerKey(owner); id(document_id);
     const rows = await all(`SELECT v.id AS version_id,v.sha256,v.byte_size,v.created_at,d.current_version,d.revision
       FROM hwp_versions v JOIN hwp_documents d ON d.owner = v.owner AND d.id = v.document_id
-      WHERE v.owner = ? AND v.document_id = ? ORDER BY v.created_at, v.id LIMIT ?`, [owner, document_id, MAX_VERSIONS]);
+      WHERE v.owner = ? AND v.document_id = ?
+      AND NOT EXISTS (SELECT 1 FROM hwp_deletions x WHERE x.owner = v.owner AND x.document_id = v.document_id)
+      ORDER BY v.created_at, v.id LIMIT ?`, [owner, document_id, MAX_VERSIONS]);
     if (!rows.length) fail('DOCUMENT_OR_VERSION_NOT_FOUND');
     if (rows.some((row) => !uuidPattern.test(row.version_id) || !uuidPattern.test(row.current_version)
       || !hashPattern.test(row.sha256) || !Number.isSafeInteger(row.byte_size) || row.byte_size < 1 || row.byte_size > MAX_BYTES
@@ -206,9 +216,11 @@ export function createVersionStore(db, bucket) {
       statement('DELETE FROM hwp_requests WHERE owner = ?', [owner]),
       statement('DELETE FROM hwp_versions WHERE owner = ?', [owner]),
       statement('DELETE FROM hwp_documents WHERE owner = ?', [owner]),
+      statement('DELETE FROM hwp_deletions WHERE owner = ?', [owner]),
     ]); } catch { fail('SYNTHETIC_CLEANUP_FAILED'); }
     return { synthetic_blobs_removed: count, cleanup_complete: true };
   }
-  return Object.freeze({ create, prepareCreate, read, replace, history, restore, purgeSyntheticOwner,
+  const deletion = createDeletionStore({ db, bucket, statement, first, all, fail, ownerKey, id });
+  return Object.freeze({ create, prepareCreate, read, replace, history, restore, remove: deletion.remove, purgeSyntheticOwner,
     limits: Object.freeze({ max_bytes: MAX_BYTES, max_versions_per_document: MAX_VERSIONS }) });
 }

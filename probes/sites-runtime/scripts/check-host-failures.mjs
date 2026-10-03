@@ -13,6 +13,7 @@ import { createDocumentService } from '../storage/service.mjs';
 import { createVersionStore, StorageError } from '../storage/store.mjs';
 import { createHostApp } from '../host/app.mjs';
 import { authenticatedOwner } from '../host/transfer.mjs';
+import { applyTestMigrations } from './migrations.mjs';
 const require = createRequire(import.meta.url);
 initSync({ module: fs.readFileSync(new URL('./rhwp_bg.wasm', pathToFileURL(require.resolve('@rhwp/core')))) });
 const mf = new Miniflare(convertV4MiniflareOptions({ compatibilityDate: '2026-10-01',
@@ -25,7 +26,7 @@ const origin = 'https://probe.invalid', headers = new Headers({
   'oai-authenticated-user-id': 'synthetic-fault-owner', 'oai-authenticated-user-email': 'fault@example.invalid' });
 try {
   const db = await mf.getD1Database('DB'), bucket = await mf.getR2Bucket('BUCKET');
-  await db.batch(fs.readFileSync('drizzle/0000_hwp_versions.sql', 'utf8').split('--> statement-breakpoint').map((s) => db.prepare(s.trim())));
+  await applyTestMigrations(db);
   const owner = await authenticatedOwner(headers), engine = createDocumentEngine(HwpDocument);
   const api = createEngineApi(HwpDocument), bytes = syntheticFixture(HwpDocument, api.exportChecked);
   const store = createVersionStore(db, bucket), service = createDocumentService(engine, store);

@@ -42,7 +42,7 @@ try {
   assert.deepEqual((await rpc.json()).result.serverInfo, { name: 'HWP Easy', version: '0.3.0' });
   rpc = await call({ jsonrpc: '2.0', id: 2, method: 'tools/list' });
   const discovered = (await rpc.json()).result.tools;
-  assert.equal(discovered.length, 11);
+  assert.equal(discovered.length, 12);
   assert.equal(discovered[0].name, 'hwp_runtime_probe');
   assert.equal(discovered[0].inputSchema.additionalProperties, false);
   const request = { jsonrpc: '2.0', id: 3, method: 'tools/call', params: { name: 'hwp_runtime_probe', arguments: {} } };

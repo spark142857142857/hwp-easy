@@ -44,5 +44,5 @@ export function createDocumentService(engine, store) {
     await open({ owner: args.owner, document_id: args.document_id, version_id: args.source_version });
     return store.restore(args);
   }
-  return Object.freeze({ create, prepareCreate, open, read, edit, restore, history: store.history });
+  return Object.freeze({ create, prepareCreate, open, read, edit, restore, remove: store.remove, history: store.history });
 }

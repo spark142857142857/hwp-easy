@@ -10,6 +10,7 @@ import { syntheticFixture } from '../../../src/one_hwp/synthetic_fixtures.mjs';
 import { createDocumentEngine } from '../engine/document.mjs';
 import { createHostApp } from '../host/app.mjs';
 import { authenticatedOwner, boundedBytes, fetchInputFile } from '../host/transfer.mjs';
+import { applyTestMigrations } from './migrations.mjs';
 const require = createRequire(import.meta.url);
 initSync({ module: fs.readFileSync(new URL('./rhwp_bg.wasm', pathToFileURL(require.resolve('@rhwp/core')))) });
 const origin = 'https://probe.invalid';
@@ -25,7 +26,7 @@ const other = { 'oai-authenticated-user-id': 'synthetic-b', 'oai-authenticated-u
 const checks = [];
 try {
   const db = await mf.getD1Database('DB'), bucket = await mf.getR2Bucket('BUCKET');
-  await db.batch(fs.readFileSync('drizzle/0000_hwp_versions.sql', 'utf8').split('--> statement-breakpoint').map((s) => db.prepare(s.trim())));
+  await applyTestMigrations(db);
   const api = createEngineApi(HwpDocument), engine = createDocumentEngine(HwpDocument);
   const bytes = syntheticFixture(HwpDocument, api.exportChecked, { paragraphs: ['파일 왕복 합성 문서', '파일 왕복 합성 문서'] });
   const rpc = (name, args, identity = headers) => mf.dispatchFetch(`${origin}/mcp`, { method: 'POST',
@@ -163,6 +164,20 @@ try {
   checks.push('fileparams_invalid_hwp_not_published');
   checks.push('fileparams_fake_fetch_contract', 'unconfigured_hosts_and_redirects_rejected_before_network',
     'bounded_stream_without_content_length', 'uploads_default_off');
+  const deletion = { document_id: created.document_id, expected_version: restored.version_id,
+    request_id: crypto.randomUUID(), confirmation: 'delete_document_and_recorded_versions' };
+  await denied('hwp_delete', { ...deletion, confirmation: 'delete_all_files' }, 'INVALID_TOOL_ARGUMENTS');
+  await denied('hwp_delete', deletion, 'DOCUMENT_OR_VERSION_NOT_FOUND', other);
+  await denied('hwp_delete', { ...deletion, expected_version: created.version_id }, 'VERSION_CONFLICT');
+  const removed = await call('hwp_delete', deletion);
+  assert.equal(removed.recorded_versions_removed, 3); assert.equal(removed.unpublished_blob_gc_verified, false);
+  assert.equal((await call('hwp_delete', deletion)).replayed, true);
+  await denied('hwp_read', current, 'DOCUMENT_OR_VERSION_NOT_FOUND');
+  assert.equal((await mf.dispatchFetch(link.download_url, { headers })).status, 404);
+  assert.equal((await call('hwp_read', { document_id: imported.structuredContent.data.document_id,
+    version_id: imported.structuredContent.data.version_id })).storage.sha256, imported.structuredContent.data.sha256);
+  checks.push('delete_confirmation_owner_and_version_guards', 'explicit_delete_replay_and_recorded_version_cleanup',
+    'deleted_document_read_and_download_revoked', 'delete_preserves_other_documents');
   console.log(JSON.stringify({ authenticated_host_contract: 'passed', checks,
     real_d1_r2_and_hwp: true, local_identity_headers_are_mocks_not_oauth: true,
     fileparam_network_is_mocked: true, native_client_attachment_verified: false, workflow }));

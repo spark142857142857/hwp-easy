@@ -25,7 +25,8 @@ export function createHostApp(env, engine, HwpDocument, fetcher = fetch) {
       max_input_bytes: store.limits.max_bytes, max_versions_per_document: store.limits.max_versions_per_document,
       default_save: 'same_remote_document', pc_original_updated: false, layout_verified: false,
       native_file_attachment_verified: false, codex_cloud_client_verified: false, dots_client_verified: false,
-      retention: 'production_policy_not_finalized_uploads_default_off' };
+      retention: 'until_explicit_delete', automatic_expiry: false,
+      deletion_scope: 'logical_document_and_recorded_versions', unpublished_blob_gc_verified: false };
     if (name === 'hwp_import') {
       if (!uploadsEnabled()) fail('DOCUMENT_UPLOADS_NOT_ENABLED');
       const bytes = await fetchInputFile(args.file, env.HWP_EASY_FILE_ORIGINS, fetcher);
@@ -34,6 +35,8 @@ export function createHostApp(env, engine, HwpDocument, fetcher = fetch) {
     if (name === 'hwp_edit') return service.edit({ owner, ...args,
       request: { expected_sha256: args.expected_sha256, operations: args.operations } });
     if (name === 'hwp_restore') return service.restore({ owner, ...args });
+    if (name === 'hwp_delete') return service.remove({ owner, document_id: args.document_id,
+      expected_version: args.expected_version, request_id: args.request_id });
     if (name === 'hwp_versions') {
       const history = await service.history({ owner, document_id: args.document_id });
       return { document_id: args.document_id, current_version: history[0].current_version, revision: history[0].revision,
@@ -53,7 +56,7 @@ export function createHostApp(env, engine, HwpDocument, fetcher = fetch) {
     snapshot.preview({ expected_sha256: metadata.sha256, page: args.page });
     return { ...metadata, preview_url: `${base}/pages/${args.page}.svg`, requires_same_user_sign_in: true, layout_verified: false };
   }
-  async function removeGeneratedDocument(owner, documentId, createRequestId) {
+  async function verifyGeneratedDocument(owner, documentId, createRequestId) {
     // Both ids are generated ONLY inside workflow(), never supplied by a caller.
     // If a document exists, require this run's creation receipt BEFORE deleting
     // any blob. Corrupt/unavailable provenance must not erase another document.
@@ -62,6 +65,13 @@ export function createHostApp(env, engine, HwpDocument, fetcher = fetch) {
       const receipt = await env.DB.prepare('SELECT document_id FROM hwp_requests WHERE owner = ? AND id = ?').bind(owner, createRequestId).first();
       if (receipt?.document_id !== documentId) fail('SYNTHETIC_CLEANUP_FAILED');
     }
+    const prefix = `hwp-easy/v1/${owner}/${documentId}/`;
+    const page = await env.BUCKET.list({ prefix, limit: 1000 });
+    if (!Array.isArray(page.objects) || page.truncated || page.objects.length > 512
+      || page.objects.some((o) => typeof o?.key !== 'string' || !o.key.startsWith(prefix))) fail('SYNTHETIC_CLEANUP_FAILED');
+  }
+  async function removeGeneratedDocument(owner, documentId, createRequestId) {
+    await verifyGeneratedDocument(owner, documentId, createRequestId);
     const prefix = `hwp-easy/v1/${owner}/${documentId}/`; let cursor, count = 0;
     do {
       const page = await env.BUCKET.list({ prefix, limit: 1000, ...(cursor ? { cursor } : {}) });
@@ -74,6 +84,7 @@ export function createHostApp(env, engine, HwpDocument, fetcher = fetch) {
       env.DB.prepare('DELETE FROM hwp_requests WHERE owner = ? AND document_id = ?').bind(owner, documentId),
       env.DB.prepare('DELETE FROM hwp_versions WHERE owner = ? AND document_id = ?').bind(owner, documentId),
       env.DB.prepare('DELETE FROM hwp_documents WHERE owner = ? AND id = ?').bind(owner, documentId),
+      env.DB.prepare('DELETE FROM hwp_deletions WHERE owner = ? AND document_id = ?').bind(owner, documentId),
     ]);
   }
   async function workflow(owner) {
@@ -116,11 +127,20 @@ export function createHostApp(env, engine, HwpDocument, fetcher = fetch) {
         source_version: created.version_id, request_id: crypto.randomUUID() }, owner);
       check(restored.sha256 === created.sha256 && restored.version_id !== created.version_id);
       check((await tool('hwp_versions', { document_id: created.document_id }, owner)).versions.length === 3);
+      const deletion = { document_id: created.document_id, expected_version: restored.version_id,
+        request_id: crypto.randomUUID(), confirmation: 'delete_document_and_recorded_versions' };
+      await verifyGeneratedDocument(owner, prepared.document_id, createRequestId);
+      const deleted = await tool('hwp_delete', deletion, owner);
+      check(deleted.deleted && deleted.recorded_versions_removed === 3 && !deleted.unpublished_blob_gc_verified);
+      check((await tool('hwp_delete', deletion, owner)).replayed);
+      try { await service.open({ owner, document_id: created.document_id }); fail('WORKFLOW_PROBE_FAILED'); }
+      catch (error) { check(error.code === 'DOCUMENT_OR_VERSION_NOT_FOUND'); }
       report = { passed: true, scope: 'signed_in_user_fixed_synthetic_only', persistence: 'd1-r2',
         owner_source: 'sites_dispatch_authenticated_identity', pages, read_plan_edit_default_save: true,
         owner_scoped_binary_handler_and_reopen: true, owner_scoped_svg_handler: true,
         external_http_download_verified: false,
         request_replay: true, previous_version_restore: true, native_file_attachment_verified: false,
+        explicit_delete_of_recorded_versions: true, unpublished_blob_gc_verified: false,
         real_two_user_oauth_verified: false, codex_cloud_client_verified: false, dots_client_verified: false,
         uploads_enabled: uploadsEnabled(), layout_verified: false };
     } finally {

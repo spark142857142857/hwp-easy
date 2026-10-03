@@ -123,7 +123,7 @@ try {
     phase = 'mcp_discovery';
     const listing = await call('tools/list', {});
     const tools = (await listing.json()).result.tools;
-    assert.equal(tools.length, 11);
+    assert.equal(tools.length, 12);
     assert.equal(tools[0].name, 'hwp_runtime_probe');
     discoveryVerified = true;
     phase = 'service_without_user';

@@ -86,19 +86,22 @@ test('failed and redirected file responses are cancelled with fixed errors', asy
   }
 });
 test('tool metadata declares complete optional file properties and safe action hints', () => {
-  assert.equal(documentTools.length, 10);
+  assert.equal(documentTools.length, 11);
   const descriptor = documentTools.find((t) => t.name === 'hwp_import');
   assert.deepEqual(descriptor._meta['openai/fileParams'], ['file']);
   assert.deepEqual(descriptor.inputSchema.properties.file.required, ['download_url', 'file_id']);
   assert.deepEqual(Object.keys(descriptor.inputSchema.properties.file.properties).sort(),
     ['download_url', 'file_id', 'file_name', 'mime_type']);
-  for (const name of ['hwp_import', 'hwp_edit', 'hwp_restore', 'hwp_workflow_probe']) {
+  for (const name of ['hwp_import', 'hwp_edit', 'hwp_restore', 'hwp_delete', 'hwp_workflow_probe']) {
     assert.equal(documentTools.find((t) => t.name === name).annotations.readOnlyHint, false);
   }
   for (const name of ['hwp_read', 'hwp_plan', 'hwp_versions', 'hwp_download', 'hwp_preview']) {
     assert.equal(documentTools.find((t) => t.name === name).annotations.readOnlyHint, true);
   }
   assert.equal(documentTools.find((t) => t.name === 'hwp_edit').annotations.destructiveHint, true);
+  assert.equal(documentTools.find((t) => t.name === 'hwp_delete').annotations.destructiveHint, true);
+  assert.equal(validateArguments('hwp_delete', { document_id: crypto.randomUUID(), expected_version: crypto.randomUUID(),
+    request_id: crypto.randomUUID(), confirmation: 'delete_everything' }), false);
   assert.equal(validateArguments('hwp_workflow_probe', { document_id: crypto.randomUUID() }), false);
   assert.equal(validateArguments('hwp_capabilities', { owner: 'untrusted' }), false);
 });
