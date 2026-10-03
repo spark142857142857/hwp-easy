@@ -1,6 +1,7 @@
 import { createVersionStore, StorageError } from '../storage/store.mjs';
 import { createDocumentService } from '../storage/service.mjs';
-import { authenticatedOwner, boundedBytes, configuredOrigin, configuredFileOrigins, fetchInputFile, TRANSFER_BODY_TIMEOUT_MS } from './transfer.mjs';
+import { authenticatedOwner, boundedBytes, configuredOrigin, configuredFileOrigins, fileDescriptorOrigin, fetchInputFile, TRANSFER_BODY_TIMEOUT_MS } from './transfer.mjs';
+import { SYNTHETIC_TRANSFER_BYTES, SYNTHETIC_TRANSFER_SHA256, verifyTransferFixture, syntheticOutputResource } from './synthetic-transfer.mjs';
 import { documentTools, validateArguments } from './tools.mjs';
 import { createEngineApi } from '../../../src/one_hwp/rhwp_api.mjs';
 import { syntheticFixture } from '../../../src/one_hwp/synthetic_fixtures.mjs';
@@ -22,6 +23,9 @@ export function createHostApp(env, engine, HwpDocument, fetcher = fetch) {
     if (name === 'hwp_capabilities') return { engine: '@rhwp/core', engine_version: '0.8.6', hwp_only: true,
       document_tools_implemented: true, uploads_enabled: uploadsEnabled(),
       file_url_origins_configured: fileOriginsConfigured(),
+      synthetic_transfer_probe_implemented: true, synthetic_transfer_fixture_sha256: SYNTHETIC_TRANSFER_SHA256,
+      synthetic_transfer_fixture_bytes: SYNTHETIC_TRANSFER_BYTES,
+      synthetic_transfer_origins_configured: syntheticFileOriginsConfigured(),
       transfer_body_timeout_ms: TRANSFER_BODY_TIMEOUT_MS,
       max_input_bytes: store.limits.max_bytes, max_versions_per_document: store.limits.max_versions_per_document,
       default_save: 'same_remote_document', pc_original_updated: false, layout_verified: false,
@@ -32,6 +36,25 @@ export function createHostApp(env, engine, HwpDocument, fetcher = fetch) {
       if (!uploadsEnabled()) fail('DOCUMENT_UPLOADS_NOT_ENABLED');
       const bytes = await fetchInputFile(args.file, env.HWP_EASY_FILE_ORIGINS, fetcher);
       return service.create({ owner, request_id: args.request_id, bytes });
+    }
+    if (name === 'hwp_transfer_probe') {
+      const candidateOrigin = fileDescriptorOrigin(args.file);
+      const diagnostics = { scope: 'server_pinned_synthetic_file_only', candidate_file_origin: candidateOrigin,
+        candidate_origin_is_not_authorization: true, input_file_bytes_received: false,
+        general_uploads_enabled: uploadsEnabled(), expected_fixture_sha256: SYNTHETIC_TRANSFER_SHA256,
+        expected_fixture_bytes: SYNTHETIC_TRANSFER_BYTES, native_download_artifact_verified: false };
+      if (!syntheticFileOriginsConfigured()) return { ...diagnostics, status: 'file_host_confirmation_required',
+        network_request_made: false, stored: false };
+      const bytes = await fetchInputFile(args.file, env.HWP_EASY_SYNTHETIC_FILE_ORIGINS, fetcher, SYNTHETIC_TRANSFER_BYTES);
+      await verifyTransferFixture(bytes);
+      let output;
+      const report = await workflow(owner, bytes, (result) => { output = result; });
+      if (!output || output.bytes.length > 65536) fail('SYNTHETIC_OUTPUT_LIMIT_EXCEEDED');
+      return { ...diagnostics, ...report, status: 'synthetic_transfer_passed',
+        scope: diagnostics.scope,
+        input_file_bytes_received: true, network_request_made: true, server_pinned_fixture_verified: true,
+        output_sha256: output.sha256, output_bytes: output.bytes.length,
+        output_transport: 'mcp_embedded_resource', _synthetic_output: syntheticOutputResource(output.bytes, output.sha256) };
     }
     if (name === 'hwp_edit') return service.edit({ owner, ...args,
       request: { expected_sha256: args.expected_sha256, operations: args.operations } });
@@ -88,9 +111,12 @@ export function createHostApp(env, engine, HwpDocument, fetcher = fetch) {
       env.DB.prepare('DELETE FROM hwp_deletions WHERE owner = ? AND document_id = ?').bind(owner, documentId),
     ]);
   }
-  async function workflow(owner) {
+  function syntheticFileOriginsConfigured() {
+    try { return configuredFileOrigins(env.HWP_EASY_SYNTHETIC_FILE_ORIGINS).length > 0; } catch { return false; }
+  }
+  async function workflow(owner, inputBytes, onOutput) {
     const api = createEngineApi(HwpDocument);
-    const bytes = syntheticFixture(HwpDocument, api.exportChecked, { paragraphs: ['합성 에이전트 문서', '합성 에이전트 문서'] });
+    const bytes = inputBytes ?? syntheticFixture(HwpDocument, api.exportChecked, { paragraphs: ['합성 에이전트 문서', '합성 에이전트 문서'] });
     let created, prepared, report;
     const createRequestId = crypto.randomUUID();
     const check = (value) => { if (!value) fail('WORKFLOW_PROBE_FAILED'); };
@@ -118,10 +144,12 @@ export function createHostApp(env, engine, HwpDocument, fetcher = fetch) {
       const link = await tool('hwp_download', { document_id: created.document_id, version_id: edited.version_id }, owner);
       const output = await download(link.download_url, owner);
       check(output.status === 200 && output.headers.get('content-type') === 'application/x-hwp');
-      const reopened = await engine.open(new Uint8Array(await output.arrayBuffer()));
+      const outputBytes = new Uint8Array(await output.arrayBuffer());
+      const reopened = await engine.open(outputBytes);
       const after = reopened.read({ expected_sha256: reopened.source_sha256 });
       check(after.blocks.find((b) => b.id === body.id).text === edits.operations[0].new_text);
       check(after.blocks.find((b) => b.id === cell.id).text === edits.operations[1].new_text);
+      if (onOutput) onOutput({ bytes: outputBytes, sha256: reopened.source_sha256 });
       const preview = await tool('hwp_preview', { document_id: created.document_id, version_id: edited.version_id, page: 0 }, owner);
       check((await download(preview.preview_url, owner)).status === 200);
       const restored = await tool('hwp_restore', { document_id: created.document_id, expected_version: edited.version_id,
@@ -195,9 +223,9 @@ export function createHostApp(env, engine, HwpDocument, fetcher = fetch) {
   }
   async function call(name, args, request) {
     const owner = await authenticatedOwner(request.headers);
-    const data = await tool(name, args, owner);
+    const { _synthetic_output: resource, ...data } = await tool(name, args, owner);
     const result = { stage: 'private-development', data, layout_verified: false };
-    return { content: [{ type: 'text', text: JSON.stringify(result) }], structuredContent: result };
+    return { content: [{ type: 'text', text: JSON.stringify(result) }, ...(resource ? [resource] : [])], structuredContent: result };
   }
   return Object.freeze({ http, call, tools: documentTools, errorCode });
 }

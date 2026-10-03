@@ -56,18 +56,27 @@ export function configuredFileOrigins(originConfig) {
   if (!Array.isArray(allowed) || !allowed.length || allowed.length > 8) fail('FILE_HOST_NOT_CONFIGURED');
   return allowed.map(configuredOrigin);
 }
-export async function fetchInputFile(file, originConfig, fetcher = fetch) {
-  // A fileParams object is a transfer descriptor, NOT proof of arbitrary URL authority.
+export function fileDescriptorOrigin(file) {
+  // Inspect ONLY the public HTTPS origin. Never return a signed URL's path,
+  // query, file ID, filename or user-supplied MIME type, and never fetch here.
   if (!file || typeof file !== 'object' || Array.isArray(file)
     || Object.keys(file).some((k) => !['download_url', 'file_id', 'mime_type', 'file_name'].includes(k))
     || typeof file.file_id !== 'string' || !file.file_id.length || file.file_id.length > 256
     || typeof file.download_url !== 'string' || file.download_url.length > 8192
     || (file.mime_type !== undefined && (typeof file.mime_type !== 'string' || file.mime_type.length > 256))
     || (file.file_name !== undefined && (typeof file.file_name !== 'string' || file.file_name.length > 512))) fail('INVALID_FILE_ARGUMENT');
-  const allowed = configuredFileOrigins(originConfig);
   let url;
   try { url = new URL(file.download_url); } catch { fail('FILE_URL_NOT_ALLOWED'); }
-  if (url.protocol !== 'https:' || url.username || url.password || url.port || url.hash || !allowed.includes(url.origin)) fail('FILE_URL_NOT_ALLOWED');
+  if (url.protocol !== 'https:' || url.username || url.password || url.port || url.hash) fail('FILE_URL_NOT_ALLOWED');
+  try { configuredOrigin(url.origin); } catch { fail('FILE_URL_NOT_ALLOWED'); }
+  return url.origin;
+}
+export async function fetchInputFile(file, originConfig, fetcher = fetch, maximum = 4 * 1024 * 1024) {
+  // A fileParams object is a descriptor, NOT proof of arbitrary URL authority.
+  const candidate = fileDescriptorOrigin(file);
+  const allowed = configuredFileOrigins(originConfig);
+  if (!allowed.includes(candidate)) fail('FILE_URL_NOT_ALLOWED');
+  const url = new URL(file.download_url);
   let result;
   try {
     // Never forward Sites/user credentials or follow a redirect to another host.
@@ -75,5 +84,5 @@ export async function fetchInputFile(file, originConfig, fetcher = fetch) {
       headers: { Accept: 'application/x-hwp, application/octet-stream' } });
   } catch { fail('FILE_FETCH_FAILED'); }
   if (!result.ok) { cancelQuietly(result.body); fail('FILE_FETCH_FAILED'); }
-  return boundedBytes(result.body, 4 * 1024 * 1024, result.headers.get('content-length'));
+  return boundedBytes(result.body, maximum, result.headers.get('content-length'));
 }

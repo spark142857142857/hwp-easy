@@ -79,7 +79,13 @@ node scripts/check-deletion.mjs
 
 `build.mjs`는 고정 패키지 버전을 확인하고 ESM, WASM과 라이선스 고지를 `dist/server`에 작성한다. 생성된 migration은 `dist/.openai/drizzle`에도 포함한다. Drizzle은 개발용 스키마·migration 생성에만 사용하고 Worker 쿼리는 raw D1 prepared statement와 원자적인 batch를 사용한다. pako 3.0.2의 low-level inflater를 런타임에 사용한다. cfb 1.2.2는 합성 시험 파일을 만드는 개발 의존성일 뿐 배포 parser가 아니다. Miniflare와 esbuild도 시험·빌드 의존성이지 배포 런타임 의존성이 아니다. Miniflare 5 alpha의 공식 V4 옵션 변환기로 명시적 ESM/WASM 모듈 목록을 전달한다.
 
-로컬 검사는 실제 workerd 엔진 실행 외에 MCP 초기화·12개 도구의 조회, **모의 신원 헤더의 존재 검사**, 합성 문서 계약과 기본 upload 거부를 확인한다. 신원 헤더를 직접 넣은 로컬 검사를 실제 사용자 인증이나 tenant 격리 검증으로 해석하지 않는다.
+로컬 검사는 실제 workerd 엔진 실행 외에 MCP 초기화·13개 도구의 조회, **모의 신원 헤더의 존재 검사**, 합성 문서 계약과 기본 upload 거부를 확인한다. 신원 헤더를 직접 넣은 로컬 검사를 실제 사용자 인증이나 tenant 격리 검증으로 해석하지 않는다.
+
+## 고정 합성 파일 전달 준비
+
+`hwp_transfer_probe`는 일반 업로드를 켜지 않고 `make-transfer-fixture.mjs`의 정확한 합성 HWP만 시험하는 별도 진단이다. 서버 지문·13,312바이트 제한·별도 `HWP_EASY_SYNTHETIC_FILE_ORIGINS`·사용자 인증을 모두 요구한다. 별도 호스트가 없으면 origin만 검사하며 다운로드를 하지 않는다. 원격에는 이 별도 설정도 아직 없으므로 실제 바이트 전송을 활성화하지 않았다.
+
+지문을 통과한 경우 실제 조회·편집·기본 저장·재열기·복구와 생성 범위 정리를 수행하고 편집된 합성 HWP를 MCP embedded resource로 반환한다. 로컬 actual workerd의 7개 모의 전달·실패 시나리오는 통과했다. 결과 저장 helper는 고정 편집을 독립적으로 재현해 동일 바이트만 새 ignored 파일로 회수한다. 일반 사용자용 명령·공개 파일 URL·다운로드 UI나 실제 native/Cloud/Dots 완료를 의미하지 않는다. [계약과 한계](../../docs/remote-documents.md#고정-합성-파일-전달-진단)
 
 원격 검사용 `scripts/check-remote.mjs`는 현재 시험 Site에만 접속한다. Site 도구에서 얻은 URL과 단기 서비스 자격을 숨긴 stdin으로 받고 원문이나 자격을 파일·인수·로그에 남기지 않는다. 서비스 자격은 사용자 신원이 아니므로 실제 플러그인 연결 성공을 반환하지 않는다. 이 스크립트를 일반 사용자나 문서 작업용 도구로 노출하지 않는다.
 

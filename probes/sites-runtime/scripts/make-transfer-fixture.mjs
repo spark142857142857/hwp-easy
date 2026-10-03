@@ -6,8 +6,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import { createRequire } from 'node:module';
 import { createHash } from 'node:crypto';
 import { HwpDocument, initSync } from '@rhwp/core';
-import { createEngineApi } from '../../../src/one_hwp/rhwp_api.mjs';
-import { syntheticFixture } from '../../../src/one_hwp/synthetic_fixtures.mjs';
+import { transferFixture, verifyTransferFixture } from '../host/synthetic-transfer.mjs';
 import { createDocumentEngine } from '../engine/document.mjs';
 
 if (process.argv.length !== 2) throw new Error('This synthetic-only helper accepts no source or destination arguments');
@@ -23,9 +22,8 @@ for (const target of [outputRoot, directory]) {
   const stat = await fs.lstat(target);
   if (!stat.isDirectory() || stat.isSymbolicLink()) throw new Error('Synthetic output directories must not be symlinks');
 }
-const bytes = syntheticFixture(HwpDocument, createEngineApi(HwpDocument).exportChecked, {
-  paragraphs: ['HWP Easy 합성 첨부 시험', '개인정보 없는 고정 테스트 문서', '끝까지 조회 확인'],
-});
+const bytes = transferFixture(HwpDocument);
+await verifyTransferFixture(bytes);
 const snapshot = await createDocumentEngine(HwpDocument).open(bytes);
 const inspected = snapshot.read({ expected_sha256: snapshot.source_sha256 });
 if (!inspected.complete || !inspected.content_complete || !inspected.target_mapping_verified) {

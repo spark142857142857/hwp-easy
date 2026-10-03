@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { boundedBytes, configuredFileOrigins, fetchInputFile } from '../host/transfer.mjs';
+import { boundedBytes, configuredFileOrigins, fileDescriptorOrigin, fetchInputFile } from '../host/transfer.mjs';
 import { documentTools, validateArguments } from '../host/tools.mjs';
 const code = (expected) => (e) => e.code === expected && e.message === expected;
 function chunks(values) {
@@ -135,13 +135,13 @@ test('failed file responses do not wait for a never-settling cancellation', { ti
   assert.equal(cancelled, true); assert.equal(body.locked, false);
 });
 test('tool metadata declares complete optional file properties and safe action hints', () => {
-  assert.equal(documentTools.length, 11);
+  assert.equal(documentTools.length, 12);
   const descriptor = documentTools.find((t) => t.name === 'hwp_import');
   assert.deepEqual(descriptor._meta['openai/fileParams'], ['file']);
   assert.deepEqual(descriptor.inputSchema.properties.file.required, ['download_url', 'file_id']);
   assert.deepEqual(Object.keys(descriptor.inputSchema.properties.file.properties).sort(),
     ['download_url', 'file_id', 'file_name', 'mime_type']);
-  for (const name of ['hwp_import', 'hwp_edit', 'hwp_restore', 'hwp_delete', 'hwp_workflow_probe']) {
+  for (const name of ['hwp_import', 'hwp_transfer_probe', 'hwp_edit', 'hwp_restore', 'hwp_delete', 'hwp_workflow_probe']) {
     assert.equal(documentTools.find((t) => t.name === name).annotations.readOnlyHint, false);
   }
   for (const name of ['hwp_read', 'hwp_plan', 'hwp_versions', 'hwp_download', 'hwp_preview']) {
@@ -153,4 +153,25 @@ test('tool metadata declares complete optional file properties and safe action h
     request_id: crypto.randomUUID(), confirmation: 'delete_everything' }), false);
   assert.equal(validateArguments('hwp_workflow_probe', { document_id: crypto.randomUUID() }), false);
   assert.equal(validateArguments('hwp_capabilities', { owner: 'untrusted' }), false);
+});
+test('diagnostic file metadata contains only the origin, never signed path or file identifiers', () => {
+  const input = { download_url: 'https://files.example.invalid/private-name?token=private',
+    file_id: 'private-id', file_name: 'private-name.hwp', mime_type: 'private-type' };
+  assert.equal(fileDescriptorOrigin(input), 'https://files.example.invalid');
+  assert.equal(fileDescriptorOrigin({ file_id: 'test', download_url: input.download_url }), 'https://files.example.invalid');
+  for (const download_url of ['http://files.example.invalid/x', 'https://127.0.0.1/x', 'https://localhost/x',
+    'https://files.internal/x', 'https://files.example.invalid/x#secret', 'https://user:secret@files.example.invalid/x']) {
+    assert.throws(() => fileDescriptorOrigin({ ...input, download_url }), code('FILE_URL_NOT_ALLOWED'));
+  }
+});
+test('synthetic probe file schema rejects caller-supplied hashes and host allowlists', () => {
+  const file = { file_id: 'synthetic', download_url: 'https://files.example.invalid/signed' };
+  const descriptor = documentTools.find((t) => t.name === 'hwp_transfer_probe');
+  assert.deepEqual(descriptor._meta['openai/fileParams'], ['file']);
+  assert.equal(descriptor.annotations.openWorldHint, true);
+  assert.equal(validateArguments('hwp_transfer_probe', { file }), true);
+  for (const args of [{ file, sha256: '0'.repeat(64) }, { file, origin: 'https://files.example.invalid' },
+    { file, owner: 'user:x' }, { file: { ...file, sha256: '0'.repeat(64) } }]) {
+    assert.equal(validateArguments('hwp_transfer_probe', args), false);
+  }
 });

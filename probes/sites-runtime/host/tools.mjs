@@ -5,6 +5,8 @@ const version = { document_id: uuid, version_id: uuid };
 const operation = object({ target_id: { type: 'string', maxLength: 256 },
   expected_old: { type: 'string', maxLength: 200000 }, new_text: { type: 'string', maxLength: 200000 } });
 const edits = { expected_sha256: hash, operations: { type: 'array', items: operation, minItems: 1, maxItems: 100 } };
+const file = object({ download_url: { type: 'string', maxLength: 8192 }, file_id: { type: 'string', maxLength: 256 },
+  mime_type: { type: 'string', maxLength: 256 }, file_name: { type: 'string', maxLength: 512 } }, ['download_url', 'file_id']);
 const resultSchema = object({ stage: { type: 'string', enum: ['private-development'] },
   data: { type: 'object', additionalProperties: true }, layout_verified: { type: 'boolean', const: false } });
 const tool = (name, description, properties = {}, required, write = false, destructive = false) => ({ name,
@@ -13,9 +15,9 @@ const tool = (name, description, properties = {}, required, write = false, destr
 export const documentTools = [
   tool('hwp_capabilities', 'Check private-development HWP features, transfer gates and limits. No file changes.'),
   tool('hwp_import', 'Import an explicitly supplied HWP file into your remote document area. Requires upload enablement and a verified file host. Does not change the PC original.', {
-    request_id: uuid, file: object({ download_url: { type: 'string', maxLength: 8192 }, file_id: { type: 'string', maxLength: 256 },
-      mime_type: { type: 'string', maxLength: 256 }, file_name: { type: 'string', maxLength: 512 } }, ['download_url', 'file_id']),
+    request_id: uuid, file,
   }, undefined, true),
+  tool('hwp_transfer_probe', 'DIAGNOSTIC ONLY: supply ONLY the fixed file from make-transfer-fixture.mjs, never a personal HWP. With no separately verified diagnostic file host, inspect only the HTTPS origin without fetching. Once configured, receive at most 13312 bytes, require the server-pinned synthetic hash, test edit/save/reopen/restore, return edited synthetic HWP as embedded MCP bytes, and clean up. Does not enable general uploads or certify client download UI.', { file }, undefined, true),
   tool('hwp_read', 'Read a pinned HWP version, including paragraph/cell targets. Follow next_cursor until complete; report unsupported content.', {
     ...version, max_chars: { type: 'integer', minimum: 1, maximum: 64000 }, max_blocks: { type: 'integer', minimum: 1, maximum: 128 },
     cursor: object({ sha256: hash, block_index: { type: 'integer', minimum: 0 }, offset: { type: 'integer', minimum: 0 } }),
@@ -38,8 +40,10 @@ export const documentTools = [
   }),
   tool('hwp_workflow_probe', 'Create, read, plan, edit, retrieve and restore ONLY a built-in synthetic HWP under the signed-in user scope, then clean up that generated document. No personal file input.', {}, undefined, true),
 ];
-documentTools.find((t) => t.name === 'hwp_import')._meta = { 'openai/fileParams': ['file'] };
-documentTools.find((t) => t.name === 'hwp_import').annotations.openWorldHint = true;
+for (const name of ['hwp_import', 'hwp_transfer_probe']) {
+  documentTools.find((t) => t.name === name)._meta = { 'openai/fileParams': ['file'] };
+  documentTools.find((t) => t.name === name).annotations.openWorldHint = true;
+}
 export function validateArguments(name, args) {
   const schema = documentTools.find((t) => t.name === name)?.inputSchema;
   const valid = (value, s) => {
