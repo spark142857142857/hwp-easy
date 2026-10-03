@@ -16,19 +16,38 @@ const api = createEngineApi(HwpDocument), engine = createDocumentEngine(HwpDocum
 const fixture = (options = {}) => syntheticFixture(HwpDocument, api.exportChecked, options);
 const code = (expected) => (error) => error instanceof GuardError && error.code === expected && error.message === expected;
 const options = (snapshot, extra = {}) => ({ expected_sha256: snapshot.source_sha256, ...extra });
-function readAll(snapshot, max_chars = 8000) {
-  const found = new Map(); let cursor = null, pages = 0, last;
+function readAll(snapshot, max_chars = 8000, max_blocks = 128) {
+  const found = new Map(), completed = new Set(); let cursor = null, pages = 0, last;
   do {
-    last = snapshot.read(options(snapshot, { cursor, max_chars }));
+    last = snapshot.read(options(snapshot, { cursor, max_chars, max_blocks }));
+    assert.equal(last.offsets, 'unicode_code_points');
+    assert.deepEqual(last.page_starts_at, cursor
+      ? { block_index: cursor.block_index, offset: cursor.offset } : { block_index: 0, offset: 0 });
+    assert.ok(last.blocks.length <= max_blocks);
+    assert.ok(last.blocks.reduce((count, block) => count + [...block.text].length, 0) <= max_chars);
     for (const block of last.blocks) {
+      assert.equal(completed.has(block.id), false, 'a completed target cannot reappear');
       const previous = found.get(block.id);
       assert.equal(block.start_offset, previous ? [...previous.text].length : 0);
+      assert.equal(block.end_offset - block.start_offset, [...block.text].length);
+      assert.equal(block.text.isWellFormed(), true);
+      assert.equal(block.fragment_complete, block.end_offset === block.total_chars);
+      if (previous) assert.equal(block.target_id, previous.target_id);
       found.set(block.id, { ...block, text: (previous?.text ?? '') + block.text });
+      if (block.fragment_complete) completed.add(block.id);
+    }
+    assert.equal(last.complete, last.next_cursor === null);
+    if (last.next_cursor) {
+      assert.equal(last.next_cursor.sha256, snapshot.source_sha256);
+      assert.ok(last.next_cursor.block_index > last.page_starts_at.block_index
+        || (last.next_cursor.block_index === last.page_starts_at.block_index
+          && last.next_cursor.offset > last.page_starts_at.offset), 'each page must advance');
     }
     cursor = last.next_cursor;
     assert.ok(++pages < 10000);
   } while (cursor);
   assert.equal(last.complete, true);
+  assert.equal(completed.size, found.size);
   return { blocks: [...found.values()], pages, last };
 }
 
@@ -86,6 +105,49 @@ test('long paragraph chain includes the tail without splitting surrogate pairs',
   assert.equal(read.blocks[0].text, text);
   assert.equal(read.blocks[0].text.isWellFormed(), true);
   assert.equal(read.blocks[0].total_chars, 70001);
+});
+
+test('Unicode pagination keeps empty and duplicate paragraph/cell targets at both page limits', async () => {
+  // Code-point offsets are not grapheme-cluster offsets: decomposed Hangul,
+  // combining accents and emoji sequences may span pages, but must reassemble exactly.
+  const paragraphs = ['', '', '한글 한 e\u0301 👩‍💻 🇰🇷', '반복 😀', '반복 😀', '끝'];
+  const cells = [['', '반복 😀\n\n끝'], ['반복 😀', '가 e\u0301 👨‍👩‍👧‍👦']];
+  const bytes = fixture({ paragraphs, cells }), snapshot = await engine.open(bytes);
+  const document = api.openDocument(bytes);
+  let expected;
+  try { expected = api.inspectDocument(document).blocks; }
+  finally { document.free(); }
+  // The synthetic createTable call adds an empty body paragraph after its anchor.
+  // Verify that exported model too, rather than silently dropping empty blocks.
+  assert.deepEqual(expected.filter((b) => b.kind === 'paragraph').map((b) => b.text),
+    [paragraphs[0], '', ...paragraphs.slice(1)]);
+  assert.deepEqual(expected.filter((b) => b.kind === 'cell').map((b) => b.text), cells.flatMap((row) => row.flatMap((text) => text.split('\n'))));
+  for (const max_chars of [1, 2, 3, 8, 64]) {
+    for (const max_blocks of [1, 2, 3, 128]) {
+      const read = readAll(snapshot, max_chars, max_blocks);
+      assert.deepEqual(read.blocks.map(({ id, kind, text }) => ({ id, kind, text })),
+        expected.map(({ id, kind, text }) => ({ id, kind, text })));
+      assert.equal(new Set(read.blocks.map((b) => b.target_id)).size, expected.length);
+      assert.equal(read.last.content_complete, true);
+    }
+  }
+});
+
+test('a partial Unicode read cannot become an edit old value or a cursor for the saved version', async () => {
+  const text = '한😀글 e\u0301 끝', snapshot = await engine.open(fixture({ table: false, paragraphs: [text, '보존'] }));
+  const first = snapshot.read(options(snapshot, { max_chars: 2, max_blocks: 1 }));
+  assert.equal(first.blocks[0].text, '한😀');
+  assert.equal(first.blocks[0].fragment_complete, false);
+  const operation = { target_id: first.blocks[0].target_id, expected_old: first.blocks[0].text, new_text: '국소 수정 🚀' };
+  assert.throws(() => snapshot.plan(options(snapshot, { operations: [operation] })), code('EXPECTED_OLD_MISMATCH'));
+  assert.deepEqual(snapshot.read(options(snapshot, { max_chars: 2, max_blocks: 1 })), first);
+  const full = readAll(snapshot, 1, 1).blocks[0];
+  const changed = await snapshot.edit(options(snapshot, { operations: [{ ...operation, expected_old: full.text }] }));
+  const reopened = await engine.open(changed.bytes);
+  assert.throws(() => reopened.read(options(reopened, { cursor: first.next_cursor })), code('CURSOR_VERSION_CONFLICT'));
+  assert.deepEqual(readAll(reopened, 1, 1).blocks.map((b) => b.text), ['국소 수정 🚀', '보존']);
+  // An immutable old snapshot remains readable even after another version exists.
+  assert.equal(readAll(snapshot, 2, 1).blocks[0].text, text);
 });
 test('copied snapshot cannot be changed by caller mutation during hashing or by changing a read result', async () => {
   const bytes = fixture({ table: false });
