@@ -252,10 +252,10 @@ const tools = [{ name: 'hwp_runtime_probe',
 export default {
   async fetch(request) {
     const path = new URL(request.url).pathname;
-    if (path.startsWith('/diagnostics/')) {
+    if (path.startsWith('/diagnostics/') && path !== '/diagnostics/stored-document') {
       return syntheticDownloadResponse(request, () => syntheticDownloadBytes(HwpDocument));
     }
-    if (path.startsWith('/documents/')) {
+    if (path.startsWith('/documents/') || path === '/diagnostics/stored-document') {
       try { return await createHostApp(env, createDocumentEngine(HwpDocument), HwpDocument).http(request); }
       catch { return response({ error: 'DOCUMENT_SERVICE_UNAVAILABLE' }, 503); }
     }

@@ -4,6 +4,8 @@ import { authenticatedOwner, boundedBytes, configuredOrigin, configuredFileOrigi
 import { SYNTHETIC_TRANSFER_BYTES, SYNTHETIC_TRANSFER_SHA256, verifyTransferFixture, syntheticOutputResource } from './synthetic-transfer.mjs';
 import { documentTools, validateArguments } from './tools.mjs';
 import { uploadDisabledError } from './error-feedback.mjs';
+import { documentViewerResponse, viewerMatch } from './document-viewer.mjs';
+import { storedSyntheticResponse } from './stored-synthetic.mjs';
 import { createEngineApi } from '../../../src/one_hwp/rhwp_api.mjs';
 import { syntheticFixture } from '../../../src/one_hwp/synthetic_fixtures.mjs';
 const fail = (code) => { throw new StorageError(code); };
@@ -77,9 +79,10 @@ export function createHostApp(env, engine, HwpDocument, fetcher = fetch) {
       storage: metadata, stale_for_save: metadata.version_id !== metadata.current_version };
     const base = `${origin()}/documents/${args.document_id}/versions/${args.version_id}`;
     if (name === 'hwp_download') return { ...metadata, download_url: `${base}.hwp`, mime_type: 'application/x-hwp',
+      viewer_url: `${base}/view`,
       requires_same_user_sign_in: true, public_share_link: false };
     snapshot.preview({ expected_sha256: metadata.sha256, page: args.page });
-    return { ...metadata, preview_url: `${base}/pages/${args.page}.svg`, requires_same_user_sign_in: true, layout_verified: false };
+    return { ...metadata, preview_url: `${base}/pages/${args.page}.svg`, viewer_url: `${base}/view?page=${args.page}`, requires_same_user_sign_in: true, layout_verified: false };
   }
   async function verifyGeneratedDocument(owner, documentId, createRequestId) {
     // Both ids are generated ONLY inside workflow(), never supplied by a caller.
@@ -205,6 +208,7 @@ export function createHostApp(env, engine, HwpDocument, fetcher = fetch) {
     catch { return jsonResponse({ error: 'AUTHENTICATION_REQUIRED' }, 401); }
     try {
       const url = new URL(request.url);
+      if (url.pathname === '/diagnostics/stored-document') return await storedSyntheticResponse(request, owner, service, HwpDocument, origin());
       if (url.pathname === '/documents/import') {
         if (request.method !== 'POST') return new Response(null, { status: 405, headers: { Allow: 'POST' } });
         if (!uploadsEnabled()) fail('DOCUMENT_UPLOADS_NOT_ENABLED');
@@ -219,6 +223,7 @@ export function createHostApp(env, engine, HwpDocument, fetcher = fetch) {
         return jsonResponse(await service.create({ owner, request_id, bytes }));
       }
       if (request.method !== 'GET') return new Response(null, { status: 405, headers: { Allow: 'GET' } });
+      if (viewerMatch(url.pathname)) return await documentViewerResponse(url, owner, service);
       return await download(request.url, owner);
     } catch (error) { return jsonResponse({ error: errorCode(error) }, error?.code === 'DOCUMENT_OR_VERSION_NOT_FOUND' ? 404 : 400); }
   }

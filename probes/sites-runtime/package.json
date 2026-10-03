@@ -8,9 +8,9 @@
   },
   "scripts": {
     "build": "node scripts/build.mjs",
-    "test": "node --test tests/*.test.mjs && node scripts/build.mjs && node scripts/check-workerd.mjs && node scripts/check-storage.mjs && node scripts/check-host.mjs && node scripts/check-host-failures.mjs && node scripts/check-deletion.mjs && node scripts/check-synthetic-transfer.mjs && node scripts/check-synthetic-download.mjs",
+    "test": "node --test tests/*.test.mjs && node scripts/build.mjs && node scripts/check-workerd.mjs && node scripts/check-storage.mjs && node scripts/check-host.mjs && node scripts/check-host-failures.mjs && node scripts/check-deletion.mjs && node scripts/check-synthetic-transfer.mjs && node scripts/check-synthetic-download.mjs && node scripts/check-document-viewer.mjs",
     "test:storage": "node scripts/check-storage.mjs",
-    "test:host": "node scripts/check-host.mjs && node scripts/check-host-failures.mjs && node scripts/check-deletion.mjs && node scripts/check-synthetic-transfer.mjs && node scripts/check-synthetic-download.mjs",
+    "test:host": "node scripts/check-host.mjs && node scripts/check-host-failures.mjs && node scripts/check-deletion.mjs && node scripts/check-synthetic-transfer.mjs && node scripts/check-synthetic-download.mjs && node scripts/check-document-viewer.mjs",
     "db:generate": "drizzle-kit generate"
   },
   "dependencies": {
