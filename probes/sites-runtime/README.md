@@ -36,6 +36,8 @@ npm test
 
 ## 배포 경계
 
+`/diagnostics/stored-document`는 GET에서 생성하지 않고, 동일 origin의 명시적 POST에서 서버 지문이 고정된 합성 HWP 한 개만 D1/R2에 보관한다. 이후 `/documents/{id}/versions/{version}/view`는 저장된 선택 버전의 HWP·수동 SVG·페이지와 이전 버전 링크를 표시한다. 읽기는 저장·복구·자동 삭제를 하지 않는다. `check-document-viewer.mjs`는 모의 신원의 실제 workerd/D1/R2/WASM으로 재시도·읽기 불변·MCP 편집·재시작·명시적 삭제 후 접근 차단을 시험한다. 실제 사용자 왕복은 재인증 뒤 별도 확인한다. [저장 버전 화면](../../docs/remote-documents.md#저장된-버전의-보기-화면)
+
 브라우저 진단은 `/diagnostics/download`와 `/diagnostics/synthetic-result.hwp`만 제공한다. 사용자 인증 뒤 고정 편집 결과를 생성·지문 검사하며 D1/R2와 외부 파일 호스트를 사용하지 않는다. `check-synthetic-download.mjs`는 실제 workerd/WASM을 저장소 binding 없이 시험하지만 신원은 모의다. 실제 Chrome 클릭·수신 검증은 별도 기록으로 구분한다. 이 화면을 일반 저장 버전의 다운로드 UI로 소개하지 않는다. [진단 경계](../../docs/remote-documents.md#고정-합성-브라우저-다운로드)
 
 Site 원본은 별도 checkout으로 관리한다. 실제 `.openai/hosting.json`은 그 checkout에만 있으며 project ID·D1/R2·MCP capability를 유지한다. 저장소의 probe에는 Site ID나 자격을 넣지 않는다. 공통 `rhwp_api.mjs`와 fixture를 Site의 `src/one_hwp`에 복사하고 상대 import만 조정한 뒤 정확한 소스를 Sites 워크플로로 push·포장·비공개 게시한다.
