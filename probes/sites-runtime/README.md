@@ -87,6 +87,14 @@ node scripts/check-deletion.mjs
 
 지문을 통과한 경우 실제 조회·편집·기본 저장·재열기·복구와 생성 범위 정리를 수행하고 편집된 합성 HWP를 MCP embedded resource로 반환한다. 로컬 actual workerd의 7개 모의 전달·실패 시나리오는 통과했다. 결과 저장 helper는 고정 편집을 독립적으로 재현해 동일 바이트만 새 ignored 파일로 회수한다. 일반 사용자용 명령·공개 파일 URL·다운로드 UI나 실제 native/Cloud/Dots 완료를 의미하지 않는다. [계약과 한계](../../docs/remote-documents.md#고정-합성-파일-전달-진단)
 
+### 비공개 버전 10 배포 기록
+
+2026년 10월 3일 Site source `459c4266c92f97597446f49ad6d78728ff599fa7`을 비공개 버전 10으로 게시했고 배포 상태는 `succeeded`였다. 원격 고정 합성 엔진·D1/R2 저장 및 자료 정리가 통과했다. 익명·임의 신원 요청과 서비스 자격의 MCP 접근은 401로 거부됐다. 서비스 자격의 진단을 실제 사용자 MCP 연결 성공으로 집계하지 않는다.
+
+기존 OAuth 클라이언트·플러그인·MCP resource·접근 정책과 환경 revision 1은 유지했다. 일반 업로드는 `false`, 일반 파일 origin은 `[]`이고 별도 합성 전달 origin도 설정하지 않았다. 이 단계 첫 Desktop 기능 조회는 **새 배포 전** `oauth_token_invalid_grant`로 실패해 재인증을 요청했고 해당 연결의 후속 호출은 중단했다. 버전 10의 사용자 native 진단·첨부 수신과 결과 회수는 아직 미검증이다.
+
+루트의 Node 단위 검사 228개, Site checkout의 222개 및 실제 workerd 저장·호스트·실패·삭제·합성 전달 검사가 통과했다. 차이는 로컬 전용 파일 생성·회수 helper 검사 6개다. 구현 commit `828506ef2372a8c22e28675f19e7b38633e409ef`의 [Windows·Linux CI 4개 작업](https://github.com/spark142857142857/hwp-easy/actions/runs/37105622024)도 모두 성공했다. 개인 `testdocs`는 이 시험에 사용하거나 업로드하지 않았다.
+
 원격 검사용 `scripts/check-remote.mjs`는 현재 시험 Site에만 접속한다. Site 도구에서 얻은 URL과 단기 서비스 자격을 숨긴 stdin으로 받고 원문이나 자격을 파일·인수·로그에 남기지 않는다. 서비스 자격은 사용자 신원이 아니므로 실제 플러그인 연결 성공을 반환하지 않는다. 이 스크립트를 일반 사용자나 문서 작업용 도구로 노출하지 않는다.
 
 이번 Windows 회귀에서 레코드·컨테이너 합성 검사 162개, 메모리 내 문서 계약 검사 32개와 실제 workerd 왕복이 통과했다. 계약 검사는 고정 HWP 20종의 전체 조회·대상 편집·재열기, 긴 문단 끝까지의 조회, snapshot 변경 방지, 부분 오류·요청 한도·미지원·로그 복구 사례를 포함한다. 공통 모델 작업량 한도는 별도 빠른 mock 검사로 확인하며 이를 실제 HWP 호환성 시험 수로 해석하지 않는다. 저장소 루트의 고정 HWP 20종도 Python `olefile` reader와 대조해 해제된 스트림 180개, 문단 레코드 비교 60회와 DocInfo 20개가 일치했다. 이를 재현하려면 루트 npm 런타임과 Python native 의존성도 준비한 뒤 루트에서 `node probes/sites-runtime/scripts/check-python-guard.mjs`를 실행한다. 필요하면 `PYTHON`을 해당 venv 실행 파일로 지정한다. 모든 입력은 메모리에서 생성한 합성 문서이며 개인 문서 폴더를 읽지 않는다.

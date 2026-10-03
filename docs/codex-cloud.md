@@ -33,6 +33,10 @@ Codex Cloud는 게시한 환경에서 도구·저장소·의존성을 준비하�
 
 추가 재인증은 없었다. OAuth 클라이언트·플러그인 ID·MCP 주소·접근 정책·환경 revision 1을 유지했다. 이는 이번 배포에서 기존 연결이 유지됐다는 근거이지 모든 배포·세션에서 연결 만료가 없다는 보장이 아니다. 실제 첨부 바이트·외부 HTTP 다운로드·HWP 회수·두 OAuth 사용자·저장소 기반 Codex Cloud·Dots·시각 배치의 미검증 상태와 개인 업로드 제한은 바꾸지 않았다. [배포와 로컬 검사](../probes/sites-runtime/README.md#비공개-버전-9-전송-시간-제한과-호환성-반영)
 
+### 버전 10 합성 전달 경로 준비와 인증 대기
+
+고정 합성 HWP만 받는 별도 전달 진단과 MCP embedded HWP 결과·로컬 회수 helper를 준비해 버전 10으로 게시했다. 모의 전달의 실제 workerd 검사와 Windows·Linux CI가 통과했다. 일반 업로드 및 별도 합성 전달 호스트는 활성화하지 않았다. 새 배포 전에 Desktop 기능 조회가 다시 `oauth_token_invalid_grant`로 실패해 재인증을 요청했고, 같은 연결의 후속 호출과 Cloud 재시험은 보류했다. 새 경로의 native 첨부·결과 회수를 확인한 것이 아니며 Cloud·Dots 지원 플래그도 그대로다. [버전 10 근거](../probes/sites-runtime/README.md#비공개-버전-10-배포-기록)
+
 ## 공통 엔진과 저장 계층
 
 `src/one_hwp/rhwp_api.mjs`는 경로·Node 파일 API 없이 문서 모델을 읽고 수정한다. Node JSON bridge와 browser ESM이 이 코드를 함께 사용한다. `probes/sites-runtime/engine/document.mjs`는 browser ESM에서 바이트 snapshot, SHA-256 기반 대상, 이어 읽기, 계획·편집·미리보기 계약을 제공한다.
