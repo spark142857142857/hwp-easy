@@ -11,6 +11,7 @@ import { createHostApp } from '../host/app.mjs';
 import { documentTools } from '../host/tools.mjs';
 import { boundedBytes } from '../host/transfer.mjs';
 import { documentToolError } from '../host/error-feedback.mjs';
+import { syntheticDownloadBytes, syntheticDownloadResponse } from '../host/synthetic-download.mjs';
 const wasm = initSync({ module: wasmModule });
 const json = JSON.parse;
 const checked = (value) => { if (json(value).ok !== true) throw new Error('operation'); };
@@ -251,6 +252,9 @@ const tools = [{ name: 'hwp_runtime_probe',
 export default {
   async fetch(request) {
     const path = new URL(request.url).pathname;
+    if (path.startsWith('/diagnostics/')) {
+      return syntheticDownloadResponse(request, () => syntheticDownloadBytes(HwpDocument));
+    }
     if (path.startsWith('/documents/')) {
       try { return await createHostApp(env, createDocumentEngine(HwpDocument), HwpDocument).http(request); }
       catch { return response({ error: 'DOCUMENT_SERVICE_UNAVAILABLE' }, 503); }

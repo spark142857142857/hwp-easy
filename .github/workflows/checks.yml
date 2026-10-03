@@ -94,3 +94,5 @@ jobs:
         run: node scripts/check-deletion.mjs
       - name: Verify pinned synthetic file transfer and embedded HWP result
         run: node scripts/check-synthetic-transfer.mjs
+      - name: Verify fixed authenticated browser download contract without storage
+        run: node scripts/check-synthetic-download.mjs
