@@ -1,27 +1,37 @@
 import { StorageError } from '../storage/store.mjs';
 const fail = (code) => { throw new StorageError(code); };
-export async function boundedBytes(body, maximum, length) {
+export const TRANSFER_BODY_TIMEOUT_MS = 30000;
+// Cancellation can itself never settle. Observe errors without letting an
+// upstream cancel hook hold a rejected transfer (and its reader) indefinitely.
+const cancelQuietly = (source) => { try { Promise.resolve(source?.cancel()).catch(() => {}); } catch {} };
+export async function boundedBytes(body, maximum, length, timeoutMs = TRANSFER_BODY_TIMEOUT_MS) {
   if (!Number.isSafeInteger(maximum) || maximum < 1 || maximum > 4 * 1024 * 1024) fail('INVALID_TRANSFER_LIMIT');
+  if (!Number.isSafeInteger(timeoutMs) || timeoutMs < 1 || timeoutMs > TRANSFER_BODY_TIMEOUT_MS) fail('INVALID_TRANSFER_TIMEOUT');
   if (length !== null && length !== undefined && (!/^\d+$/.test(String(length)) || Number(length) > maximum)) {
-    try { await body?.cancel(); } catch {}
+    cancelQuietly(body);
     fail('TRANSFER_LIMIT_EXCEEDED');
   }
   if (!body?.getReader) fail('EMPTY_TRANSFER');
   // Never retain every network chunk: millions of tiny chunks can exhaust the
   // heap even when the accumulated byte count is below the input limit.
   const reader = body.getReader(), bytes = new Uint8Array(maximum); let size = 0, chunks = 0;
+  let timer;
+  // One total deadline, not a fresh allowance after every arriving chunk.
+  const deadline = new Promise((_, reject) => {
+    timer = setTimeout(() => reject(new StorageError('TRANSFER_TIMEOUT')), timeoutMs);
+  });
   try {
     while (true) {
-      const { value, done } = await reader.read(); if (done) break;
+      const { value, done } = await Promise.race([reader.read(), deadline]); if (done) break;
       if (!(value instanceof Uint8Array)) fail('TRANSFER_READ_FAILED');
       if (++chunks > 16384 || size + value.byteLength > maximum) fail('TRANSFER_LIMIT_EXCEEDED');
       bytes.set(value, size); size += value.byteLength;
     }
   } catch (error) {
-    try { await reader.cancel(); } catch {}
+    cancelQuietly(reader);
     if (error instanceof StorageError) throw error;
     fail('TRANSFER_READ_FAILED');
-  } finally { reader.releaseLock(); }
+  } finally { clearTimeout(timer); reader.releaseLock(); }
   if (!size) fail('EMPTY_TRANSFER');
   return bytes.slice(0, size);
 }
@@ -64,6 +74,6 @@ export async function fetchInputFile(file, originConfig, fetcher = fetch) {
     result = await fetcher(url.href, { redirect: 'manual', signal: AbortSignal.timeout(30000),
       headers: { Accept: 'application/x-hwp, application/octet-stream' } });
   } catch { fail('FILE_FETCH_FAILED'); }
-  if (!result.ok) { try { await result.body?.cancel(); } catch {} fail('FILE_FETCH_FAILED'); }
+  if (!result.ok) { cancelQuietly(result.body); fail('FILE_FETCH_FAILED'); }
   return boundedBytes(result.body, 4 * 1024 * 1024, result.headers.get('content-length'));
 }

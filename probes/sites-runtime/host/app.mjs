@@ -1,6 +1,6 @@
 import { createVersionStore, StorageError } from '../storage/store.mjs';
 import { createDocumentService } from '../storage/service.mjs';
-import { authenticatedOwner, boundedBytes, configuredOrigin, configuredFileOrigins, fetchInputFile } from './transfer.mjs';
+import { authenticatedOwner, boundedBytes, configuredOrigin, configuredFileOrigins, fetchInputFile, TRANSFER_BODY_TIMEOUT_MS } from './transfer.mjs';
 import { documentTools, validateArguments } from './tools.mjs';
 import { createEngineApi } from '../../../src/one_hwp/rhwp_api.mjs';
 import { syntheticFixture } from '../../../src/one_hwp/synthetic_fixtures.mjs';
@@ -22,6 +22,7 @@ export function createHostApp(env, engine, HwpDocument, fetcher = fetch) {
     if (name === 'hwp_capabilities') return { engine: '@rhwp/core', engine_version: '0.8.6', hwp_only: true,
       document_tools_implemented: true, uploads_enabled: uploadsEnabled(),
       file_url_origins_configured: fileOriginsConfigured(),
+      transfer_body_timeout_ms: TRANSFER_BODY_TIMEOUT_MS,
       max_input_bytes: store.limits.max_bytes, max_versions_per_document: store.limits.max_versions_per_document,
       default_save: 'same_remote_document', pc_original_updated: false, layout_verified: false,
       native_file_attachment_verified: false, codex_cloud_client_verified: false, dots_client_verified: false,

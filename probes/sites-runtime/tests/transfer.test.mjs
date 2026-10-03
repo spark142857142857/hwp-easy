@@ -36,6 +36,47 @@ test('transfer rejects unreasonable internal limits', async () => {
     await assert.rejects(() => boundedBytes(null, maximum, null), code('INVALID_TRANSFER_LIMIT'));
   }
 });
+test('transfer rejects unreasonable internal deadlines before reading', async () => {
+  for (const timeout of [0, -1, Infinity, 1.1, 30001]) {
+    await assert.rejects(() => boundedBytes(null, 5, null, timeout), code('INVALID_TRANSFER_TIMEOUT'));
+  }
+});
+test('a stalled stream times out, cancels and releases its reader', { timeout: 1000 }, async () => {
+  let cancelled = false;
+  const body = new ReadableStream({ cancel() { cancelled = true; } });
+  await assert.rejects(() => boundedBytes(body, 5, null, 20), code('TRANSFER_TIMEOUT'));
+  assert.equal(cancelled, true); assert.equal(body.locked, false);
+});
+test('a deadline is total rather than reset by each arriving chunk', { timeout: 1000 }, async () => {
+  let timer, cancelled = false;
+  const body = new ReadableStream({
+    start(c) { timer = setInterval(() => c.enqueue(new Uint8Array([1])), 5); },
+    cancel() { clearInterval(timer); cancelled = true; },
+  });
+  try {
+    await assert.rejects(() => boundedBytes(body, 1000, null, 30), code('TRANSFER_TIMEOUT'));
+    assert.equal(cancelled, true); assert.equal(body.locked, false);
+  } finally { clearInterval(timer); }
+});
+test('a never-settling cancellation cannot retain an overflowed reader', { timeout: 1000 }, async () => {
+  let cancelled = false;
+  const body = new ReadableStream({ start(c) { c.enqueue(new Uint8Array(6)); },
+    cancel() { cancelled = true; return new Promise(() => {}); } });
+  await assert.rejects(() => boundedBytes(body, 5, null, 20), code('TRANSFER_LIMIT_EXCEEDED'));
+  assert.equal(cancelled, true); assert.equal(body.locked, false);
+});
+test('a never-settling cancellation cannot hold a stalled read', { timeout: 1000 }, async () => {
+  let cancelled = false;
+  const body = new ReadableStream({ cancel() { cancelled = true; return new Promise(() => {}); } });
+  await assert.rejects(() => boundedBytes(body, 5, null, 20), code('TRANSFER_TIMEOUT'));
+  assert.equal(cancelled, true); assert.equal(body.locked, false);
+});
+test('a declared overflow never waits for the upstream cancellation', { timeout: 1000 }, async () => {
+  let cancelled = false;
+  const body = new ReadableStream({ cancel() { cancelled = true; return new Promise(() => {}); } });
+  await assert.rejects(() => boundedBytes(body, 5, '6'), code('TRANSFER_LIMIT_EXCEEDED'));
+  assert.equal(cancelled, true); assert.equal(body.locked, false);
+});
 test('fragmentation is bounded independently of total bytes', { timeout: 5000 }, async () => {
   let cancelled = false;
   const body = new ReadableStream({ pull(c) { c.enqueue(new Uint8Array([1])); }, cancel() { cancelled = true; } });
@@ -51,9 +92,10 @@ test('empty-chunk streams cannot loop forever', { timeout: 5000 }, async () => {
 test('stream failures and non-byte chunks return fixed errors', async () => {
   const failed = new ReadableStream({ start(c) { c.error(new Error('private filename and signed URL')); } });
   await assert.rejects(() => boundedBytes(failed, 5, null), code('TRANSFER_READ_FAILED'));
-  const wrong = chunks(['not bytes']);
-  await assert.rejects(() => boundedBytes(wrong.body, 5, null), code('TRANSFER_READ_FAILED'));
-  assert.equal(wrong.cancelled(), true); assert.equal(wrong.body.locked, false);
+  let cancelled = false;
+  const wrong = new ReadableStream({ start(c) { c.enqueue('not bytes'); }, cancel() { cancelled = true; } });
+  await assert.rejects(() => boundedBytes(wrong, 5, null), code('TRANSFER_READ_FAILED'));
+  assert.equal(cancelled, true); assert.equal(wrong.locked, false);
 });
 test('empty transfers never produce an output HWP', async () => {
   await assert.rejects(() => boundedBytes(chunks([]).body, 5, '0'), code('EMPTY_TRANSFER'));
@@ -84,6 +126,13 @@ test('failed and redirected file responses are cancelled with fixed errors', asy
       '["https://files.example.invalid"]', async () => new Response(input.body, { status })), code('FILE_FETCH_FAILED'));
     assert.equal(input.cancelled(), true);
   }
+});
+test('failed file responses do not wait for a never-settling cancellation', { timeout: 1000 }, async () => {
+  let cancelled = false;
+  const body = new ReadableStream({ cancel() { cancelled = true; return new Promise(() => {}); } });
+  await assert.rejects(() => fetchInputFile({ file_id: 'synthetic', download_url: 'https://files.example.invalid/file' },
+    '["https://files.example.invalid"]', async () => new Response(body, { status: 403 })), code('FILE_FETCH_FAILED'));
+  assert.equal(cancelled, true); assert.equal(body.locked, false);
 });
 test('tool metadata declares complete optional file properties and safe action hints', () => {
   assert.equal(documentTools.length, 11);

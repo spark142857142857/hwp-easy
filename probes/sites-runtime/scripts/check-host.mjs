@@ -46,6 +46,7 @@ try {
   };
   assert.equal((await rpc('hwp_capabilities', {}, {})).status, 401);
   assert.equal((await rpc('hwp_capabilities', {}, { 'oai-authenticated-user-id': 'no-email' })).status, 401);
+  assert.equal((await call('hwp_capabilities', {})).transfer_body_timeout_ms, 30000);
   const firstOwner = await authenticatedOwner(new Headers(headers));
   const renamedOwner = await authenticatedOwner(new Headers({ ...headers, 'oai-authenticated-user-email': 'changed@example.invalid' }));
   assert.equal(firstOwner, renamedOwner); assert.match(firstOwner, /^user:[0-9a-f]{64}$/);
