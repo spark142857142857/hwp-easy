@@ -130,7 +130,7 @@ Windows의 Node 22.17.0/Python 3.13.2와 WSL2 Linux의 Node 22.23.3/Python 3.12.
 
 Python wheel을 빌드해 저장소 전용 venv에 설치한 뒤 소스 경로를 제외한 import, 명시적 npm 런타임 위치, 실제 HWP 읽기·균일 스타일 편집·재열기·SVG도 확인했다. Linux에서도 명시적 런타임 위치로 실제 capabilities를 조회했다. 테스트 의존성은 MCP 1.30.0과 olefile 0.47이었다. Linux 시험은 화면 없는 WSL에서 이루어졌다. 소스를 push한 뒤 [GitHub CI의 Windows·Ubuntu 검사](https://github.com/spark142857142857/hwp-easy/actions/runs/37011081648)도 모두 통과했다. Docker 컨테이너와 운영 문서 경로의 개별 클라이언트 설치 검증은 남아 있다.
 
-별도 [Sites 실행 시험](../probes/sites-runtime/README.md)은 실제 workerd와 비공개 Sites에서 동일 WASM의 합성 HWP 두 사례를 확인했다. 사용자가 설치한 시험용 플러그인의 도구를 Codex Desktop에서 실제 호출하고 성공 결과를 받았다. 이제 Node와 browser ESM은 공통 `rhwp_api.mjs`를 사용하며, browser ESM에 메모리 내 버전·대상·이어 읽기·계획·편집 보존 계약도 붙였다. 지속 저장·복구·사용자 권한 계약은 아직 없다. 본 로컬 경로와 동등한 운영용 원격 편집 기능으로 설명하지 않는다. 개인 문서의 업로드와 저장은 비활성 상태이며 실제 Codex Cloud·다른 클라이언트 연결과 운영 권한·격리는 미검증이다.
+별도 [Sites 실행 시험](../probes/sites-runtime/README.md)은 실제 workerd와 비공개 Sites에서 동일 WASM의 합성 HWP 두 사례를 확인했다. 사용자가 설치한 시험용 플러그인의 도구를 Codex Desktop에서 실제 호출하고 성공 결과를 받았다. Node와 browser ESM은 공통 `rhwp_api.mjs`를 사용하며, browser ESM에는 메모리 내 버전·대상·이어 읽기·계획·편집 보존 계약이 있다. 그 위의 개발용 원격 host에는 인증 사용자 범위의 D1/R2 지속 버전 저장·복구 계약도 구현했다. 메모리 엔진 자체가 지속 저장이나 사용자 격리를 제공한다는 뜻은 아니다. 본 로컬 경로와 동등한 운영용 원격 편집 기능으로 설명하지 않는다. 개인 문서의 업로드와 저장은 비활성 상태이며 실제 Codex Cloud·다른 클라이언트 연결과 운영 권한·격리는 미검증이다.
 
 ## 로컬 실사용 문서 검사
 
