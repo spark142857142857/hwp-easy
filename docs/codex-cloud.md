@@ -17,35 +17,15 @@ Codex Cloud는 게시한 환경에서 도구·저장소·의존성을 준비하�
 | Codex Cloud 작업 | 지원 목표 및 검증 기준 정의 | 작업 환경 준비, 실제 도구 연결, 입력부터 HWP 회수까지 전 과정 |
 | Dots | 같은 원격 플러그인을 사용하는 지원 목표와 공식 연결 조건 확인 | 실제 Dot의 인증·문서 입력·편집·결과 HWP 회수 |
 
-## 2026-10-03 ChatGPT Work Cloud native 진단
+## 현재 연결 검증 상태
 
-기존 Cloud 채팅 `HWP Easy 연결 검증`에서 설치된 HWP Easy 도구 12개가 노출된 것을 확인했다. 첫 기능 조회는 약 51분 뒤 `UNAUTHORIZED`, `oauth_token_invalid_grant`와 재인증 요청으로 실패했다. 실행 상태가 `inProgress`였다는 사실만으로 엔진이나 문서 작업이 진행 중이라고 판단하지 않는다.
+Codex Desktop와 ChatGPT Work Cloud 채팅에서 실제 사용자 연결로 기능 조회·고정 합성 엔진 진단·합성 저장·복구·정리를 확인했다. 실제 파일 인수의 descriptor 전달도 확인했지만 업로드 게이트에서 거부하므로 바이트 입력·편집 결과 회수의 성공 근거는 아니다. 개인 파일 업로드는 계속 비활성화 상태다.
 
-사용자가 기존 연결을 재인증한 뒤 같은 채팅에서 `hwp_capabilities`, `hwp_runtime_probe`, `hwp_workflow_probe`를 각각 한 번 native 호출했다. 세 호출이 모두 완료됐고, 도구 실행 기록의 소요 시간은 각각 약 5.7초·8.6초·23.3초였다. 기능 조회는 업로드 비활성화·빈 파일 origin·직접 삭제할 때까지 보관을 반환했다. 엔진 진단은 고정 합성 HWP의 읽기·편집·재열기·raw 보존·메모리 내 계약을, workflow는 로그인한 사용자 범위의 합성 문서 조회·편집·같은 문서 저장·복구·기록된 버전 삭제·시험 자료 정리를 통과했다.
+서버는 13개 도구를 선언하지만 확인한 native 목록에는 기존 12개만 있으며 `hwp_transfer_probe`는 없다. 새 도구 목록 반영과 사용자 인증은 별개로 검사한다. 공식 배포 안내는 새 도구가 자동 검사 통과 후 제공되고 기존 도구는 종전 정의를 유지할 수 있다고 설명하지만, 해당 비공개 Site의 실제 scan·held-update 결과는 아직 확인하지 못했다. 따라서 단순 대기·재인증이 새 도구 반영을 해결한다고 약속하지 않는다. [OpenAI 도구 업데이트](https://developers.openai.com/plugins/deploy/app-review#continuous-review-and-tool-updates), [검토 결과 확인](https://developers.openai.com/plugins/deploy/submission#find-and-resolve-tool-issues)
 
-검증은 같은 비공개 버전 8에서 수행했다. 재시도 사이에 재배포하거나 OAuth 클라이언트·플러그인 ID·MCP 주소·접근 대상·업로드 환경값을 바꾸지 않았다. Cloud 진단 완료 후 Codex Desktop에서도 읽기 전용 기능 조회가 성공했다. 연결 복구를 확인한 것이며 반복 인증 실패의 세부 원인은 미확정이다. [연결 복구 기준](remote-documents.md#연결-오류를-다루는-순서)
+재배포·OAuth·접근 설정을 바꾸지 않은 상태에서도 읽기 전용 호출이 `oauth_token_invalid_grant`로 실패한 사례가 있다. 재인증이 요구되면 사용자 문서 작업과 합성 쓰기 진단을 중단한다. 인증 수명·갱신 경쟁 등 세부 원인은 미확정이며 서비스 자격으로 사용자 신원을 대체하지 않는다. [연결 오류 처리](remote-documents.md#연결-오류를-다루는-순서)
 
-실제 첨부 파일 바이트, 로그인한 브라우저의 외부 HTTP 다운로드, 사용자에게 HWP 결과를 돌려주는 경로, 두 OAuth 사용자 격리, Dots와 시각적 배치는 시험하지 않았다. 합성 서버 내부 handler 왕복이나 native 도구 호출을 이 항목의 성공으로 집계하지 않는다. `codex_cloud_client_verified`, `native_file_attachment_verified`, `dots_client_verified`, `layout_verified`는 계속 `false`이며 개인 업로드도 꺼 둔다. 로컬 압축 꼬리 호환성 개선은 이 진단 시점의 버전 8에 아직 게시하지 않았다.
-
-### 비공개 버전 9 배포 뒤 재검증
-
-같은 날 압축 꼬리 호환성과 전송 본문 deadline을 버전 9로 게시한 뒤, 기존 Desktop 연결의 기능 조회·합성 workflow가 성공했다. 같은 ChatGPT Work Cloud 채팅에서도 native `hwp_capabilities`, `hwp_runtime_probe`, `hwp_workflow_probe`를 각각 한 번 호출해 모두 완료됐다. 도구 기록의 소요 시간은 약 1.2초·13.3초·20.6초였다. 기능 조회는 새 `transfer_body_timeout_ms=30000`과 업로드 비활성화를 반환했고 합성 엔진·저장·복구·기록된 버전 삭제·자료 정리가 통과했다.
-
-추가 재인증은 없었다. OAuth 클라이언트·플러그인 ID·MCP 주소·접근 정책·환경 revision 1을 유지했다. 이는 이번 배포에서 기존 연결이 유지됐다는 근거이지 모든 배포·세션에서 연결 만료가 없다는 보장이 아니다. 실제 첨부 바이트·외부 HTTP 다운로드·HWP 회수·두 OAuth 사용자·저장소 기반 Codex Cloud·Dots·시각 배치의 미검증 상태와 개인 업로드 제한은 바꾸지 않았다. [배포와 로컬 검사](../probes/sites-runtime/README.md#비공개-버전-9-전송-시간-제한과-호환성-반영)
-
-### 버전 10 합성 전달 경로 준비와 인증 대기
-
-고정 합성 HWP만 받는 별도 전달 진단과 MCP embedded HWP 결과·로컬 회수 helper를 준비해 버전 10으로 게시했다. 모의 전달의 실제 workerd 검사와 Windows·Linux CI가 통과했다. 일반 업로드 및 별도 합성 전달 호스트는 활성화하지 않았다. 새 배포 전에 Desktop 기능 조회가 다시 `oauth_token_invalid_grant`로 실패해 재인증을 요청했고, 같은 연결의 후속 호출과 Cloud 재시험은 보류했다. 새 경로의 native 첨부·결과 회수를 확인한 것이 아니며 Cloud·Dots 지원 플래그도 그대로다. [버전 10 근거](../probes/sites-runtime/README.md#비공개-버전-10-배포-기록)
-
-### 재인증 뒤 버전 10·11 확인과 도구 목록 대기
-
-사용자가 재인증한 뒤 Desktop의 native 기능 조회와 버전 10 합성 workflow가 성공했다. 같은 기존 Cloud 채팅 `HWP Easy 연결 검증`에서도 읽기 전용 기능 조회가 약 21.8초에 완료됐고 재인증 오류는 없었다. 두 클라이언트 모두 기존 12개 도구만 보였으며 서버에 구현된 `hwp_transfer_probe`는 목록에 없었다. 인증 복구와 새 도구 목록 반영을 별도 상태로 기록하며, 목록 지연의 구체적인 원인은 확정하지 않는다.
-
-버전 11은 기존 `hwp_import`의 업로드 거부 응답에 안전한 origin-only 진단을 추가했다. 게시 후 Desktop 기능 조회와 새 고정 합성 HWP의 실제 파일 인수 전달이 추가 재인증 없이 완료됐다. 서버 응답의 후보 origin은 `https://sdmntprindiasocentral.oaiusercontent.com`이었다. `isError: true`와 `DOCUMENT_UPLOADS_NOT_ENABLED`를 유지했고 파일 바이트 수신·네트워크·DB/R2 저장은 수행하지 않았다. native gateway가 추가한 `data.error_code: INVALID_ARGUMENT`도 관찰했으나 이를 HWP 바이트 검사 실패나 인증 오류로 해석하지 않는다.
-
-버전 11에서 Desktop native 합성 workflow도 전체 조회·편집·기본 저장·내부 재열기·복구·기록된 버전 삭제·정리를 통과했다. 별도 원격 고정 진단과 인증 경계 검사, 구현 commit의 Windows·Ubuntu CI 4개 작업도 성공했다. 이 버전에서 Cloud의 쓰기 workflow나 파일 입력을 재시험했다고 기록하지 않는다.
-
-후보 origin을 자동 허용하지 않았고 일반·합성 전달 allowlist와 업로드 설정도 그대로다. 이 결과는 실제 첨부 descriptor가 서버에 도달했다는 근거이며 새 도구의 바이트 입력·편집 결과 회수·Cloud 파일 전달을 통과 처리하지 않는다. 새 도구가 실제 목록에 나타난 뒤 별도 합성 전달 검증을 이어간다. 사용자의 개인 `testdocs`는 이 단계에 사용하지 않았다.
+개인 세션의 시각·개별 배포·인증 재시도 이력은 Git에 넣지 않는 `docs/local/`에 둔다. 위 표와 완료 조건에는 재현 가능한 검증 범위와 남은 제한만 유지한다.
 
 ## 공통 엔진과 저장 계층
 

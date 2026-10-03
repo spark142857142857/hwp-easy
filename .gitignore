@@ -8,6 +8,23 @@ node_modules/
 work/
 outputs/
 testdocs/
+# Personal documents and per-session operations are never source fixtures.
+docs/local/
+*.hwp
+*.hwpx
+*.pdf
+*.docx
+# Local credentials, runtime state and generated release archives.
+.env
+.env.*
+!.env.example
+!.env.*.example
+.sites-runtime/
+*.whl
+*.tgz
+*.tar
+*.tar.gz
+*.zip
 build/
 dist/
 src/*.egg-info/

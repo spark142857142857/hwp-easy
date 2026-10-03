@@ -37,6 +37,8 @@ jobs:
           node-version: '22'
       - name: Install exact engine runtime without lifecycle scripts
         run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Check document links and private/generated file exclusions
+        run: node scripts/check-repository.mjs
       - name: Test real HWP WASM engine without Hancom
         run: npm run test:engine
       - name: Install exact browser guard test dependencies

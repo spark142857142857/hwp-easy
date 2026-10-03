@@ -55,7 +55,7 @@ Sites가 전달한 신뢰할 수 있는 사용자 ID와 이메일 헤더를 모�
 
 편집한 합성 HWP는 MCP의 embedded resource(`application/x-hwp`, base64 blob)로 반환해 임시 시험 문서 정리 후에도 바이트를 회수할 수 있도록 했다. 이것은 공개 URL, 개인 문서의 보관 정책 변경이나 모든 클라이언트가 다운로드 버튼을 제공한다는 약속이 아니다. `native_download_artifact_verified`는 계속 `false`다. 개발용 `scripts/save-transfer-result.mjs`는 수신 결과의 HWP를 로컬에서 독립적으로 재현한 고정 편집 바이트와 완전히 비교한 뒤 새 ignored 합성 산출물로만 저장한다. 임의 경로·원본·개인 HWP를 받거나 기존 파일을 덮어쓰지 않는다.
 
-로컬 actual workerd/D1/R2의 7개 전달·실패 시나리오와 결과 파일 재현·재열기 검사가 통과했다. 네트워크와 신원은 모의이며 실제 클라이언트의 첨부·MCP 바이너리 전달·다운로드 UI 완료로 집계하지 않는다. 이 단계의 첫 Desktop 기능 조회는 새 배포 전에 `UNAUTHORIZED`, `oauth_token_invalid_grant`를 반환했다. 해당 연결의 후속 쓰기와 진단 호출을 멈추고 재인증을 요청했으며, 일반 업로드·OAuth·접근 범위는 완화하지 않았다.
+로컬 actual workerd/D1/R2의 7개 전달·실패 시나리오와 결과 파일 재현·재열기 검사가 통과했다. 네트워크와 신원은 모의이며 실제 클라이언트의 첨부·MCP 바이너리 전달·다운로드 UI 완료로 집계하지 않는다.
 
 ## 보관과 명시적 삭제
 
@@ -79,31 +79,15 @@ DB 응답·영수증 조회가 확정되지 않으면 완료로 보고하지 않
 
 `node scripts/check-host-failures.mjs`의 7개 실패 주입 사례와 스트림·도구 계약의 12개 단위 검사가 통과했다. 실제 로컬 D1/R2에서 첫 commit 전 실패, commit 응답과 영수증 조회 유실, blob 응답 및 첫 정리 실패, 읽기 실패와 잘못된 정리 근거를 시험했다. 모의 신원과 명시적 실패 주입을 실제 OAuth·운영 장애 인증으로 집계하지 않는다.
 
-2026년 10월 3일 첫 재인증 뒤 설치된 Codex Desktop의 기존 `hwp_runtime_probe` 호출은 정상 결과를 반환했다. 당시에는 기존 사용자 연결의 복구만 확인했고 새 도구의 사용자 호출과 파일 입력은 미검증이었다.
-
-같은 날 비공개 버전 6 배포와 원격 엔진·저장·인증 경계 시험이 통과했다. 업로드는 꺼져 있고 허용 파일 origin은 비어 있다. 배포 후 기존 설치 도구 호출도 성공했다. 후속 세션에는 11개 도구가 반영됐지만 첫 `hwp_capabilities` 조회가 `UNAUTHORIZED`, `oauth_token_invalid_grant`와 재인증 요청을 반환했다. 이 오류의 원인이나 이름 변경과의 인과관계는 확인하지 못했다. [배포 검증 기록](../probes/sites-runtime/README.md)
-
-스트림 제한·현재 버전 표시·합성 실패 정리를 포함한 비공개 버전 7도 배포했다. 고정 원격 엔진·저장 및 접근 거부 시험이 통과했고 생성한 합성 데이터만 정리했다. 개인 파일 입력과 자동 보관·삭제 정책은 활성화하지 않았다.
-
-사용자가 기존 연결을 다시 재인증한 뒤, 버전 7에서 실제 Codex Desktop의 `hwp_capabilities`, `hwp_runtime_probe`, `hwp_workflow_probe` 호출이 성공했다. 로그인한 사용자 범위의 D1/R2에서 합성 문서를 8번 이어 읽고 계획·같은 문서 저장·재시도·내부 바이너리 재열기·SVG·이전 버전 복구를 확인했으며 시험 문서 정리가 완료됐다. 이 성공은 외부 HTTP 다운로드나 실제 두 OAuth 사용자의 격리 검증을 대신하지 않는다.
-
-개인정보 없는 로컬 합성 HWP 13,312 bytes를 실제 `hwp_import`의 파일 인수로 전달했다. 서버는 인수 검사를 통과한 뒤 `DOCUMENT_UPLOADS_NOT_ENABLED`로 거부했다. 현재 코드에서는 파일 descriptor 형식 검사가 업로드 게이트보다 앞에 있으므로, 이는 네이티브 파일 인수가 서버의 기대 형식으로 도착했다는 근거다. 다운로드 URL의 호스트, 실제 바이트 수신·해시 확인·원격 저장은 검증하지 않았고 `native_file_attachment_verified`는 계속 `false`다. 개인 `testdocs` 파일은 읽거나 업로드하지 않았다.
-
-버전 7의 연결 복구·descriptor 시험 중 서버 OAuth 설정, 플러그인 ID, 접근 대상, 배포 버전과 런타임 환경값을 변경하지 않았다. 최근 Worker 오류 로그에서는 토큰 갱신 실패 원인을 찾지 못했으며, 이 로그만으로 모든 OAuth 계층의 이상이 없었다고 단정하지 않는다. 재인증으로 호출이 복구된 것은 확인했지만 구체적 원인은 미확정이다. Sites가 연결 OAuth를 관리하므로 자체 토큰 갱신기를 추가하거나 인증을 우회하지 않는다. [OpenAI 인증 안내](https://developers.openai.com/plugins/build/auth)
+실제 사용자 연결에서 고정 합성 진단과 파일 descriptor 전달을 확인했다. 바이트 입력·HWP 회수·실제 OAuth 사용자 격리는 별도 미검증이다. 개별 재인증·배포 이력은 로컬 기록으로 분리하며 [현재 연결 상태](codex-cloud.md#현재-연결-검증-상태)를 참고한다.
 
 개발용 `node scripts/make-transfer-fixture.mjs`는 고정 합성 HWP만 새 UUID 파일로 만들고 컨테이너·내용 검사를 수행한다. 입력·출력 경로 인수를 받지 않고 기존 파일을 덮어쓰지 않으며, 생성 파일은 저장소의 무시된 `outputs/synthetic-transfer/` 아래에 둔다. 메타데이터만 출력하고 네이티브 전송이나 배치 정확성을 인증하지 않는다. 일반 사용자 설치용 CLI가 아니다.
 
 다음 검증은 합성 파일 바이트의 실제 클라이언트 입력과 HWP 회수, 삭제·보관 정책, 실제 사용자 간 격리 및 권한 철회다. [저장 계약](durable-storage.md)과 [클라이언트 완료 조건](codex-cloud.md)을 함께 적용한다.
 
-직접 삭제할 때까지의 보관 결정을 반영한 비공개 버전 8을 배포했다. 기존 적용 migration은 유지하고 삭제 영수증 테이블을 추가했다. 게시 후 실제 Codex Desktop의 기능 조회는 자동 만료 없음·개인 업로드 비활성화를 반환했고, `hwp_workflow_probe`의 합성 읽기·편집·저장·복구·기록된 버전 삭제·정리가 통과했다. OAuth 클라이언트 ID, 플러그인 ID, 연결 주소와 소유자 한 명의 접근 범위는 동일했으며 추가 재인증 없이 호출했다. 새 `hwp_delete`의 직접 네이티브 호출은 이 세션의 초기 도구 카탈로그에 없어 검증하지 않았다. 새 도구는 서버와 로컬 실제 MCP에서 검사했고 원격에서는 합성 workflow 내부 계약으로 시험했다. [Windows·Linux 코드 CI](https://github.com/spark142857142857/hwp-easy/actions/runs/37093349030)의 4개 작업도 통과했다.
-
-같은 버전 8의 기존 ChatGPT Work Cloud 채팅에서 첫 기능 조회가 `oauth_token_invalid_grant`로 실패했다. 사용자가 재인증한 뒤 native `hwp_capabilities`, `hwp_runtime_probe`, `hwp_workflow_probe`를 각각 한 번 호출해 모두 성공했고, 이후 Codex Desktop의 기능 조회도 성공했다. 그 사이 재배포·OAuth 설정·접근 대상·환경값 변경은 없었다. 이는 두 실행 환경의 합성 진단과 연결 복구를 확인한 결과이며, 실제 HWP 첨부·다운로드나 저장소 기반 Codex Cloud 작업을 검증한 결과는 아니다. [Cloud 실행 기록과 한계](codex-cloud.md#2026-10-03-chatgpt-work-cloud-native-진단)
-
-후속 버전 9에는 검증된 압축 꼬리 규칙과 전송 본문의 전체 deadline을 반영했다. 원격 고정 엔진·D1/R2 저장 진단과 접근 거부 검사가 통과했고, Desktop 기능 조회·합성 workflow 및 기존 ChatGPT Work Cloud의 native 진단 세 가지도 추가 재인증 없이 성공했다. 기능 조회는 `transfer_body_timeout_ms=30000`을 반환했다. OAuth 클라이언트·플러그인 ID·주소·접근 및 환경 revision은 유지했다. 개인 파일 업로드와 빈 파일 origin 설정도 그대로다. 실제 첨부 바이트·외부 HWP 회수·개인 문서·두 OAuth 사용자·Dots·배치 검증을 완료했다고 표시하지 않는다. [버전 9 검증](../probes/sites-runtime/README.md#비공개-버전-9-전송-시간-제한과-호환성-반영)
-
 ## 연결 오류를 다루는 순서
 
-배포 버전 변경과 인증 실패를 같은 사건으로 취급하지 않는다. 버전 8 게시 직후에는 추가 재인증 없이 Desktop 호출이 성공했고, 나중의 Cloud 인증 실패는 새 배포 없이 발생했다. 따라서 매 배포가 재인증을 필수로 만든다는 설명은 현재 관찰과 맞지 않는다. 반대로 이 기록만으로 모든 배포가 인증에 영향을 주지 않는다고 보장할 수도 없다.
+배포 버전 변경과 인증 실패를 같은 사건으로 취급하지 않는다. 기존 연결이 배포 뒤 유지된 사례와, 재배포·설정 변경 없이 인증이 실패한 사례가 모두 있다. 따라서 매 배포가 재인증을 요구한다거나 모든 배포가 인증에 무관하다고 단정하지 않는다.
 
 공식 안내는 등록한 OAuth 클라이언트를 재사용하고 자격을 유효하게 유지하도록 요구하며, access/refresh token의 만료·회전을 소스 배포와 별도의 인증 수명 주기로 설명한다. 이 일반 계약은 HWP Easy의 `invalid_grant` 원인을 특정하지 않는다. Sites가 사용자 OAuth를 관리하므로 이 저장소에서 자체 refresh token을 보관하거나 갱신기를 추가하지 않는다. [OpenAI 플러그인 인증 안내](https://developers.openai.com/plugins/build/auth)
 
