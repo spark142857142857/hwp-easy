@@ -119,7 +119,9 @@ export function createEngineApi(HwpDocument) {
           text: document.getTextRange(section, paragraph, 0, length) };
         block.style = style(block);
         // Table-host paragraphs are read-only; their individual cell paragraphs are targets.
-        block.editable = !cellBlocks.has(id) && !block.style.profile
+        block.editable = !cellBlocks.has(id)
+          && !controls.some((control) => control.ctrlId === 'pgnp' && control.list === 0 && control.para === paragraph)
+          && !block.style.profile
           && block.style.char_shape_ids.length === 1;
         block.edit_limit = EDIT_LIMIT;
         blocks.push(block, ...(cellBlocks.get(id) || []));
@@ -145,11 +147,16 @@ export function createEngineApi(HwpDocument) {
     }
   }
 
-  function editDocument(bytes, operations) {
+  // Default remains conservative for the local bridge. A host may enable the
+  // one preservation-only exception AFTER independent raw shape/anchor checks;
+  // it must also independently compare every output control byte before saving.
+  function editDocument(bytes, operations, { preservePageNumbers = false } = {}) {
     const document = openDocument(bytes);
     try {
       const before = inspectDocument(document);
-      if (before.unsupported.length || !Array.isArray(operations) || operations.length === 0) {
+      const blocking = before.unsupported.some((item) => !(preservePageNumbers === true
+        && item.kind === 'control' && item.control_id === 'pgnp' && item.list === 0));
+      if (blocking || !Array.isArray(operations) || operations.length === 0) {
         throw new Error('Unsupported edit profile');
       }
       const seen = new Set();

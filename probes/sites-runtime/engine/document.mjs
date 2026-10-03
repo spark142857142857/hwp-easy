@@ -6,6 +6,7 @@ import { createEngineApi } from '../../../src/one_hwp/rhwp_api.mjs';
 import { readHwp } from '../guard/container.mjs';
 import { GuardError, parseRecords } from '../guard/records.mjs';
 import { verifyPreservation } from '../guard/preservation.mjs';
+import { pageNumberPreservationProfile } from '../guard/page-number.mjs';
 
 const fail = (code) => { throw new GuardError(code); };
 const copy = (value) => JSON.parse(JSON.stringify(value));
@@ -113,14 +114,23 @@ export function createDocumentEngine(HwpDocument) {
       if (!(error instanceof GuardError) || error.code !== 'TARGET_MAPPING_UNVERIFIED') throw error;
     }
     const unsupported = [...inspection.unsupported, ...raw.profile.unsupported];
+    const pageNumberProfile = pageNumberPreservationProfile(raw, unsupported);
+    if (pageNumberProfile === null) unsupported.push({ kind: 'page_number_profile',
+      reason: 'Page-number control shape, root anchor or model coverage is unverified' });
+    const preservedControls = pageNumberProfile ?? [];
     const version = await sha256(bytes);
     const targets = new Map(inspection.blocks.map((block) => [targetId(version, block.id), block]));
-    const editableProfile = mappingVerified && unsupported.length === 0;
+    const allContentSupported = mappingVerified && unsupported.length === 0;
+    const editableProfile = mappingVerified && unsupported.every((item) =>
+      preservedControls.length && item.kind === 'control' && item.control_id === 'pgnp');
     const base = () => ({ source_sha256: version, scope: 'supported_paragraph_and_cell_blocks',
       supported_blocks: inspection.blocks.length, table_count: inspection.tables.length,
-      all_content_supported: unsupported.length === 0 && mappingVerified,
+      all_content_supported: allContentSupported, edit_profile_supported: editableProfile,
+      preserved_controls: copy(preservedControls),
       unsupported: copy(unsupported), target_mapping_verified: mappingVerified,
-      warnings: [...inspection.warnings, ...(!mappingVerified ? ['Raw paragraph coverage could not be matched; editing is disabled.'] : [])],
+      warnings: [...inspection.warnings,
+        ...(preservedControls.length ? ['Page-number controls are preserved as opaque bytes only; their host paragraphs are read-only.'] : []),
+        ...(!mappingVerified ? ['Raw paragraph coverage could not be matched; editing is disabled.'] : [])],
       layout_verified: false, persistence: 'none' });
     function checkVersion(expected) {
       if (typeof expected !== 'string' || !hashPattern.test(expected)) fail('INVALID_VERSION');
@@ -154,7 +164,7 @@ export function createDocumentEngine(HwpDocument) {
         index += 1; offset = 0;
       }
       const complete = index === inspection.blocks.length;
-      return { ...base(), blocks: fragments, complete, content_complete: complete && editableProfile,
+      return { ...base(), blocks: fragments, complete, content_complete: complete && allContentSupported,
         content_complete_scope: 'unmodified_cursor_chain_from_start_not_this_page_alone',
         cursor_kind: 'validated_version_bound_position_not_authorization_or_issued_token',
         offsets: 'unicode_code_points', page_starts_at: start,
@@ -192,7 +202,8 @@ export function createDocumentEngine(HwpDocument) {
     }
     async function edit(options) {
       const operations = plans(options);
-      const output = quietEngine(() => api.editDocument(bytes, operations));
+      const output = quietEngine(() => api.editDocument(bytes, operations,
+        { preservePageNumbers: preservedControls.length > 0 }));
       const after = readHwp(output);
       // api.editDocument already reopens and compares exact text/style/table model.
       // Independently match raw AFTER text and nesting to that reopened model.

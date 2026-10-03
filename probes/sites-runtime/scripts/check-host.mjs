@@ -12,6 +12,7 @@ import { createHostApp } from '../host/app.mjs';
 import { authenticatedOwner, boundedBytes, fetchInputFile } from '../host/transfer.mjs';
 import { applyTestMigrations } from './migrations.mjs';
 import { withCheckedDeflateTrailers } from '../tests/trailer-fixtures.mjs';
+import { withPageNumber } from '../tests/page-number-fixtures.mjs';
 const require = createRequire(import.meta.url);
 initSync({ module: fs.readFileSync(new URL('./rhwp_bg.wasm', pathToFileURL(require.resolve('@rhwp/core')))) });
 const origin = 'https://probe.invalid';
@@ -223,6 +224,29 @@ try {
     version_id: imported.structuredContent.data.version_id })).storage.sha256, imported.structuredContent.data.sha256);
   checks.push('delete_confirmation_owner_and_version_guards', 'explicit_delete_replay_and_recorded_version_cleanup',
     'deleted_document_read_and_download_revoked', 'delete_preserves_other_documents');
+  const pageBytes = withPageNumber(syntheticFixture(HwpDocument, api.exportChecked));
+  const pageDoc = await (await upload({}, headers, pageBytes)).json();
+  const pageArgs = { document_id: pageDoc.document_id, version_id: pageDoc.version_id };
+  const pageBefore = await call('hwp_read', pageArgs);
+  assert.equal(pageBefore.edit_profile_supported, true);
+  assert.equal(pageBefore.content_complete, false);
+  assert.equal(pageBefore.preserved_controls[0].edit_mode, 'preserve_bytes_only');
+  const pageTargets = ['paragraph', 'cell'].map((kind) => pageBefore.blocks.find((b) => b.kind === kind && b.editable && b.text));
+  const pageEdits = { expected_sha256: pageDoc.sha256, operations: pageTargets.map((b, i) => ({
+    target_id: b.target_id, expected_old: b.text, new_text: `쪽 번호 보존 합성 수정 ${i} 😀` })) };
+  assert.equal((await call('hwp_plan', { ...pageArgs, ...pageEdits })).file_changed, false);
+  const pageEdited = await call('hwp_edit', { document_id: pageDoc.document_id, expected_version: pageDoc.version_id,
+    request_id: crypto.randomUUID(), ...pageEdits });
+  assert.equal(pageEdited.saved, true); assert.equal(pageEdited.raw_preservation_verified, true);
+  const pageDownload = await call('hwp_download', { document_id: pageDoc.document_id, version_id: pageEdited.version_id });
+  const pageOutput = new Uint8Array(await (await mf.dispatchFetch(pageDownload.download_url, { headers })).arrayBuffer());
+  const pageReopened = await engine.open(pageOutput), pageAfter = pageReopened.read({ expected_sha256: pageEdited.sha256 });
+  assert.equal(pageAfter.edit_profile_supported, true); assert.deepEqual(pageAfter.preserved_controls, pageBefore.preserved_controls);
+  for (const [index, target] of pageTargets.entries()) assert.equal(pageAfter.blocks.find((b) => b.id === target.id).text, pageEdits.operations[index].new_text);
+  const pageOriginal = await call('hwp_read', pageArgs);
+  assert.equal(pageOriginal.storage.sha256, pageDoc.sha256);
+  await denied('hwp_read', pageArgs, 'DOCUMENT_OR_VERSION_NOT_FOUND', other);
+  checks.push('pgnp_actual_workerd_d1_r2_body_cell_save_download_reopen', 'pgnp_previous_version_unchanged_and_mock_other_user_denied');
   console.log(JSON.stringify({ authenticated_host_contract: 'passed', checks,
     real_d1_r2_and_hwp: true, local_identity_headers_are_mocks_not_oauth: true,
     fileparam_network_is_mocked: true, native_client_attachment_verified: false, workflow }));
