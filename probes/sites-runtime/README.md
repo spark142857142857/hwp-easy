@@ -9,7 +9,7 @@
 - 모델과 독립적으로 CFB·bounded raw-DEFLATE·본문/DocInfo 레코드를 검사한다. 미지원 tag·잘못된 체인·비대상 레코드 손실을 거부한다. 이는 좁은 지원 profile이며 범용 복구 parser나 시각 배치 인증이 아니다.
 - actual workerd/D1/R2에서 저장·재시작·현재/이전 버전 조회·조건부 저장·재시도·복구·기록된 버전 삭제를 시험한다. 실패는 명시적으로 주입하며 신원 헤더·파일 네트워크는 모의다. 실제 OAuth 격리·운영 장애/삭제 인증으로 집계하지 않는다.
 - 소유자 전용 Sites의 고정 엔진/저장 진단과 실제 Desktop·ChatGPT Work Cloud 사용자 연결의 합성 도구 왕복을 확인했다. 익명·임의 신원·서비스 자격의 사용자 문서/MCP 접근은 거부한다. 서비스 자격 진단은 사용자 MCP 연결 검증이 아니다.
-- 파일 descriptor 전달은 확인했지만 실제 바이트 첨부·외부 HWP 회수·두 OAuth 사용자·저장소 Codex Cloud·Dots·시각 배치는 미검증이다. 서버의 13개 도구와 확인한 native 목록의 12개를 구분한다. 개별 배포·인증 이력은 ignored 로컬 기록에 보관한다.
+- 새 로컬 대화의 13개 native 도구와 실제 고정 합성 파일 인수의 바이트 전달·embedded HWP 회수를 확인했다. 별도 로그인 Chrome에서도 고정 편집 결과를 다운로드해 native 결과와 바이트 전체 일치를 확인했다. 저장된 사용자 문서의 다운로드·두 OAuth 사용자·저장소 Codex Cloud·Dots·시각 배치는 미검증이다. 개별 배포·인증 이력은 ignored 로컬 기록에 보관한다.
 
 컨테이너 검사의 보수적 한도는 입력 4 MiB, 본문 해제 합계 8 MiB, DocInfo 해제 2 MiB, 본문 레코드 100,000개, directory slot 2,048개와 경로 문자 누적 65,536개다. 이것은 전체 isolate 메모리·CPU 적합성 인증이 아니다. 초기 진단의 WASM linear memory는 2,949,120 bytes에서 두 사례 후 27,394,048 bytes였으나 JS heap·동시 요청·peak 측정은 아니다. [Workers 제한](https://developers.cloudflare.com/workers/platform/limits/)
 
@@ -22,7 +22,7 @@ npm ci --ignore-scripts --no-audit --no-fund
 npm test
 ```
 
-`npm test`는 Node 회귀 → 빌드 → actual workerd 엔진 → D1/R2 저장 → 인증 헤더/바이너리 계약 → 실패 정리 → 명시적 삭제 → 고정 합성 전송 검사를 실행한다. 루트에서 `node probes/sites-runtime/scripts/check-python-guard.mjs`를 실행하면 합성 HWP를 Python `olefile` reader와 대조한다. 루트 런타임과 native Python 의존성이 필요하며 `PYTHON`으로 venv 실행 파일을 지정할 수 있다. 입력은 생성한 합성 문서이며 `testdocs/`를 읽지 않는다.
+`npm test`는 Node 회귀 → 빌드 → actual workerd 엔진 → D1/R2 저장 → 인증 헤더/바이너리 계약 → 실패 정리 → 명시적 삭제 → 고정 합성 전송 → 저장소 없는 고정 브라우저 다운로드 계약 검사를 실행한다. 루트에서 `node probes/sites-runtime/scripts/check-python-guard.mjs`를 실행하면 합성 HWP를 Python `olefile` reader와 대조한다. 루트 런타임과 native Python 의존성이 필요하며 `PYTHON`으로 venv 실행 파일을 지정할 수 있다. 입력은 생성한 합성 문서이며 `testdocs/`를 읽지 않는다.
 
 `build.mjs`는 ESM·WASM·검증된 라이선스 고지를 `dist/server`에, migration을 `dist/.openai/drizzle`에 작성한다. pako 3.0.2는 bounded raw-DEFLATE runtime이다. cfb는 합성 fixture writer, Drizzle은 스키마/migration 생성, Miniflare·esbuild는 시험/빌드에만 사용한다. 이들은 배포 Worker의 별도 runtime 의존성이 아니다. [외부 구성요소 고지](../../THIRD_PARTY_NOTICES.md)
 
@@ -35,6 +35,8 @@ npm test
 기존 `hwp_import`의 업로드 거부는 `isError: true`와 첫 오류 text를 유지한다. 안전한 descriptor에만 공개 origin 피드백을 추가하고 signed URL·파일명·ID·내용을 반환하지 않는다. 네트워크·바이트 수신·저장은 수행하지 않는다. 새 도구의 반영 지연을 기존 도구의 숨은 쓰기로 우회하지 않는다.
 
 ## 배포 경계
+
+브라우저 진단은 `/diagnostics/download`와 `/diagnostics/synthetic-result.hwp`만 제공한다. 사용자 인증 뒤 고정 편집 결과를 생성·지문 검사하며 D1/R2와 외부 파일 호스트를 사용하지 않는다. `check-synthetic-download.mjs`는 실제 workerd/WASM을 저장소 binding 없이 시험하지만 신원은 모의다. 실제 Chrome 클릭·수신 검증은 별도 기록으로 구분한다. 이 화면을 일반 저장 버전의 다운로드 UI로 소개하지 않는다. [진단 경계](../../docs/remote-documents.md#고정-합성-브라우저-다운로드)
 
 Site 원본은 별도 checkout으로 관리한다. 실제 `.openai/hosting.json`은 그 checkout에만 있으며 project ID·D1/R2·MCP capability를 유지한다. 저장소의 probe에는 Site ID나 자격을 넣지 않는다. 공통 `rhwp_api.mjs`와 fixture를 Site의 `src/one_hwp`에 복사하고 상대 import만 조정한 뒤 정확한 소스를 Sites 워크플로로 push·포장·비공개 게시한다.
 
