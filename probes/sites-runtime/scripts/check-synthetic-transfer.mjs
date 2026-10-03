@@ -79,8 +79,26 @@ try {
   assert.equal((await invoke('hwp_transfer_probe', { file: file() }, {})).status, 401);
   assert.equal(fetches, 0);
   const imported = await invoke('hwp_import', { file: file(), request_id: crypto.randomUUID() });
+  assert.equal(imported.body.result.isError, true);
   assert.equal(imported.body.result.content[0].text, 'DOCUMENT_UPLOADS_NOT_ENABLED');
+  const blockedDiagnostic = imported.body.result.structuredContent.data.transfer_diagnostic;
+  assert.equal(blockedDiagnostic.candidate_file_origin, fileOrigin);
+  for (const key of ['network_request_made', 'input_file_bytes_received', 'stored', 'general_uploads_enabled']) {
+    assert.equal(blockedDiagnostic[key], false);
+  }
+  assert.equal(blockedDiagnostic.candidate_origin_is_not_authorization, true);
+  assert(!JSON.stringify(imported.body).includes('not-for-logs'));
+  for (const download_url of ['http://127.0.0.1/private', 'https://host.internal/private',
+    'https://user:secret@files.example.invalid/']) {
+    const rejected = await invoke('hwp_import', { file: { ...file(), download_url }, request_id: crypto.randomUUID() });
+    assert.deepEqual(rejected.body.result, { isError: true, content: [{ type: 'text', text: 'DOCUMENT_UPLOADS_NOT_ENABLED' }] });
+  }
+  assert.equal((await invoke('hwp_import', { file: file(), request_id: crypto.randomUUID() }, {})).status, 401);
+  const overridden = await invoke('hwp_import', { file: { ...file(), owner }, request_id: crypto.randomUUID() });
+  assert.equal(overridden.body.result.content[0].text, 'INVALID_TOOL_ARGUMENTS');
   assert.equal(fetches, 0);
+  await intact();
+  checks.push('disabled_import_safe_origin_feedback_no_fetch_no_storage_or_descriptor_echo');
   checks.push('authentication_and_general_upload_gate_not_bypassed');
 
   const output = (await invoke('hwp_transfer_probe', { file: file() })).body.result;

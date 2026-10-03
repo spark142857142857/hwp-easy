@@ -3,6 +3,7 @@ import { createDocumentService } from '../storage/service.mjs';
 import { authenticatedOwner, boundedBytes, configuredOrigin, configuredFileOrigins, fileDescriptorOrigin, fetchInputFile, TRANSFER_BODY_TIMEOUT_MS } from './transfer.mjs';
 import { SYNTHETIC_TRANSFER_BYTES, SYNTHETIC_TRANSFER_SHA256, verifyTransferFixture, syntheticOutputResource } from './synthetic-transfer.mjs';
 import { documentTools, validateArguments } from './tools.mjs';
+import { uploadDisabledError } from './error-feedback.mjs';
 import { createEngineApi } from '../../../src/one_hwp/rhwp_api.mjs';
 import { syntheticFixture } from '../../../src/one_hwp/synthetic_fixtures.mjs';
 const fail = (code) => { throw new StorageError(code); };
@@ -33,7 +34,7 @@ export function createHostApp(env, engine, HwpDocument, fetcher = fetch) {
       retention: 'until_explicit_delete', automatic_expiry: false,
       deletion_scope: 'logical_document_and_recorded_versions', unpublished_blob_gc_verified: false };
     if (name === 'hwp_import') {
-      if (!uploadsEnabled()) fail('DOCUMENT_UPLOADS_NOT_ENABLED');
+      if (!uploadsEnabled()) throw uploadDisabledError(args.file);
       const bytes = await fetchInputFile(args.file, env.HWP_EASY_FILE_ORIGINS, fetcher);
       return service.create({ owner, request_id: args.request_id, bytes });
     }

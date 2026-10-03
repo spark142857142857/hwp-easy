@@ -10,6 +10,7 @@ import { runStorageProbe } from '../storage/probe.mjs';
 import { createHostApp } from '../host/app.mjs';
 import { documentTools } from '../host/tools.mjs';
 import { boundedBytes } from '../host/transfer.mjs';
+import { documentToolError } from '../host/error-feedback.mjs';
 const wasm = initSync({ module: wasmModule });
 const json = JSON.parse;
 const checked = (value) => { if (json(value).ok !== true) throw new Error('operation'); };
@@ -304,8 +305,7 @@ export default {
         .call(rpc.params?.name, rpc.params?.arguments, request)); }
       catch (err) {
         if (err.code === 'AUTHENTICATION_REQUIRED') return response({ error: 'Authentication required' }, 401);
-        const code = typeof err.code === 'string' && /^[A-Z][A-Z0-9_]{0,80}$/.test(err.code) ? err.code : 'DOCUMENT_OPERATION_FAILED';
-        return reply({ isError: true, content: [{ type: 'text', text: code }] });
+        return reply(documentToolError(err));
       }
     }
     if (rpc.params?.name !== 'hwp_runtime_probe' || !rpc.params.arguments

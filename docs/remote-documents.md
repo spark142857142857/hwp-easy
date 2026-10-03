@@ -25,6 +25,10 @@
 
 `hwp_import`는 공식 OpenAI 플러그인의 `openai/fileParams` 계약을 사용한다. `file`에는 필수 `download_url`, `file_id`와 선택 `mime_type`, `file_name`을 선언한다. 이 선언만으로 Codex의 로컬 경로나 클라우드 첨부가 자동 전달되는 것은 아니다. [OpenAI 플러그인 도구 참조](https://developers.openai.com/plugins/reference)
 
+업로드가 꺼진 MCP `hwp_import`는 계속 `isError: true`와 첫 text block의 `DOCUMENT_UPLOADS_NOT_ENABLED`로 실패한다. 안전한 descriptor라면 추가 text block과 기존 출력 schema에 맞는 `structuredContent`로 공개 HTTPS origin만 알려준다. 파일명·ID·임시 URL 경로·query·MIME은 반환하지 않고 네트워크·바이트 수신·저장도 하지 않는다. 관찰된 origin은 허가 근거가 아니다. 잘못되거나 안전하지 않은 descriptor는 추가 진단 없이 기존 게이트 오류를 유지한다. 입력 schema, 업로드 플래그와 일반 HTTP import 동작은 바꾸지 않았다.
+
+진단은 서버 내부에서 만든 오류 객체에만 연결하고 임의 오류 속성을 직렬화하지 않는다. 3개 단위 검사와 actual workerd의 업로드 거부·익명 접근·인수 변조·안전하지 않은 URL·기존 DB/R2 보존 검사가 통과했다. 이는 새 진단 도구의 목록 반영이 지연돼도 기존 첨부 도구의 실패 이유를 확인할 수 있게 하는 피드백이며 업로드를 대신 수행하는 경로가 아니다.
+
 서버는 관리자가 설정한 정확한 HTTPS 파일 origin만 따라가고, 리디렉션을 거부하며 사용자 인증 헤더를 전달하지 않는다. Content-Length가 없거나 잘못되더라도 실제 스트림은 4 MiB 이하로 제한한다. 파일 이름과 MIME 문자열만으로 HWP라고 판단하지 않고 저장 전 실제 바이트를 검사한다. 확인하지 않은 다운로드 호스트는 추측해서 허용하지 않는다.
 
 스트림 조각을 모두 배열에 남기지 않고 크기가 정해진 버퍼에 복사한다. 조각은 16,384개 이하로 제한하고 초과·읽기 실패 시 스트림을 취소하고 reader를 해제한다. 빈 조각 반복도 이 제한에 포함한다. MCP 요청 본문은 별도로 3 MiB 이하로 제한한다. 이는 전체 엔진·동시 요청의 메모리나 CPU 인증은 아니다.
