@@ -26,6 +26,8 @@ from typing import Any
 _SHA256 = re.compile(r"[0-9a-f]{64}\Z")
 _OPERATION_KEYS = frozenset({"target_id", "expected_old", "new_text"})
 _UNSUPPORTED_NEW_TEXT = re.compile(r"[\r\n\x00-\x08\x0b-\x1f\ud800-\udfff]")
+_CELL_LOCATION_KEYS = ("control", "cell", "cell_paragraph", "row", "column",
+                       "row_span", "column_span")
 
 
 class NativeServiceError(ValueError):
@@ -162,6 +164,11 @@ class NativeService:
                     or _UNSUPPORTED_NEW_TEXT.search(block["id"])):
                 raise NativeServiceError("Document engine returned invalid block metadata")
             ids.add(block["id"])
+            if block["kind"] == "cell":
+                for key in _CELL_LOCATION_KEYS:
+                    minimum = 1 if key.endswith("_span") else 0
+                    if key in block and (type(block[key]) is not int or block[key] < minimum):
+                        raise NativeServiceError("Document engine returned invalid cell location metadata")
         return result
 
     @staticmethod
@@ -290,11 +297,19 @@ class NativeService:
                 continue
             start = max(0, found - self.CONTEXT_CHARS)
             end = min(len(text), found + len(query) + self.CONTEXT_CHARS)
+            location = {"section": block["section"], "paragraph": block["paragraph"]}
+            if block["kind"] == "cell":
+                location.update({key: block[key] for key in _CELL_LOCATION_KEYS if key in block})
+                if "control" in block:
+                    location["table_id"] = f's{block["section"]}:p{block["paragraph"]}:t{block["control"]}'
             results.append({"target_id": self._target_id(snapshot.sha256, block["id"]),
                             "id": block["id"], "kind": block["kind"],
                             "section": block["section"], "paragraph": block["paragraph"],
+                            "location": location,
+                            "location_complete": block["kind"] != "cell" or all(key in block for key in _CELL_LOCATION_KEYS),
                             "match_start": found, "match_end": found + len(query),
-                            "context_start": start, "context": text[start:end]})
+                            "context_start": start, "context_end": end,
+                            "total_chars": len(text), "context": text[start:end]})
             # A one-character advance includes overlapping occurrences.
             offset = found + 1
         # Do not return a useless final cursor merely because the last hit filled
@@ -310,6 +325,8 @@ class NativeService:
         result = self._base(snapshot, inspection)
         result.update(query=query, results=results, complete=complete,
                       content_complete=False, response_scope="search_matches",
+                      location_index_base=0, text_offset_unit="unicode_code_points",
+                      edit_expected_old_scope="whole_block",
                       complete_scope="search_traversal_of_issued_cursor_chain",
                       next_cursor=None if complete else self._next_cursor("search", snapshot, index, offset, query))
         return result

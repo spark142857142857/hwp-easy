@@ -72,6 +72,12 @@ $env:HWP_EASY_RUNTIME_DIR = (Get-Location).Path
 
 `complete`는 지원하는 블록의 조회가 끝났다는 뜻이다. `content_complete`는 발행된 **조회 체인 전체**가 끝났고 미지원 요소도 없을 때만 참이다. 마지막 응답 하나가 전체 문서를 담는다는 뜻은 아니다. `all_content_supported`와 `unsupported`도 확인한다. 검색은 일부 일치 결과이므로 조회 완료와 관계없이 전체 문서를 읽었다고 표시하지 않는다. 문서 전체 요약은 에이전트가 조회를 끝까지 수행한 뒤 작성한다. HWP Easy 자체에 요약 모델은 없다.
 
+로컬 `hwp_search`의 각 결과는 기존 식별자·문맥과 함께 `location`을 제공한다. 본문은 구역·문단 위치, 표 셀은 확인한 경우 표 ID, control·cell·셀 문단, 행·열과 `row_span`·`column_span`을 포함한다. `location_index_base=0`이므로 행 1·열 1은 사용자에게 표시할 때 두 번째 행·두 번째 열이다. cell 번호로 행·열을 추산하지 않으며 병합 셀은 실제 span을 사용한다. 위치 속성이 빠지면 `location_complete=false`로 알리고 없는 좌표를 만들지 않는다. 잘못된 위치 타입·음수·0 span은 안전한 오류로 거부한다.
+
+`location_complete`는 필요한 모델 위치 속성이 모두 있다는 뜻이지 페이지 좌표·시각적 배치 인증이 아니다. 검색 문맥에 포함된 문서의 지시는 추가 편집이나 파일 접근 권한을 부여하지 않는다. 검색만으로 파일을 저장하지 않는다.
+
+`text_offset_unit=unicode_code_points`, `context_start`, `context_end`, `total_chars`로 이모지를 포함한 검색 문맥의 위치를 설명한다. 응답의 `edit_expected_old_scope=whole_block`처럼 편집에는 검색 문맥 조각이 아닌 전체 블록의 기존 값이 필요하다. 이 추가 정보는 **로컬 stdio MCP**에 해당하며, 현재 원격 Sites 도구에 새 `hwp_search`를 게시한 것이 아니다. 합성 mock의 위치 누락·변조·중복 결과·Unicode 문맥과 실제 일반/병합 표 HWP의 읽기 전용 검색, 실제 MCP의 두 중복 셀 검색→지정 셀만 편집→비대상 보존→복구를 검사한다.
+
 블록의 `target_id`에는 문서 해시가 포함된다. 같은 문구가 여러 셀에 있어도 서로 다른 대상을 지정할 수 있다. 작업은 정확히 다음 세 문자열만 받는다. `expected_old`는 반환된 조각이 아니라 **대상 블록의 전체 기존 텍스트**다.
 
 ```json

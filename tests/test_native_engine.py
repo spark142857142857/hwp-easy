@@ -217,6 +217,44 @@ class RealEngineTests(unittest.TestCase):
             self.assertEqual(source.read_bytes(), self.bytes)
             self.assertFalse(any(path.suffix.lower() in (".pdf", ".docx", ".hwpx") for path in root.rglob("*")))
 
+    def test_real_search_cell_locations_and_merged_spans_are_read_only(self):
+        from one_hwp.native_service import NativeService
+        from one_hwp.native_storage import PathPolicy, SafeStore
+        for merged in (False, True):
+            with self.subTest(merged=merged), tempfile.TemporaryDirectory() as directory:
+                root = Path(directory)
+                source = root / "synthetic-search.hwp"
+                data = real_fixture({"merged": merged,
+                    "cells": [["반복 문구", "반복 문구"], ["반복 문구", "반복 문구"]]})
+                source.write_bytes(data)
+                service = NativeService(self.engine, SafeStore(PathPolicy([root]), root / "backup"))
+                page = service.read(source)
+                blocks = {block["target_id"]: block for block in page["blocks"]}
+                cursor, results = None, []
+                for _ in range(10):
+                    search = service.search(source, page["source_sha256"], "반복 문구", cursor, max_results=1)
+                    self.assertFalse(search["content_complete"])
+                    results.extend(search["results"])
+                    cursor = search["next_cursor"]
+                    if search["complete"]:
+                        break
+                self.assertIsNone(cursor)
+                self.assertGreaterEqual(len(results), 3)
+                self.assertEqual(len({hit["target_id"] for hit in results}), len(results))
+                for hit in results:
+                    block = blocks[hit["target_id"]]
+                    self.assertTrue(hit["location_complete"])
+                    for key in ("section", "paragraph", "control", "cell", "cell_paragraph",
+                                "row", "column", "row_span", "column_span"):
+                        self.assertEqual(hit["location"][key], block[key])
+                if merged:
+                    self.assertTrue(any(hit["location"]["column_span"] == 2 for hit in results))
+                else:
+                    self.assertEqual({(hit["location"]["row"], hit["location"]["column"]) for hit in results},
+                                     {(0, 0), (0, 1), (1, 0), (1, 1)})
+                self.assertEqual(source.read_bytes(), data)
+                self.assertEqual(list((root / "backup").iterdir()), [])
+
     @unittest.skipUnless(importlib.util.find_spec("mcp"), "optional MCP SDK not installed")
     def test_real_stdio_mcp_read_plan_edit_preview_restore(self):
         import asyncio
@@ -235,7 +273,24 @@ class RealEngineTests(unittest.TestCase):
                     read_result = await session.call_tool("hwp_read", {"source": str(source)})
                     self.assertFalse(read_result.isError)
                     page = read_result.structuredContent
-                    block = next(item for item in page["blocks"] if item["editable"])
+                    search_args = {"source": str(source), "expected_sha256": page["source_sha256"],
+                                   "query": "반복 문구", "max_results": 1}
+                    search_first = await session.call_tool("hwp_search", search_args)
+                    self.assertFalse(search_first.isError)
+                    first = search_first.structuredContent
+                    self.assertFalse(first["content_complete"])
+                    self.assertFalse(first["complete"])
+                    search_second = await session.call_tool("hwp_search", {**search_args, "cursor": first["next_cursor"]})
+                    self.assertFalse(search_second.isError)
+                    second = search_second.structuredContent
+                    self.assertTrue(second["complete"])
+                    self.assertIsNone(second["next_cursor"])
+                    hit = second["results"][0]
+                    self.assertNotEqual(hit["target_id"], first["results"][0]["target_id"])
+                    self.assertEqual((hit["location"]["row"], hit["location"]["column"]), (1, 1))
+                    self.assertTrue(hit["location_complete"])
+                    self.assertEqual(source.read_bytes(), self.bytes)
+                    block = next(item for item in page["blocks"] if item["target_id"] == hit["target_id"])
                     operations = [{"target_id": block["target_id"], "expected_old": block["text"], "new_text": "MCP 실제 수정 😀"}]
                     planned = await session.call_tool("hwp_plan", {"source": str(source), "expected_sha256": page["source_sha256"], "operations": operations})
                     self.assertFalse(planned.isError)
@@ -243,6 +298,11 @@ class RealEngineTests(unittest.TestCase):
                                                                   "operations": operations, "request_id": "stdio-synthetic"})
                     self.assertFalse(edited.isError)
                     saved = edited.structuredContent
+                    after_result = await session.call_tool("hwp_read", {"source": str(source), "expected_sha256": saved["sha256"]})
+                    self.assertFalse(after_result.isError)
+                    after_values = {item["id"]: item["text"] for item in after_result.structuredContent["blocks"]}
+                    for old in page["blocks"]:
+                        self.assertEqual(after_values[old["id"]], "MCP 실제 수정 😀" if old["id"] == block["id"] else old["text"])
                     preview = await session.call_tool("hwp_preview", {"source": str(source), "expected_sha256": saved["sha256"], "page": 0})
                     self.assertFalse(preview.isError)
                     self.assertIn("<svg", preview.structuredContent["svg"])

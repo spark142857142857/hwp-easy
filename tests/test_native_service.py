@@ -300,6 +300,65 @@ class NativeServiceTests(unittest.TestCase):
         with self.assertRaises(NativeServiceError):
             self.service.search(SOURCE, self.version, "문장", cursor)
 
+    def test_search_reports_cell_address_spans_without_guessing_from_cell_index(self):
+        value = document(("같은 문구", "같은 문구", "같은 문구"))
+        value["blocks"][1].update(control=2, cell=7, cell_paragraph=3,
+                                   row=1, column=4, row_span=2, column_span=3)
+        self.replace_document(value)
+        first = self.service.search(SOURCE, self.version, "같은", max_results=1)
+        second = self.service.search(SOURCE, self.version, "같은", first["next_cursor"], max_results=1)
+        third = self.service.search(SOURCE, self.version, "같은", second["next_cursor"], max_results=1)
+        hit = second["results"][0]
+        self.assertEqual(hit["location"], {"section": 0, "paragraph": 1, "control": 2,
+            "cell": 7, "cell_paragraph": 3, "row": 1, "column": 4, "row_span": 2,
+            "column_span": 3, "table_id": "s0:p1:t2"})
+        self.assertTrue(hit["location_complete"])
+        self.assertEqual(first["results"][0]["location"], {"section": 0, "paragraph": 0})
+        self.assertTrue(first["results"][0]["location_complete"])
+        self.assertNotEqual(hit["target_id"], third["results"][0]["target_id"])
+        self.assertEqual(second["location_index_base"], 0)
+        self.assertEqual(second["edit_expected_old_scope"], "whole_block")
+        self.assertFalse(second["content_complete"])
+        self.assertTrue(third["complete"])
+        self.assertEqual(self.store.save_calls, [])
+
+    def test_search_missing_cell_address_is_disclosed_not_invented(self):
+        hit = self.service.search(SOURCE, self.version, "같은")["results"][0]
+        self.assertEqual(hit["kind"], "cell")
+        self.assertEqual(hit["location"], {"section": 0, "paragraph": 1})
+        self.assertFalse(hit["location_complete"])
+
+    def test_search_unicode_context_offsets_do_not_become_edit_values(self):
+        text = "😀" * 100 + "반복 문구" + "끝" * 100
+        self.replace_document(document((text,)))
+        result = self.service.search(SOURCE, self.version, "반복 문구")
+        hit = result["results"][0]
+        self.assertEqual(result["text_offset_unit"], "unicode_code_points")
+        self.assertEqual(hit["match_start"], 100)
+        self.assertEqual(hit["total_chars"], len(text))
+        self.assertEqual(hit["context"], text[hit["context_start"]:hit["context_end"]])
+        with self.assertRaises(NativeServiceError):
+            self.service.plan(SOURCE, self.version, [{"target_id": hit["target_id"],
+                "expected_old": hit["context"], "new_text": "다른 문구"}])
+        self.assertEqual(self.store.save_calls, [])
+
+    def test_invalid_cell_coordinates_fail_safely_before_search_or_read(self):
+        for key in ("control", "cell", "cell_paragraph", "row", "column", "row_span", "column_span"):
+            invalid = [True, -1, "PRIVATE_COORDINATE", 1.5, None]
+            if key.endswith("_span"):
+                invalid.append(0)
+            for item in invalid:
+                value = document()
+                value["blocks"][1][key] = item
+                self.replace_document(value)
+                for method in (lambda: self.service.read(SOURCE),
+                               lambda: self.service.search(SOURCE, self.version, "같은")):
+                    with self.subTest(key=key, item=item):
+                        with self.assertRaises(NativeServiceError) as failure:
+                            method()
+                        self.assertNotIn("PRIVATE_COORDINATE", str(failure.exception))
+        self.assertEqual(self.store.save_calls, [])
+
     def test_search_invalid_query_or_limits_rejected(self):
         for query in ("", None, 1, "x" * 8001):
             with self.subTest(query=type(query)), self.assertRaises(NativeServiceError):

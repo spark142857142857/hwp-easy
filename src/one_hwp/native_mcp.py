@@ -58,7 +58,10 @@ TOOL_METADATA = {
     ),
     "hwp_search": _metadata(
         "Search the supported blocks of one selected HWP version and return bounded match context plus "
-        "version-bound target IDs. Follow next_cursor for remaining results. No file is written."
+        "version-bound target IDs, zero-based cell locations and merged-cell spans when available. "
+        "location_complete=false means location metadata is incomplete; never guess coordinates. "
+        "Text offsets are Unicode code points. A match context is not the whole-block expected_old for editing. "
+        "Follow next_cursor for remaining results. No file is written."
     ),
     "hwp_plan": _metadata(
         "Validate a proposed edit without saving. Each operation has exactly target_id, expected_old and "
