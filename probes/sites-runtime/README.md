@@ -101,6 +101,16 @@ node scripts/check-deletion.mjs
 
 ## 배포 경계
 
+### 비공개 버전 11: 기존 첨부 도구의 안전한 실패 피드백
+
+2026년 10월 3일 재인증 뒤 Desktop 기능 조회와 합성 workflow 및 기존 ChatGPT Work Cloud 기능 조회가 성공했다. 양쪽 native 도구 목록에는 12개가 있으며 새 `hwp_transfer_probe`는 아직 없었다. 인증 오류와 목록 반영 대기를 구분하고 새 tool 이름을 추측 호출하거나 서비스 자격으로 사용자 신원을 대신하지 않았다.
+
+Site source `24aecb0817b2b8f433b0274b56209bf2f488ab17`을 같은 소유자 전용 Site의 버전 11로 게시했다. 기존 `hwp_import`가 업로드를 거부할 때 공개 HTTPS origin만 추가로 알려주며 첫 오류 text와 `isError`, 입력 schema, 실제 작업 거부는 유지한다. arbitrary error 속성을 응답에 싣지 않고 signed URL·파일명·ID·내용을 노출하지 않는다. 루트 단위 검사 231개와 Site 단위 검사 225개, actual workerd 저장·호스트·실패·삭제 및 합성 전달 8개 시나리오가 통과했다.
+
+게시 뒤 Desktop native 기능 조회와 새 고정 합성 HWP 파일 인수 전달은 추가 재인증 없이 완료됐다. 후보 origin만 반환하고 `network_request_made`, `input_file_bytes_received`, `stored`, `general_uploads_enabled`는 모두 `false`였다. OAuth 클라이언트·플러그인·MCP resource·접근 revision과 환경 revision 1은 유지했다. 일반 업로드 `false`, 일반 allowlist `[]`와 미설정 합성 allowlist도 그대로다. 실제 바이트 왕복과 HWP 결과 회수, 두 OAuth 사용자·저장소 Codex Cloud·Dots·배치는 미검증이다. [클라이언트 기록](../../docs/codex-cloud.md#재인증-뒤-버전-1011-확인과-도구-목록-대기)
+
+버전 11의 원격 고정 엔진·D1/R2 저장·합성 자료 정리와 익명·임의 신원·서비스 자격의 사용자 문서/MCP 접근 거부도 통과했다. 게시 뒤 Desktop의 native 합성 workflow가 8회 전체 조회·계획·같은 문서 저장·재열기·복구·기록된 버전 삭제·정리를 성공했다. 구현 commit `b195b840868c15e5c8e6c677e358632e6d136e8a`의 [Windows·Ubuntu CI 4개 작업](https://github.com/spark142857142857/hwp-easy/actions/runs/37107733442)은 모두 성공했다. 후보 전달 호스트를 허용 목록에 추가하지 않았고 개인 파일도 시험하지 않았다.
+
 Site 원본은 별도 Site checkout에 있고, 해당 checkout의 `.openai/hosting.json`에 실제 `project_id`와 `capabilities: ["mcp"]`를 둔다. 이 시험 소스에는 Site ID나 자격을 넣지 않는다. Site checkout은 이 probe 디렉터리를 루트로 사용하므로 공통 `rhwp_api.mjs`와 합성 fixture를 그 checkout의 `src/one_hwp`에 그대로 복사하고 해당 import의 상대 위치만 조정한다. 검증된 정확한 Site 소스를 Sites 워크플로로 push·포장한 뒤 비공개로 게시한다. 로컬 검사만으로 비공개 접근 경계나 원격 WASM 모듈 전달 성공을 주장하지 않는다.
 
 Windows에서는 워크플로 프로세스에만 Git Bash의 PATH와 `TAR_OPTIONS=--force-local`을 설정해 포장했다. Windows 드라이브 경로가 tar의 원격 대상 구문으로 해석되지 않도록 하기 위한 것이며 시스템 설정을 변경하지 않는다.

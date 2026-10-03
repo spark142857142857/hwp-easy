@@ -37,6 +37,16 @@ Codex Cloud는 게시한 환경에서 도구·저장소·의존성을 준비하�
 
 고정 합성 HWP만 받는 별도 전달 진단과 MCP embedded HWP 결과·로컬 회수 helper를 준비해 버전 10으로 게시했다. 모의 전달의 실제 workerd 검사와 Windows·Linux CI가 통과했다. 일반 업로드 및 별도 합성 전달 호스트는 활성화하지 않았다. 새 배포 전에 Desktop 기능 조회가 다시 `oauth_token_invalid_grant`로 실패해 재인증을 요청했고, 같은 연결의 후속 호출과 Cloud 재시험은 보류했다. 새 경로의 native 첨부·결과 회수를 확인한 것이 아니며 Cloud·Dots 지원 플래그도 그대로다. [버전 10 근거](../probes/sites-runtime/README.md#비공개-버전-10-배포-기록)
 
+### 재인증 뒤 버전 10·11 확인과 도구 목록 대기
+
+사용자가 재인증한 뒤 Desktop의 native 기능 조회와 버전 10 합성 workflow가 성공했다. 같은 기존 Cloud 채팅 `HWP Easy 연결 검증`에서도 읽기 전용 기능 조회가 약 21.8초에 완료됐고 재인증 오류는 없었다. 두 클라이언트 모두 기존 12개 도구만 보였으며 서버에 구현된 `hwp_transfer_probe`는 목록에 없었다. 인증 복구와 새 도구 목록 반영을 별도 상태로 기록하며, 목록 지연의 구체적인 원인은 확정하지 않는다.
+
+버전 11은 기존 `hwp_import`의 업로드 거부 응답에 안전한 origin-only 진단을 추가했다. 게시 후 Desktop 기능 조회와 새 고정 합성 HWP의 실제 파일 인수 전달이 추가 재인증 없이 완료됐다. 서버 응답의 후보 origin은 `https://sdmntprindiasocentral.oaiusercontent.com`이었다. `isError: true`와 `DOCUMENT_UPLOADS_NOT_ENABLED`를 유지했고 파일 바이트 수신·네트워크·DB/R2 저장은 수행하지 않았다. native gateway가 추가한 `data.error_code: INVALID_ARGUMENT`도 관찰했으나 이를 HWP 바이트 검사 실패나 인증 오류로 해석하지 않는다.
+
+버전 11에서 Desktop native 합성 workflow도 전체 조회·편집·기본 저장·내부 재열기·복구·기록된 버전 삭제·정리를 통과했다. 별도 원격 고정 진단과 인증 경계 검사, 구현 commit의 Windows·Ubuntu CI 4개 작업도 성공했다. 이 버전에서 Cloud의 쓰기 workflow나 파일 입력을 재시험했다고 기록하지 않는다.
+
+후보 origin을 자동 허용하지 않았고 일반·합성 전달 allowlist와 업로드 설정도 그대로다. 이 결과는 실제 첨부 descriptor가 서버에 도달했다는 근거이며 새 도구의 바이트 입력·편집 결과 회수·Cloud 파일 전달을 통과 처리하지 않는다. 새 도구가 실제 목록에 나타난 뒤 별도 합성 전달 검증을 이어간다. 사용자의 개인 `testdocs`는 이 단계에 사용하지 않았다.
+
 ## 공통 엔진과 저장 계층
 
 `src/one_hwp/rhwp_api.mjs`는 경로·Node 파일 API 없이 문서 모델을 읽고 수정한다. Node JSON bridge와 browser ESM이 이 코드를 함께 사용한다. `probes/sites-runtime/engine/document.mjs`는 browser ESM에서 바이트 snapshot, SHA-256 기반 대상, 이어 읽기, 계획·편집·미리보기 계약을 제공한다.
