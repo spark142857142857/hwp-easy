@@ -34,7 +34,9 @@ export const documentTools = [
     document_id: uuid, expected_version: uuid, request_id: uuid,
     confirmation: { type: 'string', pattern: '^delete_document_and_recorded_versions$' },
   }, undefined, true, true),
-  tool('hwp_download', 'Get an authenticated HWP download link for your chosen immutable version. It is not a public/share link and may require browser sign-in.', version),
+  tool('hwp_download', 'Retrieve your chosen immutable HWP version. Default delivery is a browser-sign-in link. Explicit delivery=embedded returns HWP bytes as an MCP resource, at most 256 KiB; larger files must use the link. Neither mode saves locally or certifies client attachment UI.', {
+    ...version, delivery: { type: 'string', pattern: '^(link|embedded)$', maxLength: 8 },
+  }, ['document_id', 'version_id']),
   tool('hwp_preview', 'Get an authenticated page SVG preview link. Layout fidelity is unverified; HWP remains the final document.', {
     ...version, page: { type: 'integer', minimum: 0, maximum: 9999 },
   }),

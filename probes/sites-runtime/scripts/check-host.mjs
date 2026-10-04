@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
+import { spawnSync } from 'node:child_process';
 import { createRequire } from 'node:module';
 import { pathToFileURL } from 'node:url';
 import { Miniflare, convertV4MiniflareOptions } from 'miniflare';
@@ -113,6 +114,41 @@ try {
   assert.equal(link.public_share_link, false);
   const result = await mf.dispatchFetch(link.download_url, { headers }); assert.equal(result.status, 200);
   const output = new Uint8Array(await result.arrayBuffer()), reopened = await engine.open(output);
+  const downloadHistory = await call('hwp_versions', { document_id: created.document_id }), downloadBlobs = await blobState();
+  const downloadResult = (await (await rpc('hwp_download', { ...current, delivery: 'embedded' })).json()).result;
+  assert.equal(downloadResult.isError, undefined);
+  const embedded = downloadResult.content.filter((c) => c.type === 'resource'); assert.equal(embedded.length, 1);
+  assert.deepEqual(new Uint8Array(Buffer.from(embedded[0].resource.blob, 'base64')), output);
+  assert.equal(embedded[0].resource.mimeType, 'application/x-hwp');
+  assert.equal(downloadResult.structuredContent.data.output_sha256, edited.sha256);
+  assert.equal(downloadResult.structuredContent.data.output_bytes, output.length);
+  assert.equal(downloadResult.structuredContent.data.local_file_saved, false);
+  assert(!JSON.stringify(downloadResult.structuredContent).includes(embedded[0].resource.blob));
+  assert.deepEqual(await call('hwp_versions', { document_id: created.document_id }), downloadHistory);
+  assert.deepEqual(await blobState(), downloadBlobs);
+  await denied('hwp_download', { ...current, delivery: 'embedded' }, 'DOCUMENT_OR_VERSION_NOT_FOUND', other);
+  const oldEmbedded = (await (await rpc('hwp_download', { ...args, delivery: 'embedded' })).json()).result;
+  assert.deepEqual(new Uint8Array(Buffer.from(oldEmbedded.content.find((c) => c.type === 'resource').resource.blob, 'base64')), bytes);
+  assert.equal((await (await rpc('hwp_download', current)).json()).result.content.length, 1);
+  checks.push('embedded_immutable_current_and_old_hwp_exact_bytes_no_storage_mutation_owner_scope');
+  let largeState = 12345;
+  const largeText = Array.from({ length: 350000 }, () => {
+    largeState = (Math.imul(largeState, 1664525) + 1013904223) >>> 0;
+    return String.fromCharCode(33 + largeState % 90);
+  }).join('');
+  const largeBytes = syntheticFixture(HwpDocument, api.exportChecked,
+    { paragraphs: [largeText, '합성 마지막 문단'], table: false });
+  assert(largeBytes.length > 256 * 1024);
+  const largeUpload = await upload({}, headers, largeBytes); assert.equal(largeUpload.status, 200);
+  const largeDoc = await largeUpload.json(), largeArgs = { document_id: largeDoc.document_id, version_id: largeDoc.version_id };
+  const largeHistory = await call('hwp_versions', { document_id: largeDoc.document_id }), largeBlobs = await blobState();
+  const tooLarge = await denied('hwp_download', { ...largeArgs, delivery: 'embedded' }, 'DOCUMENT_EMBEDDED_OUTPUT_LIMIT_EXCEEDED');
+  assert.equal(tooLarge.content.length, 1);
+  const largeLink = await call('hwp_download', largeArgs);
+  assert.deepEqual(new Uint8Array(await (await mf.dispatchFetch(largeLink.download_url, { headers })).arrayBuffer()), largeBytes);
+  assert.deepEqual(await call('hwp_versions', { document_id: largeDoc.document_id }), largeHistory);
+  assert.deepEqual(await blobState(), largeBlobs);
+  checks.push('over_256_kib_real_synthetic_hwp_rejected_without_truncation_link_and_storage_preserved');
   const final = reopened.read({ expected_sha256: edited.sha256 });
   assert.equal(final.blocks.find((b) => b.id === body.id).text, edits.operations[0].new_text);
   assert.equal(final.blocks.find((b) => b.id === cell.id).text, edits.operations[1].new_text);
@@ -189,13 +225,39 @@ try {
   checks.push('checked_crc32_isize_hwp_real_workerd_read_plan_edit_download_reopen_restore');
 
   const countBefore = (await db.prepare('SELECT count(*) AS n FROM hwp_documents').first()).n;
-  const workflow = await call('hwp_workflow_probe', {});
+  const workflowEnvelope = (await (await rpc('hwp_workflow_probe', {})).json()).result;
+  const workflow = workflowEnvelope.structuredContent.data;
   assert.equal(workflow.passed, true); assert.equal(workflow.synthetic_cleanup_complete, true);
   assert.equal(workflow.native_file_attachment_verified, false);
   assert.equal(workflow.external_http_download_verified, false);
   assert.equal(workflow.owner_scoped_binary_handler_and_reopen, true);
   assert.equal(workflow.empty_cell_fill_save_reopen, true);
   assert.equal(workflow.cell_text_clear_save_reopen, true);
+  assert.equal(workflow.stored_version_embedded_hwp_verified, true);
+  const savedWorkflow = spawnSync(process.execPath, ['scripts/save-workflow-result.mjs'], {
+    input: JSON.stringify(workflowEnvelope), encoding: 'utf8', timeout: 15000,
+  });
+  assert.equal(savedWorkflow.status, 0); const savedWorkflowMeta = JSON.parse(savedWorkflow.stdout);
+  assert.equal(savedWorkflowMeta.independently_reproduced_bytes_match, true);
+  assert.equal(savedWorkflowMeta.local_reopen_verified, true);
+  assert.equal(savedWorkflowMeta.sha256, workflow.output_sha256);
+  assert.deepEqual(fs.readFileSync(savedWorkflowMeta.path), Buffer.from(workflowEnvelope.content.find((c) => c.type === 'resource').resource.blob, 'base64'));
+  const syntheticOutputs = () => fs.readdirSync(path.dirname(savedWorkflowMeta.path)).sort();
+  const beforeRejectedOutput = syntheticOutputs();
+  for (const mutate of [
+    (r) => { r.structuredContent.data.scope = 'personal_document'; },
+    (r) => { r.content.find((c) => c.type === 'resource').resource.blob = Buffer.from([1, 2, 3]).toString('base64'); },
+    (r) => { r.content.push(r.content.find((c) => c.type === 'resource')); },
+    (r) => { r.structuredContent.data.output_sha256 = '0'.repeat(64); },
+  ]) {
+    const corrupted = structuredClone(workflowEnvelope); mutate(corrupted);
+    const deniedResult = spawnSync(process.execPath, ['scripts/save-workflow-result.mjs'], {
+      input: JSON.stringify(corrupted), encoding: 'utf8', timeout: 15000,
+    });
+    assert.equal(deniedResult.status, 1); assert.equal(deniedResult.stdout, '');
+    assert.deepEqual(syntheticOutputs(), beforeRejectedOutput);
+  }
+  checks.push('fixed_workflow_resource_independently_reproduced_local_file_reopen_rejects_unverified_results');
   assert.equal((await db.prepare('SELECT count(*) AS n FROM hwp_documents').first()).n, countBefore);
   assert.equal((await call('hwp_read', { document_id: created.document_id, version_id: restored.version_id })).storage.sha256, created.sha256);
   checks.push('workflow_probe_cleanup_does_not_delete_existing_documents');
@@ -244,6 +306,7 @@ try {
   assert.equal(removed.recorded_versions_removed, 3); assert.equal(removed.unpublished_blob_gc_verified, false);
   assert.equal((await call('hwp_delete', deletion)).replayed, true);
   await denied('hwp_read', current, 'DOCUMENT_OR_VERSION_NOT_FOUND');
+  await denied('hwp_download', { ...current, delivery: 'embedded' }, 'DOCUMENT_OR_VERSION_NOT_FOUND');
   assert.equal((await mf.dispatchFetch(link.download_url, { headers })).status, 404);
   assert.equal((await call('hwp_read', { document_id: imported.structuredContent.data.document_id,
     version_id: imported.structuredContent.data.version_id })).storage.sha256, imported.structuredContent.data.sha256);

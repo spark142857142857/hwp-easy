@@ -94,6 +94,28 @@ try {
     await revoked(doc); assert.equal((await keys(doc)).length, 0);
     checks.push(`${channel}_read_rechecks_${phase}_deletion_before_returning_already_fetched_bytes`);
   }
+  // Embedded delivery has additional engine/encoding work after store.read.
+  // A deletion during that work must not release the buffered binary resource.
+  for (const phase of ['pending', 'complete']) {
+    const doc = await create(), request = deletion(doc), gate = barrier();
+    const host = createHostApp({ DB: db, BUCKET: bucket, HWP_EASY_ORIGIN: origin }, {
+      async open() { await gate.pause(); return { source_sha256: doc.sha256 }; },
+    }, HwpDocument);
+    const reading = outcome(host.call('hwp_download', { document_id: doc.document_id,
+      version_id: doc.version_id, delivery: 'embedded' }, new Request(`${origin}/mcp`, { headers: identity })));
+    try {
+      await reached(gate);
+      if (phase === 'complete') await store.remove(request);
+      else {
+        const broken = { get: (...args) => bucket.get(...args), put: (...args) => bucket.put(...args),
+          async delete() { throw new Error('PRIVATE_INJECTED_DELETE_FAILURE'); } };
+        await assert.rejects(() => createVersionStore(db, broken).remove(request), code('DELETE_INCOMPLETE_RETRY_SAME_REQUEST'));
+      }
+    } finally { gate.release(); }
+    rejected(await reading, 'DOCUMENT_OR_VERSION_NOT_FOUND');
+    if (phase === 'pending') await store.remove(request);
+    await revoked(doc); checks.push(`embedded_output_rechecks_${phase}_deletion_after_engine_open`);
+  }
   // The new guard must not confuse a normal edit with deletion. Old versions
   // remain readable, and a receipt already confirmed before staleness replays.
   const retained = await create(), retainedGate = barrier();

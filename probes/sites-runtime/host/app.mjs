@@ -8,6 +8,7 @@ import { publicErrorCode as errorCode } from './public-errors.mjs';
 import { uploadStatus } from './upload-status.mjs';
 import { documentViewerResponse, viewerMatch } from './document-viewer.mjs';
 import { storedSyntheticResponse } from './stored-synthetic.mjs';
+import { documentOutputResource, MAX_EMBEDDED_HWP_BYTES } from './document-output.mjs';
 import { createEngineApi } from '../../../src/one_hwp/rhwp_api.mjs';
 import { syntheticFixture } from '../../../src/one_hwp/synthetic_fixtures.mjs';
 const fail = (code) => { throw new StorageError(code); };
@@ -29,6 +30,7 @@ export function createHostApp(env, engine, HwpDocument, fetcher = fetch) {
       file_url_origins_configured: fileOriginsConfigured(),
       upload_status: uploadStatus(uploadsEnabled(), fileOriginsConfigured()),
       stored_document_tools_available: true,
+      embedded_hwp_download_available: true, max_embedded_hwp_bytes: MAX_EMBEDDED_HWP_BYTES,
       synthetic_transfer_probe_implemented: true, synthetic_transfer_fixture_sha256: SYNTHETIC_TRANSFER_SHA256,
       synthetic_transfer_fixture_bytes: SYNTHETIC_TRANSFER_BYTES,
       synthetic_transfer_origins_configured: syntheticFileOriginsConfigured(),
@@ -74,6 +76,26 @@ export function createHostApp(env, engine, HwpDocument, fetcher = fetch) {
         versions: history.map(({ current_version, revision, ...entry }) => entry) };
     }
     if (name === 'hwp_workflow_probe') return workflow(owner);
+    if (name === 'hwp_download') {
+      const { bytes, ...metadata } = await store.read({ owner, document_id: args.document_id, version_id: args.version_id });
+      if (args.delivery === 'embedded' && bytes.length > MAX_EMBEDDED_HWP_BYTES) fail('DOCUMENT_EMBEDDED_OUTPUT_LIMIT_EXCEEDED');
+      const snapshot = await engine.open(bytes);
+      if (snapshot.source_sha256 !== metadata.sha256) fail('BLOB_MISSING_OR_CORRUPT');
+      const base = `${origin()}/documents/${args.document_id}/versions/${args.version_id}`;
+      const data = { ...metadata, download_url: `${base}.hwp`, mime_type: 'application/x-hwp',
+        viewer_url: `${base}/view`, requires_same_user_sign_in: true, public_share_link: false };
+      if (args.delivery !== 'embedded') return data;
+      const resource = await documentOutputResource(bytes, metadata);
+      // Engine open / encoding can overlap deletion. Check this pinned version
+      // once more before returning the newly materialized resource, not after.
+      const history = await store.history({ owner, document_id: args.document_id });
+      if (!history.some((v) => v.version_id === args.version_id && v.sha256 === metadata.sha256)) {
+        fail('DOCUMENT_OR_VERSION_NOT_FOUND');
+      }
+      return { ...data, output_transport: 'mcp_embedded_resource', output_bytes: bytes.length,
+        output_sha256: metadata.sha256, local_file_saved: false, native_file_attachment_verified: false,
+        _document_output: resource };
+    }
     const { snapshot, metadata } = await service.open({ owner, document_id: args.document_id, version_id: args.version_id });
     if (name === 'hwp_read') return { ...snapshot.read({ expected_sha256: metadata.sha256,
       ...(args.cursor ? { cursor: args.cursor } : {}), ...(args.max_chars ? { max_chars: args.max_chars } : {}),
@@ -81,9 +103,6 @@ export function createHostApp(env, engine, HwpDocument, fetcher = fetch) {
     if (name === 'hwp_plan') return { ...await snapshot.preflight({ expected_sha256: args.expected_sha256, operations: args.operations }),
       storage: metadata, stale_for_save: metadata.version_id !== metadata.current_version };
     const base = `${origin()}/documents/${args.document_id}/versions/${args.version_id}`;
-    if (name === 'hwp_download') return { ...metadata, download_url: `${base}.hwp`, mime_type: 'application/x-hwp',
-      viewer_url: `${base}/view`,
-      requires_same_user_sign_in: true, public_share_link: false };
     snapshot.preview({ expected_sha256: metadata.sha256, page: args.page });
     return { ...metadata, preview_url: `${base}/pages/${args.page}.svg`, viewer_url: `${base}/view?page=${args.page}`, requires_same_user_sign_in: true, layout_verified: false };
   }
@@ -125,7 +144,7 @@ export function createHostApp(env, engine, HwpDocument, fetcher = fetch) {
     const api = createEngineApi(HwpDocument);
     const bytes = inputBytes ?? syntheticFixture(HwpDocument, api.exportChecked, {
       paragraphs: ['합성 에이전트 문서', '합성 에이전트 문서'], cells: [['문항', '합성 답변'], ['', '보존']] });
-    let created, prepared, report;
+    let created, prepared, report, embedded;
     const createRequestId = crypto.randomUUID();
     const check = (value) => { if (!value) fail('WORKFLOW_PROBE_FAILED'); };
     try {
@@ -157,6 +176,10 @@ export function createHostApp(env, engine, HwpDocument, fetcher = fetch) {
       const output = await download(link.download_url, owner);
       check(output.status === 200 && output.headers.get('content-type') === 'application/x-hwp');
       const outputBytes = new Uint8Array(await output.arrayBuffer());
+      embedded = await tool('hwp_download', { document_id: created.document_id, version_id: edited.version_id,
+        delivery: 'embedded' }, owner);
+      const blob = atob(embedded._document_output.resource.blob);
+      check(blob.length === outputBytes.length && outputBytes.every((byte, i) => byte === blob.charCodeAt(i)));
       const reopened = await engine.open(outputBytes);
       const after = reopened.read({ expected_sha256: reopened.source_sha256 });
       check(after.blocks.find((b) => b.id === body.id).text === edits.operations[0].new_text);
@@ -204,11 +227,17 @@ export function createHostApp(env, engine, HwpDocument, fetcher = fetch) {
         empty_cell_fill_save_reopen: !!emptyCell,
         cell_text_clear_save_reopen: !!emptyCell,
         owner_scoped_binary_handler_and_reopen: true, owner_scoped_svg_handler: true,
+        stored_version_embedded_hwp_verified: true,
         external_http_download_verified: false,
         request_replay: true, previous_version_restore: true, native_file_attachment_verified: false,
         explicit_delete_of_recorded_versions: true, unpublished_blob_gc_verified: false,
         real_two_user_oauth_verified: false, codex_cloud_client_verified: false, dots_client_verified: false,
         uploads_enabled: uploadsEnabled(), layout_verified: false };
+      // Only the built-in diagnostic returns its own already-verified bytes.
+      // General download returns a resource only after explicit delivery choice.
+      if (!inputBytes) Object.assign(report, { output_transport: embedded.output_transport,
+        output_sha256: embedded.output_sha256, output_bytes: embedded.output_bytes,
+        _document_output: embedded._document_output });
     } finally {
       if (prepared) {
         try { await removeGeneratedDocument(owner, prepared.document_id, createRequestId); }
@@ -265,7 +294,8 @@ export function createHostApp(env, engine, HwpDocument, fetcher = fetch) {
   }
   async function call(name, args, request) {
     const owner = await authenticatedOwner(request.headers);
-    const { _synthetic_output: resource, ...data } = await tool(name, args, owner);
+    const { _synthetic_output, _document_output, ...data } = await tool(name, args, owner);
+    const resource = _document_output ?? _synthetic_output;
     const result = { stage: 'private-development', data, layout_verified: false };
     return { content: [{ type: 'text', text: JSON.stringify(result) }, ...(resource ? [resource] : [])], structuredContent: result };
   }
