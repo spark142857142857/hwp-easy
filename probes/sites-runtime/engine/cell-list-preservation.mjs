@@ -1,6 +1,6 @@
 /** Pinned @rhwp/core 0.8.6 zero -> 0x0400 cell LIST_HEADER fallback only. */
 import { deflateRaw } from 'pako';
-import { readCfb, readHwp, replaceAllocatedBodyStreams } from '../guard/container.mjs';
+import { readCfb, readHwp, replaceBodyStreamsWithMiniTailGrowth } from '../guard/container.mjs';
 import { GuardError, parseRecords } from '../guard/records.mjs';
 
 const fail = () => { throw new GuardError('PRESERVATION_MISMATCH'); };
@@ -12,7 +12,8 @@ const equal = (a, b) => a.length === b.length && a.every((value, index) => value
  * match full record order and the complete unchanged cell header, prove original
  * coordinates/paragraph count against the model, then restore exactly two bytes.
  * All other differences remain for the mandatory whole-document raw guard.
- * Compression may use only the candidate's existing allocation. Reopen/model
+ * Compression prefers exact allocation; a bounded one-mini-sector append may
+ * use only already allocated zero tail space. Reopen/model
  * comparison and raw verification are REQUIRED by the caller after this step.
  */
 export function preserveZeroCellListWords(before, candidate, inspection) {
@@ -52,14 +53,15 @@ export function preserveZeroCellListWords(before, candidate, inspection) {
         const unit = allocated.length < 4096 ? 64 : 2 ** view(candidate).getUint16(30, true);
         const fits = (bytes) => (bytes.length >= 4096) === (allocated.length >= 4096)
           && Math.ceil(bytes.length / unit) === Math.ceil(allocated.length / unit);
-        // One bounded alternate compression profile, NOT allocation changes or
-        // padding that could hide data. The final writer and raw guard remain
-        // authoritative; if level 9 also cannot fit, replacement rejects it.
+        // One bounded alternate compression profile, never content padding.
+        // The writer separately checks exact allocation or its one-mini-sector
+        // tail append; all other allocation changes remain unsupported.
         if (!fits(packed)) packed = deflateRaw(patched, { level: 9 });
       }
       replacements.set(name, packed);
     }
   }
-  return { bytes: replacements.size ? replaceAllocatedBodyStreams(candidate, replacements) : candidate,
-    restored_cell_list_words: restored };
+  const result = replacements.size ? replaceBodyStreamsWithMiniTailGrowth(candidate, replacements)
+    : { bytes: candidate, body_mini_sector_growth: 0 };
+  return { ...result, restored_cell_list_words: restored };
 }

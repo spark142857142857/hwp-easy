@@ -13,7 +13,7 @@ import { authenticatedOwner, boundedBytes, fetchInputFile } from '../host/transf
 import { applyTestMigrations } from './migrations.mjs';
 import { withCheckedDeflateTrailers } from '../tests/trailer-fixtures.mjs';
 import { withPageNumber, rewriteSyntheticBody } from '../tests/page-number-fixtures.mjs';
-import { compressionFallbackFixture, compressionRejectedFixture } from '../tests/cell-list-fixtures.mjs';
+import { compressionFallbackFixture, compressionRejectedFixture, miniGrowthFixture } from '../tests/cell-list-fixtures.mjs';
 import { readCfb, readHwp } from '../guard/container.mjs';
 import { parseRecords } from '../guard/records.mjs';
 const require = createRequire(import.meta.url);
@@ -493,6 +493,38 @@ try {
   assert.equal(readCfb(compressionOutput).get('BodyText/Section0').length,
     compressionFallbackFixture(HwpDocument, api).fallback.length);
   checks.push('alternate_compression_same_allocation_actual_worker_plan_save_download_reopen');
+  const growthFixture = miniGrowthFixture(HwpDocument, api);
+  const growthUpload = await upload({}, headers, growthFixture.bytes); assert.equal(growthUpload.status, 200);
+  const growthDoc = await growthUpload.json();
+  const growthArgs = { document_id: growthDoc.document_id, version_id: growthDoc.version_id };
+  const growthRead = await call('hwp_read', growthArgs), growthTarget = growthRead.blocks[growthFixture.target_block_index];
+  assert.equal(growthTarget.cell_text_clear_supported, true);
+  const growthEdits = { expected_sha256: growthDoc.sha256, operations: [{
+    target_id: growthTarget.target_id, expected_old: growthTarget.text, new_text: '',
+  }] };
+  const growthHistory = await call('hwp_versions', { document_id: growthDoc.document_id });
+  const growthBlobs = await blobState();
+  const growthPlan = await call('hwp_plan', { ...growthArgs, ...growthEdits });
+  assert.equal(growthPlan.body_mini_sector_growth, 1); assert.equal(growthPlan.restored_cell_list_words, 6);
+  assert.equal(growthPlan.raw_preservation_verified, true); assert.equal(growthPlan.saved, false);
+  assert.deepEqual(await call('hwp_versions', { document_id: growthDoc.document_id }), growthHistory);
+  assert.deepEqual(await blobState(), growthBlobs);
+  await denied('hwp_plan', { ...growthArgs, ...growthEdits }, 'DOCUMENT_OR_VERSION_NOT_FOUND', other);
+  const growthSaveArgs = { document_id: growthDoc.document_id, expected_version: growthDoc.version_id,
+    request_id: crypto.randomUUID(), ...growthEdits };
+  const growthSaved = await call('hwp_edit', growthSaveArgs), growthReplay = await call('hwp_edit', growthSaveArgs);
+  assert.equal(growthSaved.saved, true); assert.equal(growthSaved.raw_preservation_verified, true);
+  assert.equal(growthReplay.replayed, true); assert.equal(growthReplay.version_id, growthSaved.version_id);
+  const growthLink = await call('hwp_download', { document_id: growthDoc.document_id, version_id: growthSaved.version_id });
+  const growthOutput = new Uint8Array(await (await mf.dispatchFetch(growthLink.download_url, { headers })).arrayBuffer());
+  const growthReopened = await engine.open(growthOutput);
+  assert.deepEqual(growthReopened.read({ expected_sha256: growthSaved.sha256 }).blocks.map((b) => [b.id, b.text, b.style]),
+    growthRead.blocks.map((b) => [b.id, b.id === growthTarget.id ? '' : b.text, b.style]));
+  const growthOriginalLink = await call('hwp_download', growthArgs);
+  assert.deepEqual(new Uint8Array(await (await mf.dispatchFetch(growthOriginalLink.download_url, { headers })).arrayBuffer()),
+    growthFixture.bytes);
+  assert.equal((await call('hwp_versions', { document_id: growthDoc.document_id })).versions.length, 2);
+  checks.push('one_mini_tail_growth_actual_worker_plan_no_mutation_save_replay_download_reopen_original_retained');
   const compressionRejectedBytes = compressionRejectedFixture(HwpDocument, api).bytes;
   const compressionRejectedUpload = await upload({}, headers, compressionRejectedBytes);
   assert.equal(compressionRejectedUpload.status, 200);

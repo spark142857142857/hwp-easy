@@ -249,6 +249,7 @@ export function createDocumentEngine(HwpDocument) {
         empty_cell_text_insertions_verified: projection.verified_insertions,
         cell_text_record_removals_verified: projection.verified_removals,
         restored_cell_list_words: repaired.restored_cell_list_words,
+        body_mini_sector_growth: repaired.body_mini_sector_growth,
         saved: false, persistence: 'none' };
     }
     async function preflight(options) {
@@ -261,6 +262,7 @@ export function createDocumentEngine(HwpDocument) {
         serialization_checked: true, content_verified: candidate.content_verified,
         raw_preservation_verified: candidate.raw_preservation_verified,
         restored_cell_list_words: candidate.restored_cell_list_words,
+        body_mini_sector_growth: candidate.body_mini_sector_growth,
         empty_cell_text_insertions_verified: candidate.empty_cell_text_insertions_verified,
         cell_text_record_removals_verified: candidate.cell_text_record_removals_verified,
         raw_preservation_scope: candidate.raw_preservation_scope, saved: false };

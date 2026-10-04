@@ -1,4 +1,4 @@
-// Independent read-only CFB/HWP adapter. No rhwp model, filesystem or network.
+// Independent CFB/HWP reader and narrow body repair. No rhwp model, filesystem or network.
 import { ZStream, zlibInflateInit2, zlibInflate, zlibInflateEnd, Z_NO_FLUSH,
   Z_OK, Z_STREAM_END } from 'pako';
 import { GuardError, profileSections } from './records.mjs';
@@ -194,7 +194,7 @@ function parseCfb(input, options = {}, captureLayout = false) {
       continue;
     }
     if (entry.child !== FREE) fail('directory_invalid');
-    let content, locations;
+    let content, locations, miniSectorIds;
     if (entry.size >= 4096) {
       const ids = chain(entry.first, 6, Math.ceil(entry.size / sectorSize));
       content = join(ids.map(sector), entry.size);
@@ -202,24 +202,33 @@ function parseCfb(input, options = {}, captureLayout = false) {
     }
     else {
       const parts = []; let id = entry.first;
-      if (captureLayout) locations = [];
+      if (captureLayout) { locations = []; miniSectorIds = []; }
       while (id !== END) {
         if (parts.length >= Math.ceil(entry.size / 64) || id >= miniOwners.length || miniOwners[id]
           || id * 4 + 4 > miniFat.length || (id + 1) * 64 > miniRoot.length) fail('mini_chain_invalid');
         miniOwners[id] = 1; parts.push(miniRoot.subarray(id * 64, (id + 1) * 64));
-        if (captureLayout) locations.push((rootIds[Math.floor(id * 64 / sectorSize)] + 1) * sectorSize + id * 64 % sectorSize);
+        if (captureLayout) {
+          locations.push((rootIds[Math.floor(id * 64 / sectorSize)] + 1) * sectorSize + id * 64 % sectorSize);
+          miniSectorIds.push(id);
+        }
         id = miniView.getUint32(id * 4, true);
       }
       if (parts.length !== Math.ceil(entry.size / 64)) fail('mini_chain_invalid');
       content = join(parts, entry.size);
     }
     streams.set(path, content);
-    if (captureLayout) layouts.set(path, { locations, unit: entry.size >= 4096 ? sectorSize : 64,
+    if (captureLayout) layouts.set(path, { locations, miniSectorIds, unit: entry.size >= 4096 ? sectorSize : 64,
       sizeOffset: (directoryIds[Math.floor(entry.directoryOffset / sectorSize)] + 1) * sectorSize
         + entry.directoryOffset % sectorSize + 120 });
   }
   for (let index = 1; index < entries.length; index++) if (entries[index] && !visited.has(index)) fail('directory_invalid');
-  return { streams, layouts };
+  return { streams, layouts, miniLayout: captureLayout ? {
+    rootSize: root.size, rootCapacity: rootIds.length * sectorSize,
+    rootSizeOffset: (directoryIds[0] + 1) * sectorSize + 120,
+    sectorOffset: (id) => (rootIds[Math.floor(id * 64 / sectorSize)] + 1) * sectorSize + id * 64 % sectorSize,
+    fatEntryOffset: (id) => id * 4 + 4 <= miniFat.length
+      ? (miniIds[Math.floor(id * 4 / sectorSize)] + 1) * sectorSize + id * 4 % sectorSize : undefined,
+  } : undefined };
 }
 
 export function readCfb(input, options = {}) {
@@ -256,6 +265,72 @@ export function replaceAllocatedBodyStreams(input, replacements) {
   if (streams.size !== checked.size || [...streams].some(([name, original]) =>
     !checked.has(name) || !equal(replacements.get(name) ?? original, checked.get(name)))) fail('BODY_REPAIR_INVALID');
   return output;
+}
+
+/**
+ * Explicit adapter-only fallback: append ONE 64-byte mini sector in already
+ * allocated, zero-filled mini-stream tail space. No file/FAT/root-chain growth,
+ * stream relocation, shrink, class transition, free-hole reuse or padding.
+ * The default exact-allocation writer above deliberately remains unchanged.
+ */
+export function replaceBodyStreamsWithMiniTailGrowth(input, replacements) {
+  let originalFailure;
+  try { return { bytes: replaceAllocatedBodyStreams(input, replacements), body_mini_sector_growth: 0 }; }
+  catch (error) {
+    if (!bodyRepairAllocationDiagnostic(error)) throw error;
+    originalFailure = error;
+  }
+  const reject = () => { throw originalFailure; };
+  const { streams, layouts, miniLayout } = parseCfb(input, {}, true);
+  let growing;
+  for (const [name, bytes] of replacements) {
+    if (typeof name !== 'string' || !/^BodyText\/Section(?:0|[1-9]\d*)$/.test(name)
+      || !(bytes instanceof Uint8Array) || !bytes.length) fail('BODY_REPAIR_INVALID');
+    const original = streams.get(name), layout = layouts.get(name);
+    if (!original || !layout) reject();
+    if ((bytes.length >= 4096) === (original.length >= 4096)
+      && Math.ceil(bytes.length / layout.unit) === layout.locations.length) continue;
+    if (growing || layout.unit !== 64 || bytes.length >= 4096
+      || Math.ceil(bytes.length / 64) !== layout.locations.length + 1 || !layout.miniSectorIds?.length) reject();
+    growing = { name, layout };
+  }
+  if (!growing || miniLayout.rootSize % 64 || miniLayout.rootSize + 64 > miniLayout.rootCapacity) reject();
+  const id = miniLayout.rootSize / 64, tailOffset = miniLayout.sectorOffset(id);
+  const newFatOffset = miniLayout.fatEntryOffset(id);
+  const oldTail = growing.layout.miniSectorIds.at(-1), oldFatOffset = miniLayout.fatEntryOffset(oldTail);
+  const sourceView = new DataView(input.buffer, input.byteOffset, input.byteLength);
+  if (newFatOffset === undefined || oldFatOffset === undefined
+    || sourceView.getUint32(miniLayout.rootSizeOffset + 4, true) !== 0
+    || sourceView.getUint32(growing.layout.sizeOffset + 4, true) !== 0
+    || sourceView.getUint32(newFatOffset, true) !== FREE || sourceView.getUint32(oldFatOffset, true) !== END
+    || input.subarray(tailOffset, tailOffset + 64).some((byte) => byte !== 0)) reject();
+  const output = new Uint8Array(input), view = new DataView(output.buffer);
+  const allowed = new Uint8Array(input.length), permit = (offset, length) => allowed.fill(1, offset, offset + length);
+  for (const [name, bytes] of replacements) {
+    const layout = layouts.get(name), locations = name === growing.name ? [...layout.locations, tailOffset] : layout.locations;
+    locations.forEach((offset, index) => {
+      permit(offset, layout.unit); output.fill(0, offset, offset + layout.unit);
+      output.set(bytes.subarray(index * layout.unit, (index + 1) * layout.unit), offset);
+    });
+    permit(layout.sizeOffset, 4); view.setUint32(layout.sizeOffset, bytes.length, true);
+  }
+  permit(oldFatOffset, 4); view.setUint32(oldFatOffset, id, true);
+  permit(newFatOffset, 4); view.setUint32(newFatOffset, END, true);
+  permit(miniLayout.rootSizeOffset, 4); view.setUint32(miniLayout.rootSizeOffset, miniLayout.rootSize + 64, true);
+  // Whole-container byte check supplements the independent stream reparse:
+  // every byte outside the exact body data/size and three metadata DWORDs stays.
+  if (input.some((byte, index) => byte !== output[index] && !allowed[index])) fail('BODY_REPAIR_INVALID');
+  const checked = parseCfb(output, {}, true);
+  if (streams.size !== checked.streams.size || [...streams].some(([name, original]) =>
+    !checked.streams.has(name) || !equal(replacements.get(name) ?? original, checked.streams.get(name)))) fail('BODY_REPAIR_INVALID');
+  for (const [name, layout] of layouts) {
+    const after = checked.layouts.get(name), expectedLocations = name === growing.name ? [...layout.locations, tailOffset] : layout.locations;
+    if (!after || after.unit !== layout.unit || after.sizeOffset !== layout.sizeOffset
+      || !equal(expectedLocations, after.locations)) fail('BODY_REPAIR_INVALID');
+  }
+  if (checked.miniLayout.rootSize !== miniLayout.rootSize + 64
+    || checked.miniLayout.rootCapacity !== miniLayout.rootCapacity) fail('BODY_REPAIR_INVALID');
+  return { bytes: output, body_mini_sector_growth: 1 };
 }
 
 export function readHwp(input, options = {}) {

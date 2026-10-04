@@ -29,3 +29,26 @@ function fixture(HwpDocument, api, rows, sourcePadding = false) {
 
 export const compressionFallbackFixture = (HwpDocument, api) => fixture(HwpDocument, api, 8);
 export const compressionRejectedFixture = (HwpDocument, api) => fixture(HwpDocument, api, 39, true);
+
+// Fixed, non-personal one-mini growth boundary: clear the third question cell.
+// The deterministic ASCII answers avoid relying on a personal document's data.
+export function miniGrowthFixture(HwpDocument, api) {
+  let state = 12345;
+  const token = () => {
+    state = (Math.imul(state, 1664525) + 1013904223) >>> 0;
+    return String.fromCharCode(33 + state % 90);
+  };
+  const cells = Array.from({ length: 3 }, (_, i) => [
+    `${i} 합성 질문`, `${i} 합성 답변 ` + Array.from({ length: 40 }, token).join(''),
+  ]);
+  const candidate = syntheticFixture(HwpDocument, api.exportChecked,
+    { paragraphs: ['합성 검증', '보존'], cells });
+  const name = 'BodyText/Section0';
+  const patched = encodeRecords([...parseRecords(readHwp(candidate).streams.get(name))].map((r) => {
+    if (r.tag !== 72) return r;
+    const payload = r.payload.slice(); payload[6] = 0; payload[7] = 0;
+    return { ...r, payload };
+  }));
+  return { bytes: replaceAllocatedBodyStreams(candidate, new Map([[name, deflateRaw(patched, { level: 9 })]])),
+    target_block_index: 6 };
+}

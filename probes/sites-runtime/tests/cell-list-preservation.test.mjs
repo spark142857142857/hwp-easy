@@ -8,10 +8,14 @@ import { createEngineApi } from '../../../src/one_hwp/rhwp_api.mjs';
 import { syntheticFixture } from '../../../src/one_hwp/synthetic_fixtures.mjs';
 import { readCfb, readHwp, replaceAllocatedBodyStreams } from '../guard/container.mjs';
 import { verifyPreservation } from '../guard/preservation.mjs';
+import { parseRecords } from '../guard/records.mjs';
 import { preserveZeroCellListWords } from '../engine/cell-list-preservation.mjs';
-import { createDocumentEngine } from '../engine/document.mjs';
+import { createDocumentEngine, mapRawTargets } from '../engine/document.mjs';
+import { cellTextClearProfiles } from '../guard/empty-cell-clear.mjs';
+import { projectVerifiedCellTextTransitions } from '../guard/empty-cell-fill.mjs';
+import { encodeRecords } from './page-number-fixtures.mjs';
 import { rewriteSyntheticBody, withPageNumber } from './page-number-fixtures.mjs';
-import { compressionFallbackFixture, compressionRejectedFixture } from './cell-list-fixtures.mjs';
+import { compressionFallbackFixture, compressionRejectedFixture, miniGrowthFixture } from './cell-list-fixtures.mjs';
 
 const require = createRequire(import.meta.url);
 initSync({ module: fs.readFileSync(new URL('./rhwp_bg.wasm', pathToFileURL(require.resolve('@rhwp/core')))) });
@@ -112,4 +116,42 @@ test('repair still fails if both compression profiles miss the existing allocati
   await assert.rejects(snapshot.preflight(request), /BODY_REPAIR_ALLOCATION_UNSUPPORTED/);
   await assert.rejects(snapshot.edit(request), /BODY_REPAIR_ALLOCATION_UNSUPPORTED/);
   assert.deepEqual(f.bytes, original); assert.deepEqual(f.candidate, candidate);
+});
+
+test('one-mini tail append composes with exact cell clear, model reopen and mandatory raw checks', async () => {
+  const f = miniGrowthFixture(HwpDocument, api), original = f.bytes.slice();
+  const engine = createDocumentEngine(HwpDocument), snapshot = await engine.open(f.bytes);
+  const before = snapshot.read({ expected_sha256: snapshot.source_sha256 });
+  const target = before.blocks[f.target_block_index]; assert.equal(target.cell_text_clear_supported, true);
+  const request = { expected_sha256: snapshot.source_sha256, operations: [{
+    target_id: target.target_id, expected_old: target.text, new_text: '',
+  }] };
+  const plan = await snapshot.preflight(request);
+  assert.equal(plan.body_mini_sector_growth, 1); assert.equal(plan.restored_cell_list_words, 6);
+  assert.equal(plan.saved, false); assert.equal(plan.storage_checked, false); assert.equal(plan.file_changed, false);
+  assert.equal(Object.hasOwn(plan, 'bytes'), false); assert.equal(Object.hasOwn(plan, 'output_sha256'), false);
+  const result = await snapshot.edit(request), reopened = await engine.open(result.bytes);
+  assert.equal(result.body_mini_sector_growth, 1); assert.equal(result.raw_preservation_verified, true);
+  assert.equal(result.content_verified, true); assert.equal(result.layout_verified, false);
+  assert.equal(result.cell_text_record_removals_verified, 1);
+  assert.deepEqual(reopened.read({ expected_sha256: reopened.source_sha256 }).blocks.map((b) => [b.id, b.text, b.style]),
+    before.blocks.map((b) => [b.id, b.id === target.id ? '' : b.text, b.style]));
+  assert.deepEqual(inspect(result.bytes).tables, inspect(f.bytes).tables);
+  const candidate = api.editDocument(f.bytes, [{ target_id: target.id, expected_old: target.text, new_text: '' }],
+    { clearCellTargets: new Set([target.id]) });
+  const name = 'BodyText/Section0', packed = readCfb(result.bytes).get(name);
+  assert.equal(result.bytes.length, candidate.length);
+  assert.equal(Math.ceil(packed.length / 64), Math.ceil(readCfb(candidate).get(name).length / 64) + 1);
+  assert.throws(() => replaceAllocatedBodyStreams(candidate, new Map([[name, packed]])), /BODY_REPAIR_ALLOCATION_UNSUPPORTED/);
+  const raw = readHwp(f.bytes), after = readHwp(result.bytes), model = inspect(f.bytes);
+  const mapping = mapRawTargets(raw, model.blocks), clear = cellTextClearProfiles(raw, model.blocks, mapping);
+  const operations = [{ target_id: target.id, new_text: '' }];
+  const projected = projectVerifiedCellTextTransitions(raw, after, operations, new Map(), clear);
+  const targets = [{ ...mapping.get(target.id), new_text: '' }];
+  assert.equal(verifyPreservation(projected.streams, after.streams, targets).verified, true);
+  const records = [...parseRecords(after.streams.get(name))].map((r) => ({ ...r, payload: r.payload.slice() }));
+  records.find((r) => r.tag === 66 && r.level === 0).payload[10] ^= 1;
+  const corrupted = new Map(after.streams).set(name, encodeRecords(records));
+  assert.throws(() => verifyPreservation(projected.streams, corrupted, targets), /PRESERVATION_MISMATCH/);
+  assert.deepEqual(f.bytes, original);
 });
