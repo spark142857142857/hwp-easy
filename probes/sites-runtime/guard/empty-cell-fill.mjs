@@ -1,10 +1,11 @@
-/** Narrow exception for adding text to an EXISTING empty cell paragraph.
+/** Narrow text-record transitions in EXISTING cell paragraphs.
  * No paragraph/cell/style/control creation. The projection is proof-only:
  * it is never serialized, stored, or returned as an edited document.
  */
 import { GuardError, parseRecords } from './records.mjs';
 
 const fail = () => { throw new GuardError('EMPTY_CELL_INSERTION_UNVERIFIED'); };
+const clearFail = () => { throw new GuardError('CELL_TEXT_REMOVAL_UNVERIFIED'); };
 const view = (bytes) => new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
 
 export function emptyCellFillProfiles(decoded, blocks, mapping) {
@@ -64,45 +65,70 @@ function equal(left, right) {
  * Profiles are internal, obtained from emptyCellFillProfiles for this snapshot.
  */
 export function projectVerifiedEmptyCellInsertions(before, after, operations, profiles) {
+  return projectVerifiedCellTextTransitions(before, after, operations, profiles, new Map());
+}
+
+/** Source-only proof projection: add empty CR records for verified fills and
+ * remove precisely the old plain-text record for verified clears. All other
+ * source bytes are unchanged; the original strict guard remains mandatory.
+ */
+export function projectVerifiedCellTextTransitions(before, after, operations, profiles, clearProfiles) {
   const bySection = new Map();
   if (!Array.isArray(operations) || operations.length > 100) fail();
   for (const operation of operations) {
-    const profile = profiles.get(operation.target_id);
-    if (!profile || operation.new_text === '') continue;
+    const filling = profiles.get(operation.target_id), clearing = clearProfiles.get(operation.target_id);
+    const profile = operation.new_text === '' ? clearing : filling;
+    if (!profile) continue;
     if (!bySection.has(profile.section)) bySection.set(profile.section, new Map());
     const targets = bySection.get(profile.section);
     if (targets.has(profile.envelope_index)) fail();
-    targets.set(profile.envelope_index, { ...profile, payload: requestedPayload(operation.new_text) });
+    targets.set(profile.envelope_index, { ...profile, clear: operation.new_text === '',
+      ...(operation.new_text === '' ? {} : { payload: requestedPayload(operation.new_text) }) });
   }
   const streams = new Map(before.streams);
-  let count = 0;
+  let count = 0, removals = 0;
   for (const [section, targets] of bySection) {
     const name = `BodyText/Section${section}`, original = before.streams.get(name);
     const candidate = after.streams.get(name), right = parseRecords(candidate);
-    const offsets = [];
-    for (const left of parseRecords(original)) {
+    const reject = [...targets.values()].some((target) => target.clear) ? clearFail : fail;
+    const changes = [], leftRecords = parseRecords(original);
+    for (const left of leftRecords) {
       const current = right.next();
-      if (current.done || left.tag !== current.value.tag || left.level !== current.value.level) fail();
+      if (current.done || left.tag !== current.value.tag || left.level !== current.value.level) reject();
       const target = targets.get(left.index);
       if (!target) continue;
-      if (left.tag !== 66 || left.level !== 2
-        || target.insert_offset !== left.payload.byteOffset - original.byteOffset + left.payload.length) fail();
+      if (left.tag !== 66 || left.level !== 2) reject();
+      const boundary = left.payload.byteOffset - original.byteOffset + left.payload.length;
+      if (target.clear) {
+        const removed = leftRecords.next();
+        if (removed.done || removed.value.tag !== 67 || removed.value.level !== 3
+          || removed.value.index !== target.text_envelope_index || target.remove_start !== boundary
+          || target.remove_end !== removed.value.payload.byteOffset - original.byteOffset + removed.value.payload.length) clearFail();
+        // The next normal pair must be the original char-shape envelope. An
+        // after PARA_TEXT (even empty CR) or another unexpected record fails.
+        changes.push({ start: target.remove_start, end: target.remove_end, insert: false }); removals++;
+        continue;
+      }
+      if (target.insert_offset !== boundary) fail();
       const inserted = right.next();
       if (inserted.done || inserted.value.tag !== 67 || inserted.value.level !== 3
         || !equal(inserted.value.payload, target.payload)) fail();
-      offsets.push(target.insert_offset);
+      changes.push({ start: target.insert_offset, end: target.insert_offset, insert: true }); count++;
     }
-    if (!right.next().done || offsets.length !== targets.size) fail();
-    const projected = new Uint8Array(original.length + offsets.length * 6);
+    if (!right.next().done || changes.length !== targets.size) reject();
+    const projected = new Uint8Array(original.length + changes.reduce((n, c) => n + (c.insert ? 6 : c.start - c.end), 0));
     let start = 0, position = 0;
-    for (const offset of offsets) {
-      projected.set(original.subarray(start, offset), position); position += offset - start;
+    for (const change of changes) {
+      projected.set(original.subarray(start, change.start), position); position += change.start - start;
       // Empty PARA_TEXT containing only the paragraph terminator (CR).
-      view(projected).setUint32(position, 67 | (3 << 10) | (2 << 20), true);
-      projected[position + 4] = 13; position += 6; start = offset;
+      if (change.insert) {
+        view(projected).setUint32(position, 67 | (3 << 10) | (2 << 20), true);
+        projected[position + 4] = 13; position += 6;
+      }
+      start = change.end;
     }
     projected.set(original.subarray(start), position);
-    streams.set(name, projected); count += offsets.length;
+    streams.set(name, projected);
   }
-  return { streams, verified_insertions: count };
+  return { streams, verified_insertions: count, verified_removals: removals };
 }

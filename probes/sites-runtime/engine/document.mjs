@@ -9,7 +9,8 @@ import { verifyPreservation } from '../guard/preservation.mjs';
 import { pageNumberPreservationProfile } from '../guard/page-number.mjs';
 import { preserveZeroCellListWords } from './cell-list-preservation.mjs';
 import { rawTargetRestrictions } from './raw-target-restrictions.mjs';
-import { emptyCellFillProfiles, projectVerifiedEmptyCellInsertions } from '../guard/empty-cell-fill.mjs';
+import { emptyCellFillProfiles, projectVerifiedCellTextTransitions } from '../guard/empty-cell-fill.mjs';
+import { cellTextClearProfiles } from '../guard/empty-cell-clear.mjs';
 
 const fail = (code) => { throw new GuardError(code); };
 const copy = (value) => JSON.parse(JSON.stringify(value));
@@ -123,6 +124,7 @@ export function createDocumentEngine(HwpDocument) {
     const preservedControls = pageNumberProfile ?? [];
     const version = await sha256(bytes);
     const emptyCellProfiles = mappingVerified ? emptyCellFillProfiles(raw, inspection.blocks, mapping) : new Map();
+    const clearCellProfiles = mappingVerified ? cellTextClearProfiles(raw, inspection.blocks, mapping) : new Map();
     const restrictions = mappingVerified ? rawTargetRestrictions(raw, inspection.blocks, mapping, emptyCellProfiles) : new Map();
     const targets = new Map(inspection.blocks.map((block) => [targetId(version, block.id), block]));
     const allContentSupported = mappingVerified && unsupported.length === 0;
@@ -165,6 +167,7 @@ export function createDocumentEngine(HwpDocument) {
         fragments.push({ ...copy(block), target_id: targetId(version, block.id),
           editable: editableProfile && block.editable && !restrictions.has(block.id),
           empty_cell_fill_supported: editableProfile && emptyCellProfiles.has(block.id) && !restrictions.has(block.id),
+          cell_text_clear_supported: editableProfile && clearCellProfiles.has(block.id) && !restrictions.has(block.id),
           edit_restrictions: copy(restrictions.get(block.id) ?? []), text: text.slice(offset, end).join(''),
           start_offset: offset, end_offset: end, total_chars: text.length, fragment_complete: end === text.length });
         budget -= end - offset;
@@ -198,7 +201,9 @@ export function createDocumentEngine(HwpDocument) {
         seen.add(operation.target_id);
         const block = targets.get(operation.target_id);
         if (!block) fail('TARGET_VERSION_OR_ID_INVALID');
-        if (!block.editable || restrictions.has(block.id) || (!length && block.style.char_shape_ids[0] !== 0)) fail('TARGET_NOT_EDITABLE');
+        if (!block.editable || restrictions.has(block.id)
+          || (!length && (block.kind === 'cell' && block.text ? !clearCellProfiles.has(block.id)
+            : block.style.char_shape_ids[0] !== 0))) fail('TARGET_NOT_EDITABLE');
         if (emptyCellProfiles.has(block.id) && operation.new_text.includes('\t')) fail('INVALID_OPERATION');
         if (block.text !== operation.expected_old) fail('EXPECTED_OLD_MISMATCH');
         return { target_id: block.id, expected_old: operation.expected_old, new_text: operation.new_text };
@@ -214,8 +219,9 @@ export function createDocumentEngine(HwpDocument) {
     async function edit(options) {
       const operations = plans(options);
       const candidate = quietEngine(() => api.editDocument(bytes, operations,
-        { preservePageNumbers: preservedControls.length > 0 }));
-      const projection = projectVerifiedEmptyCellInsertions(raw, readHwp(candidate), operations, emptyCellProfiles);
+        { preservePageNumbers: preservedControls.length > 0,
+          clearCellTargets: new Set(operations.filter((o) => o.new_text === '' && clearCellProfiles.has(o.target_id)).map((o) => o.target_id)) }));
+      const projection = projectVerifiedCellTextTransitions(raw, readHwp(candidate), operations, emptyCellProfiles, clearCellProfiles);
       const proofSource = { ...raw, streams: projection.streams };
       const repaired = preserveZeroCellListWords(proofSource, candidate, inspection), output = repaired.bytes;
       const reopened = inspect(output);
@@ -231,15 +237,17 @@ export function createDocumentEngine(HwpDocument) {
         if (!saved || saved.section !== position.section || saved.record_index !== position.record_index) fail('TARGET_MAPPING_UNVERIFIED');
       }
       // Recheck exact insertion bytes after any bounded metadata repair.
-      projectVerifiedEmptyCellInsertions(raw, after, operations, emptyCellProfiles);
+      projectVerifiedCellTextTransitions(raw, after, operations, emptyCellProfiles, clearCellProfiles);
       const preservation = verifyPreservation(projection.streams, after.streams,
         operations.map((operation) => ({ ...mapping.get(operation.target_id), new_text: operation.new_text })));
       const outputVersion = await sha256(output);
       return { bytes: output, source_sha256: version, output_sha256: outputVersion,
         content_verified: true, raw_preservation_verified: preservation.verified,
-        raw_preservation_scope: projection.verified_insertions
+        raw_preservation_scope: projection.verified_removals
+          ? 'narrow_raw_record_preservation_with_verified_cell_text_transitions' : projection.verified_insertions
           ? 'narrow_raw_record_preservation_with_verified_empty_cell_insertions' : preservation.scope, layout_verified: false,
         empty_cell_text_insertions_verified: projection.verified_insertions,
+        cell_text_record_removals_verified: projection.verified_removals,
         restored_cell_list_words: repaired.restored_cell_list_words,
         saved: false, persistence: 'none' };
     }
@@ -254,6 +262,7 @@ export function createDocumentEngine(HwpDocument) {
         raw_preservation_verified: candidate.raw_preservation_verified,
         restored_cell_list_words: candidate.restored_cell_list_words,
         empty_cell_text_insertions_verified: candidate.empty_cell_text_insertions_verified,
+        cell_text_record_removals_verified: candidate.cell_text_record_removals_verified,
         raw_preservation_scope: candidate.raw_preservation_scope, saved: false };
     }
     function preview(options) {

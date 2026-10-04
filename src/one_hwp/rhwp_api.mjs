@@ -150,7 +150,10 @@ export function createEngineApi(HwpDocument) {
   // Default remains conservative for the local bridge. A host may enable the
   // one preservation-only exception AFTER independent raw shape/anchor checks;
   // it must also independently compare every output control byte before saving.
-  function editDocument(bytes, operations, { preservePageNumbers = false } = {}) {
+  function editDocument(bytes, operations, { preservePageNumbers = false, clearCellTargets = new Set() } = {}) {
+    // Remote host opt-in ONLY after independent plain-cell raw profiling. The
+    // local default remains unchanged; full model/raw verification is required.
+    if (!(clearCellTargets instanceof Set) || clearCellTargets.size > 100) throw new Error('Invalid clear-cell profile');
     const document = openDocument(bytes);
     try {
       const before = inspectDocument(document);
@@ -170,7 +173,8 @@ export function createEngineApi(HwpDocument) {
         seen.add(operation.target_id);
         const block = before.blocks.find((item) => item.id === operation.target_id);
         if (!block || !block.editable || block.text !== operation.expected_old
-          || (!operation.new_text && block.style.char_shape_ids[0] !== 0)) {
+          || (!operation.new_text && block.style.char_shape_ids[0] !== 0
+            && !(block.kind === 'cell' && block.text && clearCellTargets.has(block.id)))) {
           throw new Error('Target is stale or has unsupported formatting');
         }
         return { block, operation };
@@ -189,6 +193,8 @@ export function createEngineApi(HwpDocument) {
             block.cell, block.cell_paragraph, 0, operation.new_text));
           if (newCount) checked(document.setCharShapeIdInCell(block.section, block.paragraph,
             block.control, block.cell, block.cell_paragraph, 0, newCount, shapeId));
+          else if (clearCellTargets.has(block.id)) checked(document.setCharShapeIdInCell(block.section, block.paragraph,
+            block.control, block.cell, block.cell_paragraph, 0, 0, shapeId));
         }
       }
       const output = exportChecked(document);

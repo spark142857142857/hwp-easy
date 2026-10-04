@@ -163,23 +163,46 @@ export function createHostApp(env, engine, HwpDocument, fetcher = fetch) {
       check(after.blocks.find((b) => b.id === cell.id).text === edits.operations[1].new_text);
       if (emptyCell) check(after.blocks.find((b) => b.id === emptyCell.id).text === edits.operations[2].new_text);
       if (onOutput) onOutput({ bytes: outputBytes, sha256: reopened.source_sha256 });
-      const preview = await tool('hwp_preview', { document_id: created.document_id, version_id: edited.version_id, page: 0 }, owner);
+      let finalEdited = edited;
+      if (emptyCell) {
+        const target = after.blocks.find((b) => b.id === emptyCell.id);
+        check(target.cell_text_clear_supported);
+        const clearEdits = { expected_sha256: edited.sha256, operations: [{
+          target_id: target.target_id, expected_old: target.text, new_text: '' }] };
+        const clearPlan = await tool('hwp_plan', { document_id: created.document_id, version_id: edited.version_id, ...clearEdits }, owner);
+        check(clearPlan.cell_text_record_removals_verified === 1 && clearPlan.saved === false);
+        const clearArgs = { document_id: created.document_id, expected_version: edited.version_id,
+          request_id: crypto.randomUUID(), ...clearEdits };
+        finalEdited = await tool('hwp_edit', clearArgs, owner);
+        const clearReplay = await tool('hwp_edit', clearArgs, owner);
+        check(finalEdited.saved && clearReplay.replayed && clearReplay.version_id === finalEdited.version_id);
+        const clearLink = await tool('hwp_download', { document_id: created.document_id, version_id: finalEdited.version_id }, owner);
+        const clearOutput = await download(clearLink.download_url, owner);
+        check(clearOutput.status === 200);
+        const cleared = await engine.open(new Uint8Array(await clearOutput.arrayBuffer()));
+        const clearRead = cleared.read({ expected_sha256: cleared.source_sha256 });
+        check(JSON.stringify(clearRead.blocks.map((b) => [b.id, b.text, b.style])) ===
+          JSON.stringify(after.blocks.map((b) => [b.id, b.id === target.id ? '' : b.text, b.style])));
+      }
+      const expectedVersions = emptyCell ? 4 : 3;
+      const preview = await tool('hwp_preview', { document_id: created.document_id, version_id: finalEdited.version_id, page: 0 }, owner);
       check((await download(preview.preview_url, owner)).status === 200);
-      const restored = await tool('hwp_restore', { document_id: created.document_id, expected_version: edited.version_id,
+      const restored = await tool('hwp_restore', { document_id: created.document_id, expected_version: finalEdited.version_id,
         source_version: created.version_id, request_id: crypto.randomUUID() }, owner);
       check(restored.sha256 === created.sha256 && restored.version_id !== created.version_id);
-      check((await tool('hwp_versions', { document_id: created.document_id }, owner)).versions.length === 3);
+      check((await tool('hwp_versions', { document_id: created.document_id }, owner)).versions.length === expectedVersions);
       const deletion = { document_id: created.document_id, expected_version: restored.version_id,
         request_id: crypto.randomUUID(), confirmation: 'delete_document_and_recorded_versions' };
       await verifyGeneratedDocument(owner, prepared.document_id, createRequestId);
       const deleted = await tool('hwp_delete', deletion, owner);
-      check(deleted.deleted && deleted.recorded_versions_removed === 3 && !deleted.unpublished_blob_gc_verified);
+      check(deleted.deleted && deleted.recorded_versions_removed === expectedVersions && !deleted.unpublished_blob_gc_verified);
       check((await tool('hwp_delete', deletion, owner)).replayed);
       try { await service.open({ owner, document_id: created.document_id }); fail('WORKFLOW_PROBE_FAILED'); }
       catch (error) { check(error.code === 'DOCUMENT_OR_VERSION_NOT_FOUND'); }
       report = { passed: true, scope: 'signed_in_user_fixed_synthetic_only', persistence: 'd1-r2',
         owner_source: 'sites_dispatch_authenticated_identity', pages, read_plan_edit_default_save: true,
         empty_cell_fill_save_reopen: !!emptyCell,
+        cell_text_clear_save_reopen: !!emptyCell,
         owner_scoped_binary_handler_and_reopen: true, owner_scoped_svg_handler: true,
         external_http_download_verified: false,
         request_replay: true, previous_version_restore: true, native_file_attachment_verified: false,

@@ -194,6 +194,7 @@ try {
   assert.equal(workflow.external_http_download_verified, false);
   assert.equal(workflow.owner_scoped_binary_handler_and_reopen, true);
   assert.equal(workflow.empty_cell_fill_save_reopen, true);
+  assert.equal(workflow.cell_text_clear_save_reopen, true);
   assert.equal((await db.prepare('SELECT count(*) AS n FROM hwp_documents').first()).n, countBefore);
   assert.equal((await call('hwp_read', { document_id: created.document_id, version_id: restored.version_id })).storage.sha256, created.sha256);
   checks.push('workflow_probe_cleanup_does_not_delete_existing_documents');
@@ -429,8 +430,41 @@ try {
   const emptyOriginalLink = await call('hwp_download', emptyArgs);
   assert.deepEqual(new Uint8Array(await (await mf.dispatchFetch(emptyOriginalLink.download_url, { headers })).arrayBuffer()), emptyBytes);
   assert.equal((await call('hwp_versions', { document_id: emptyDoc.document_id })).versions.length, 2);
+  const clearTargets = emptyAfter.blocks.filter((b) => emptyTargets.some((t) => t.id === b.id));
+  assert.ok(clearTargets.every((b) => b.cell_text_clear_supported));
+  const clearArgs = { document_id: emptyDoc.document_id, version_id: emptySaved.version_id };
+  const clearEdits = { expected_sha256: emptySaved.sha256, operations: clearTargets.map((b) => ({
+    target_id: b.target_id, expected_old: b.text, new_text: '',
+  })) };
+  const beforeClearHistory = await call('hwp_versions', { document_id: emptyDoc.document_id }), beforeClearBlobs = await blobState();
+  const clearPlan = await call('hwp_plan', { ...clearArgs, ...clearEdits });
+  assert.equal(clearPlan.cell_text_record_removals_verified, 2); assert.equal(clearPlan.saved, false);
+  assert.equal(clearPlan.raw_preservation_scope, 'narrow_raw_record_preservation_with_verified_cell_text_transitions');
+  assert.deepEqual(await call('hwp_versions', { document_id: emptyDoc.document_id }), beforeClearHistory);
+  assert.deepEqual(await blobState(), beforeClearBlobs);
+  const clearSaveArgs = { document_id: emptyDoc.document_id, expected_version: emptySaved.version_id,
+    request_id: crypto.randomUUID(), ...clearEdits };
+  const clearSaved = await call('hwp_edit', clearSaveArgs), clearReplay = await call('hwp_edit', clearSaveArgs);
+  assert.equal(clearSaved.saved, true); assert.equal(clearReplay.version_id, clearSaved.version_id); assert.equal(clearReplay.replayed, true);
+  const clearLink = await call('hwp_download', { document_id: emptyDoc.document_id, version_id: clearSaved.version_id });
+  const clearOutput = new Uint8Array(await (await mf.dispatchFetch(clearLink.download_url, { headers })).arrayBuffer());
+  const clearSnapshot = await engine.open(clearOutput), clearedRead = clearSnapshot.read({ expected_sha256: clearSaved.sha256 });
+  assert.deepEqual(clearedRead.blocks.map((b) => [b.id, b.text, b.style]), emptyRead.blocks.map((b) => [b.id, b.text, b.style]));
+  assert.deepEqual(new Uint8Array(await (await mf.dispatchFetch(emptyLink.download_url, { headers })).arrayBuffer()), emptyOutput);
+  const refillTargets = clearedRead.blocks.filter((b) => b.empty_cell_fill_supported);
+  assert.equal(refillTargets.length, 2);
+  const refilled = await call('hwp_edit', { document_id: emptyDoc.document_id, expected_version: clearSaved.version_id,
+    request_id: crypto.randomUUID(), expected_sha256: clearSaved.sha256, operations: refillTargets.map((b) => ({
+      target_id: b.target_id, expected_old: '', new_text: '합성 다시 채움 😀',
+    })) });
+  const refilledRead = await call('hwp_read', { document_id: emptyDoc.document_id, version_id: refilled.version_id });
+  assert.deepEqual(refilledRead.blocks.map((b) => [b.id, b.text, b.style]), emptyRead.blocks.map((b) =>
+    [b.id, b.empty_cell_fill_supported ? '합성 다시 채움 😀' : b.text, b.style]));
+  assert.equal((await call('hwp_versions', { document_id: emptyDoc.document_id })).versions.length, 4);
+  assert.deepEqual(new Uint8Array(await (await mf.dispatchFetch(clearLink.download_url, { headers })).arrayBuffer()), clearOutput);
   checks.push('empty_cell_fill_worker_plan_no_mutation_save_replay_download_reopen_original_retained',
-    'empty_cell_tab_rejected_before_d1_r2_mutation');
+    'empty_cell_tab_rejected_before_d1_r2_mutation',
+    'cell_clear_worker_plan_no_mutation_save_replay_download_reopen_refill_all_prior_versions_retained');
   const compressionBytes = compressionFallbackFixture(HwpDocument, api).bytes;
   const compressionUpload = await upload({}, headers, compressionBytes); assert.equal(compressionUpload.status, 200);
   const compressionDoc = await compressionUpload.json();
