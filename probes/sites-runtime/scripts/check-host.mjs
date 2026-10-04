@@ -193,6 +193,7 @@ try {
   assert.equal(workflow.native_file_attachment_verified, false);
   assert.equal(workflow.external_http_download_verified, false);
   assert.equal(workflow.owner_scoped_binary_handler_and_reopen, true);
+  assert.equal(workflow.empty_cell_fill_save_reopen, true);
   assert.equal((await db.prepare('SELECT count(*) AS n FROM hwp_documents').first()).n, countBefore);
   assert.equal((await call('hwp_read', { document_id: created.document_id, version_id: restored.version_id })).storage.sha256, created.sha256);
   checks.push('workflow_probe_cleanup_does_not_delete_existing_documents');
@@ -343,7 +344,10 @@ try {
           if (inFirstCell) {
             const payload = r.payload.slice(), v = new DataView(payload.buffer);
             if (kind === 'tail_style') v.setUint16(12, 2, true);
-            else v.setUint32(0, (v.getUint32(0, true) & 0x80000000) | 1, true);
+            else {
+              v.setUint32(0, (v.getUint32(0, true) & 0x80000000) | 1, true);
+              v.setUint16(14, 1, true); // Range metadata is outside the empty-fill profile.
+            }
             return [{ ...r, payload }];
           }
         }
@@ -390,6 +394,43 @@ try {
   }
   checks.push('raw_text_and_style_restrictions_visible_in_actual_worker_mcp',
     'restricted_plan_save_rejected_before_d1_r2_mutation', 'other_cell_edit_keeps_nonvisible_style_refs');
+  const emptyBytes = syntheticFixture(HwpDocument, api.exportChecked,
+    { paragraphs: ['합성 검증', '보존'], cells: [['', '원문'], ['', '답변']] });
+  const emptyUpload = await upload({}, headers, emptyBytes); assert.equal(emptyUpload.status, 200);
+  const emptyDoc = await emptyUpload.json();
+  const emptyArgs = { document_id: emptyDoc.document_id, version_id: emptyDoc.version_id };
+  const emptyRead = await call('hwp_read', emptyArgs), emptyTargets = emptyRead.blocks.filter((b) => b.empty_cell_fill_supported);
+  assert.equal(emptyTargets.length, 2);
+  const emptyEdits = { expected_sha256: emptyDoc.sha256, operations: emptyTargets.map((b) => ({
+    target_id: b.target_id, expected_old: '', new_text: '합성 빈 셀 추가 🙂',
+  })) };
+  const emptyHistory = await call('hwp_versions', { document_id: emptyDoc.document_id }), emptyBlobs = await blobState();
+  const emptyPlan = await call('hwp_plan', { ...emptyArgs, ...emptyEdits });
+  assert.equal(emptyPlan.empty_cell_text_insertions_verified, 2);
+  assert.equal(emptyPlan.raw_preservation_scope, 'narrow_raw_record_preservation_with_verified_empty_cell_insertions');
+  assert.deepEqual(await call('hwp_versions', { document_id: emptyDoc.document_id }), emptyHistory);
+  assert.deepEqual(await blobState(), emptyBlobs);
+  const tabEdits = { ...emptyEdits, operations: [{ ...emptyEdits.operations[0], new_text: '탭\t추가' }] };
+  await denied('hwp_plan', { ...emptyArgs, ...tabEdits }, 'INVALID_OPERATION');
+  await denied('hwp_edit', { document_id: emptyDoc.document_id, expected_version: emptyDoc.version_id,
+    request_id: crypto.randomUUID(), ...tabEdits }, 'INVALID_OPERATION');
+  assert.deepEqual(await call('hwp_versions', { document_id: emptyDoc.document_id }), emptyHistory);
+  assert.deepEqual(await blobState(), emptyBlobs);
+  const emptySaveArgs = { document_id: emptyDoc.document_id, expected_version: emptyDoc.version_id,
+    request_id: crypto.randomUUID(), ...emptyEdits };
+  const emptySaved = await call('hwp_edit', emptySaveArgs), emptyReplay = await call('hwp_edit', emptySaveArgs);
+  assert.equal(emptySaved.saved, true); assert.equal(emptySaved.raw_preservation_verified, true);
+  assert.equal(emptyReplay.replayed, true); assert.equal(emptyReplay.version_id, emptySaved.version_id);
+  const emptyLink = await call('hwp_download', { document_id: emptyDoc.document_id, version_id: emptySaved.version_id });
+  const emptyOutput = new Uint8Array(await (await mf.dispatchFetch(emptyLink.download_url, { headers })).arrayBuffer());
+  const emptyReopened = await engine.open(emptyOutput), emptyAfter = emptyReopened.read({ expected_sha256: emptySaved.sha256 });
+  assert.deepEqual(emptyAfter.blocks.map((b) => [b.id, b.text, b.style]), emptyRead.blocks.map((b) =>
+    [b.id, b.empty_cell_fill_supported ? '합성 빈 셀 추가 🙂' : b.text, b.style]));
+  const emptyOriginalLink = await call('hwp_download', emptyArgs);
+  assert.deepEqual(new Uint8Array(await (await mf.dispatchFetch(emptyOriginalLink.download_url, { headers })).arrayBuffer()), emptyBytes);
+  assert.equal((await call('hwp_versions', { document_id: emptyDoc.document_id })).versions.length, 2);
+  checks.push('empty_cell_fill_worker_plan_no_mutation_save_replay_download_reopen_original_retained',
+    'empty_cell_tab_rejected_before_d1_r2_mutation');
   const compressionBytes = compressionFallbackFixture(HwpDocument, api).bytes;
   const compressionUpload = await upload({}, headers, compressionBytes); assert.equal(compressionUpload.status, 200);
   const compressionDoc = await compressionUpload.json();

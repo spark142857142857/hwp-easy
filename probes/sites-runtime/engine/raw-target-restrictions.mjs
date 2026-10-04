@@ -1,7 +1,7 @@
 /** Target-only limits: existing text records and visible/raw style coverage. */
 import { parseRecords } from '../guard/records.mjs';
 
-export function rawTargetRestrictions(decoded, blocks, mapping) {
+export function rawTargetRestrictions(decoded, blocks, mapping, emptyCellProfiles = new Map()) {
   const references = new Map();
   for (const section of decoded.profile.sections) {
     let paragraph = -1;
@@ -44,7 +44,7 @@ export function rawTargetRestrictions(decoded, blocks, mapping) {
       message_ko: '텍스트 검사에 포함되지 않는 별도 글자 서식이 있어 이 문단은 읽기만 지원합니다.',
     };
     const items = restriction ? [restriction] : [];
-    if (!refs || refs.text_records !== 1) items.push({
+    if (!refs || (refs.text_records !== 1 && !(refs.text_records === 0 && emptyCellProfiles.has(block.id)))) items.push({
       code: 'RAW_TEXT_RECORD_LAYOUT_UNVERIFIED',
       message_ko: '기존 텍스트 레코드 한 개를 교체하는 구조가 아니어서 이 문단은 읽기만 지원합니다.',
     });

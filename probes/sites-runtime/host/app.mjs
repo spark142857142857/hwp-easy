@@ -123,7 +123,8 @@ export function createHostApp(env, engine, HwpDocument, fetcher = fetch) {
   }
   async function workflow(owner, inputBytes, onOutput) {
     const api = createEngineApi(HwpDocument);
-    const bytes = inputBytes ?? syntheticFixture(HwpDocument, api.exportChecked, { paragraphs: ['합성 에이전트 문서', '합성 에이전트 문서'] });
+    const bytes = inputBytes ?? syntheticFixture(HwpDocument, api.exportChecked, {
+      paragraphs: ['합성 에이전트 문서', '합성 에이전트 문서'], cells: [['문항', '합성 답변'], ['', '보존']] });
     let created, prepared, report;
     const createRequestId = crypto.randomUUID();
     const check = (value) => { if (!value) fail('WORKFLOW_PROBE_FAILED'); };
@@ -139,11 +140,15 @@ export function createHostApp(env, engine, HwpDocument, fetcher = fetch) {
         cursor = read.next_cursor; check(++pages < 100);
       } while (cursor);
       const blocks = [...found.values()], body = blocks.find((b) => b.kind === 'paragraph' && b.editable && b.text),
-        cell = blocks.find((b) => b.kind === 'cell' && b.editable && b.text);
+        cell = blocks.find((b) => b.kind === 'cell' && b.editable && b.text),
+        emptyCell = blocks.find((b) => b.empty_cell_fill_supported);
       check(body && cell);
-      const edits = { expected_sha256: created.sha256, operations: [body, cell].map((b, i) => ({
+      if (!inputBytes) check(emptyCell);
+      const selected = [body, cell, ...(emptyCell ? [emptyCell] : [])];
+      const edits = { expected_sha256: created.sha256, operations: selected.map((b, i) => ({
         target_id: b.target_id, expected_old: b.text, new_text: `인증 범위 합성 편집 ${i} 😀` })) };
-      check((await tool('hwp_plan', { document_id: created.document_id, version_id: created.version_id, ...edits }, owner)).file_changed === false);
+      const planned = await tool('hwp_plan', { document_id: created.document_id, version_id: created.version_id, ...edits }, owner);
+      check(planned.file_changed === false && planned.empty_cell_text_insertions_verified === (emptyCell ? 1 : 0));
       const editArgs = { document_id: created.document_id, expected_version: created.version_id,
         request_id: crypto.randomUUID(), ...edits };
       const edited = await tool('hwp_edit', editArgs, owner), replayed = await tool('hwp_edit', editArgs, owner);
@@ -156,6 +161,7 @@ export function createHostApp(env, engine, HwpDocument, fetcher = fetch) {
       const after = reopened.read({ expected_sha256: reopened.source_sha256 });
       check(after.blocks.find((b) => b.id === body.id).text === edits.operations[0].new_text);
       check(after.blocks.find((b) => b.id === cell.id).text === edits.operations[1].new_text);
+      if (emptyCell) check(after.blocks.find((b) => b.id === emptyCell.id).text === edits.operations[2].new_text);
       if (onOutput) onOutput({ bytes: outputBytes, sha256: reopened.source_sha256 });
       const preview = await tool('hwp_preview', { document_id: created.document_id, version_id: edited.version_id, page: 0 }, owner);
       check((await download(preview.preview_url, owner)).status === 200);
@@ -173,6 +179,7 @@ export function createHostApp(env, engine, HwpDocument, fetcher = fetch) {
       catch (error) { check(error.code === 'DOCUMENT_OR_VERSION_NOT_FOUND'); }
       report = { passed: true, scope: 'signed_in_user_fixed_synthetic_only', persistence: 'd1-r2',
         owner_source: 'sites_dispatch_authenticated_identity', pages, read_plan_edit_default_save: true,
+        empty_cell_fill_save_reopen: !!emptyCell,
         owner_scoped_binary_handler_and_reopen: true, owner_scoped_svg_handler: true,
         external_http_download_verified: false,
         request_replay: true, previous_version_restore: true, native_file_attachment_verified: false,

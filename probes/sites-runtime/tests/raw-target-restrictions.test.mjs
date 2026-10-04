@@ -83,7 +83,7 @@ test('nonvisible tail style remains readable, is explicitly readonly and cannot 
   assert.equal(edited.raw_preservation_verified, true);
 });
 
-test('an empty cell without a serialized text record is readable but cannot be filled', async () => {
+test('an empty cell with unverified range metadata remains readonly', async () => {
   const base = syntheticFixture(HwpDocument, api.exportChecked, { paragraphs: ['합성 검증', '보존'] });
   const d = api.openDocument(base), model = api.inspectDocument(d); d.free();
   const cell = model.blocks.find((b) => b.kind === 'cell');
@@ -95,6 +95,7 @@ test('an empty cell without a serialized text record is readable but cannot be f
         if (firstCell) {
           const payload = r.payload.slice(), v = new DataView(payload.buffer);
           v.setUint32(0, (v.getUint32(0, true) & 0x80000000) | 1, true);
+          v.setUint16(14, 1, true);
           return [{ ...r, payload }];
         }
       }

@@ -18,7 +18,7 @@
 
 원격 `hwp_plan`은 `snapshot.preflight`로 HWP 후보를 메모리 안에서 생성·재열기하고 내용 및 독립 raw 보존을 검사한다. 저장 버전·바이트·후보 링크를 만들거나 반환하지 않는다. 성공은 `serialization_checked: true`를 표시하지만 `storage_checked: false`, `layout_verified: false`는 유지한다. 이후 실제 저장은 현재 버전과 보존을 다시 검사한다.
 
-`hwp_read`는 보이지 않는 별도 글자 서식과 기존 텍스트 레코드가 없는 셀 등 지원하지 않는 대상에 `editable: false`, `edit_restrictions`의 고정 코드·한국어 사유를 표시한다. 다른 대상은 그대로 조회할 수 있으며 `editable: true`만으로 저장 성공을 보장하지 않는다. 제한 대상의 계획·편집은 저장 전에 거부한다. 여러 대상의 실패 요청을 임의로 분할 저장하지 않는다. [대상별 제한 계약](../../docs/remote-documents.md#조회-단계의-대상별-편집-제한)
+`hwp_read`는 보이지 않는 별도 글자 서식과 검증되지 않은 텍스트 레코드 구조 등 지원하지 않는 대상에 `editable: false`, `edit_restrictions`의 고정 코드·한국어 사유를 표시한다. 검증된 기존 빈 셀 문단은 `empty_cell_fill_supported`로 구분하고, 텍스트 레코드 한 개의 정확한 추가를 검사한 뒤 채운다. 새 셀·문단·서식 생성은 아니다. 다른 대상은 그대로 조회할 수 있으며 `editable: true`만으로 저장 성공을 보장하지 않는다. 제한 대상의 계획·편집은 저장 전에 거부한다. 여러 대상의 실패 요청을 임의로 분할 저장하지 않는다. [대상별 제한 계약](../../docs/remote-documents.md#조회-단계의-대상별-편집-제한), [빈 셀 채우기](../../docs/remote-documents.md#기존-빈-셀의-텍스트-채우기)
 
 셀 목록의 0 word 보완 후 기본 압축이 후보 CFB의 기존 할당에 맞지 않으면 같은 raw 바이트를 level 9로 한 번만 다시 압축한다. 할당 수·저장 종류·내용 보존 조건은 그대로이며 여전히 맞지 않으면 저장하지 않는다. 합성 8×2 표의 경계 사례를 Node와 실제 workerd/D1/R2에서 검사한다. [셀 목록 보존 계약](../../docs/remote-documents.md#셀-목록의-0-값-보존)
 
