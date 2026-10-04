@@ -1,6 +1,9 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import CFB from 'cfb';
 import { StorageError } from '../storage/store.mjs';
+import { GuardError } from '../guard/records.mjs';
+import { replaceAllocatedBodyStreams } from '../guard/container.mjs';
 import { documentToolError, uploadDisabledError } from '../host/error-feedback.mjs';
 
 const file = { download_url: 'https://files.example.invalid/private-path?token=secret',
@@ -61,4 +64,38 @@ test('uppercase private codes and hostile accessors never reach the MCP error re
     assert.deepEqual(result, { isError: true, content: [{ type: 'text', text: 'DOCUMENT_OPERATION_FAILED' }] });
     assert(!JSON.stringify(result).includes('PRIVATE_'));
   }
+});
+
+test('only validated allocation failures carry numeric feedback and safe agent guidance', () => {
+  const cfb = CFB.utils.cfb_new();
+  CFB.utils.cfb_add(cfb, 'BodyText/Section0', Buffer.alloc(190, 42));
+  const bytes = new Uint8Array(CFB.write(cfb, { type: 'buffer', fileType: 'cfb' })), original = bytes.slice();
+  let caught;
+  assert.throws(() => replaceAllocatedBodyStreams(bytes,
+    new Map([['BodyText/Section0', new Uint8Array(193)]])), (error) => { caught = error; return true; });
+  caught.message = 'PRIVATE_DOCUMENT_TEXT'; caught.stack = 'PRIVATE_SIGNED_URL'; caught.details = file;
+  const result = documentToolError(caught), feedback = result.structuredContent;
+  assert.equal(result.isError, true); assert.equal(result.content[0].text, 'BODY_REPAIR_ALLOCATION_UNSUPPORTED');
+  assert.deepEqual(JSON.parse(result.content[1].text), feedback);
+  const d = feedback.data.edit_diagnostic;
+  assert.equal(d.status, 'existing_body_allocation_mismatch');
+  assert.match(d.message_ko, /재인증.*현재 엔진/);
+  assert.equal(d.allocation.candidate_stream_bytes, 190); assert.equal(d.allocation.repaired_stream_bytes, 193);
+  assert.equal(d.allocation.candidate_units, 3); assert.equal(d.allocation.repaired_units, 4);
+  assert.equal(d.saved, false); assert.equal(d.file_changed, false);
+  assert.equal(d.retry_same_request_recommended, false);
+  assert.equal(d.suggested_action, 'report_limit_without_altering_request');
+  assert.equal(d.automatic_partial_save_allowed, false); assert.equal(d.unrequested_edits_allowed, false);
+  assert.equal(feedback.layout_verified, false);
+  assert(!JSON.stringify(result).includes('PRIVATE_')); assert(!JSON.stringify(result).includes('Section0'));
+  assert.deepEqual(bytes, original);
+  d.allocation.candidate_stream_bytes = -1;
+  assert.equal(documentToolError(caught).structuredContent.data.edit_diagnostic.allocation.candidate_stream_bytes, 190);
+  for (const error of [new GuardError('BODY_REPAIR_ALLOCATION_UNSUPPORTED'), {
+    code: 'BODY_REPAIR_ALLOCATION_UNSUPPORTED', edit_diagnostic: d, allocation: file, details: file }]) {
+    assert.deepEqual(documentToolError(error), { isError: true,
+      content: [{ type: 'text', text: 'BODY_REPAIR_ALLOCATION_UNSUPPORTED' }] });
+  }
+  caught.code = 'PRESERVATION_MISMATCH';
+  assert.deepEqual(documentToolError(caught), { isError: true, content: [{ type: 'text', text: 'PRESERVATION_MISMATCH' }] });
 });

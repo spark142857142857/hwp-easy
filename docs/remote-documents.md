@@ -43,6 +43,14 @@
 
 계획과 메모리 편집 결과의 `restored_cell_list_words`는 이 정확한 보완의 개수를 알린다. 원격 저장 응답에 이 개수가 포함된다는 뜻은 아니다. 합성 문서의 무저장 계획·같은 문서 저장·다운로드·재열기, 쪽 번호 보존과의 조합, unrelated 메타데이터 거부 및 CFB v3/v4 mini/regular 경계를 검사한다. 일반 CFB/HWP writer, 서식 인증, Python 로컬 stdio의 지원 확대는 아니다.
 
+### 할당 조건 실패의 에이전트 피드백
+
+검증된 CFB 본문 스트림에서 기존 할당 수나 mini/regular 저장 종류의 불일치가 확인되면, MCP는 `isError: true`와 첫 텍스트의 `BODY_REPAIR_ALLOCATION_UNSUPPORTED`를 유지하면서 `data.edit_diagnostic`을 추가한다. 한국어 설명, `existing_body_allocation_mismatch` 상태와 후보·보완 데이터의 바이트 수, 단위 크기·개수 및 저장 종류만 전달한다. 원본 HWP의 크기나 PC 디스크 용량이 아니라 **writer가 만든 편집 후보의 본문 할당 조건**이다. 작아진 압축 데이터도 기존 할당 개수가 달라지면 거부하므로 이를 모두 공간 부족으로 설명하지 않는다.
+
+`saved: false`, `file_changed: false`와 함께 동일 요청의 무조건 재시도를 권하지 않고, `suggested_action: report_limit_without_altering_request`를 제공한다. 재인증이나 저장소 용량 오류로 오인하지 않으며 실패 이유를 알리고 현재 요청을 유지한다. 자동 일부 저장, 요청을 쪼개 일부만 반영하기, 요청하지 않은 변경 추가 및 임의 축약·공백·padding으로 압축 크기를 맞추기는 허용하지 않는다. 사용자가 요청 범위를 바꾸기 전에는 저장 성공을 위해 다른 내용을 고치지 않는다.
+
+진단은 검증된 컨테이너 경로가 만든 오류 객체에만 연결한다. 임의 upstream 오류의 속성·메시지·stack을 진단으로 읽지 않으며 문서 텍스트·이름·ID·해시·스트림 경로·URL은 포함하지 않는다. 모양이 같은 오류나 누락된 스트림에는 진단을 붙이지 않는다. CFB v3/v4의 증가·감소·저장 종류 경계, 위조·오염 오류의 개인정보 비노출과 실제 로컬 workerd/D1/R2의 계획·저장 거부 후 버전·blob·다운로드 불변을 검사한다. 지원 폭을 넓히거나 할당 제한을 해결한 기능은 아니며 Python 로컬 stdio의 오류 계약은 유지한다.
+
 ### 조회 단계의 대상별 편집 제한
 
 `hwp_read`의 각 블록은 `editable`과 `edit_restrictions`를 반환한다. 원본 글자 서식 참조가 눈에 보이는 텍스트의 서식 검사에 모두 포함되지 않으면 `RAW_CHAR_SHAPE_REFS_UNCOVERED`, 서식 레코드의 구조를 확인하지 못하면 `RAW_CHAR_SHAPE_LAYOUT_UNVERIFIED`로 읽기만 허용한다. 기존 텍스트 레코드가 정확히 한 개가 아닌 경우에는 아래 검증된 빈 셀 채우기 예외 외에 `RAW_TEXT_RECORD_LAYOUT_UNVERIFIED`를 표시한다. 사유는 고정 코드와 한국어 `message_ko`로 제공하며 문서 내용을 오류에 넣지 않는다.

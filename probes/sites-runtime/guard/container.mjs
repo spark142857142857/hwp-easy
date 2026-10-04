@@ -7,6 +7,29 @@ const defaults = Object.freeze({ maxDocumentBytes: 4 * 1024 * 1024,
   maxBodyBytes: 8 * 1024 * 1024, maxDocInfoBytes: 2 * 1024 * 1024,
   maxDirectoryEntries: 2048, maxPathChars: 65536 });
 const fail = (code = 'invalid_cfb') => { throw new GuardError(code); };
+// Only a mismatch found in this validated container can carry size feedback.
+// Never expose arbitrary error fields or document/stream names to the host.
+const allocationFailures = new WeakMap();
+export function bodyRepairAllocationDiagnostic(error) {
+  const diagnostic = allocationFailures.get(error);
+  return diagnostic ? { ...diagnostic } : undefined;
+}
+function allocationFailure(input, original, layout, replacement) {
+  const candidateMini = original.length < 4096, repairedMini = replacement.length < 4096;
+  const repairedUnit = repairedMini ? 64
+    : 2 ** new DataView(input.buffer, input.byteOffset, input.byteLength).getUint16(30, true);
+  const error = new GuardError('BODY_REPAIR_ALLOCATION_UNSUPPORTED');
+  allocationFailures.set(error, Object.freeze({
+    scope: 'candidate_body_stream_allocation',
+    reason: candidateMini === repairedMini ? 'allocation_count_changed' : 'storage_class_changed',
+    candidate_storage_class: candidateMini ? 'mini' : 'regular',
+    repaired_storage_class: repairedMini ? 'mini' : 'regular',
+    candidate_unit_bytes: layout.unit, repaired_unit_bytes: repairedUnit,
+    candidate_units: layout.locations.length, repaired_units: Math.ceil(replacement.length / repairedUnit),
+    candidate_stream_bytes: original.length, repaired_stream_bytes: replacement.length,
+  }));
+  throw error;
+}
 const equal = (a, b) => a.length === b.length && a.every((x, i) => x === b[i]);
 const join = (parts, size) => {
   const result = new Uint8Array(size); let offset = 0;
@@ -216,8 +239,9 @@ export function replaceAllocatedBodyStreams(input, replacements) {
     if (typeof name !== 'string' || !/^BodyText\/Section(?:0|[1-9]\d*)$/.test(name)
       || !(bytes instanceof Uint8Array) || !bytes.length) fail('BODY_REPAIR_INVALID');
     const original = streams.get(name), layout = layouts.get(name);
-    if (!original || !layout || (bytes.length >= 4096) !== (original.length >= 4096)
-      || Math.ceil(bytes.length / layout.unit) !== layout.locations.length) fail('BODY_REPAIR_ALLOCATION_UNSUPPORTED');
+    if (!original || !layout) fail('BODY_REPAIR_ALLOCATION_UNSUPPORTED');
+    if ((bytes.length >= 4096) !== (original.length >= 4096)
+      || Math.ceil(bytes.length / layout.unit) !== layout.locations.length) allocationFailure(input, original, layout, bytes);
   }
   const output = new Uint8Array(input), view = new DataView(output.buffer, output.byteOffset, output.byteLength);
   for (const [name, bytes] of replacements) {

@@ -53,6 +53,7 @@ try {
     const response = await rpc(name, args, identity);
     const result = (await response.json()).result;
     assert.equal(result.isError, true); assert.equal(result.content[0].text, code);
+    return result;
   };
   assert.equal((await rpc('hwp_capabilities', {}, {})).status, 401);
   assert.equal((await rpc('hwp_capabilities', {}, { 'oai-authenticated-user-id': 'no-email' })).status, 401);
@@ -504,16 +505,33 @@ try {
   }] };
   const compressionRejectedHistory = await call('hwp_versions', { document_id: compressionRejectedDoc.document_id });
   const compressionRejectedBlobs = await blobState();
-  await denied('hwp_plan', { ...compressionRejectedArgs, ...compressionRejectedEdits }, 'BODY_REPAIR_ALLOCATION_UNSUPPORTED');
-  await denied('hwp_edit', { document_id: compressionRejectedDoc.document_id,
+  const allocationPlanFailure = await denied('hwp_plan', { ...compressionRejectedArgs, ...compressionRejectedEdits }, 'BODY_REPAIR_ALLOCATION_UNSUPPORTED');
+  const allocationEditFailure = await denied('hwp_edit', { document_id: compressionRejectedDoc.document_id,
     expected_version: compressionRejectedDoc.version_id, request_id: crypto.randomUUID(), ...compressionRejectedEdits },
   'BODY_REPAIR_ALLOCATION_UNSUPPORTED');
+  for (const result of [allocationPlanFailure, allocationEditFailure]) {
+    const d = result.structuredContent.data.edit_diagnostic;
+    assert.deepEqual(JSON.parse(result.content[1].text), result.structuredContent);
+    assert.equal(d.status, 'existing_body_allocation_mismatch');
+    assert.equal(d.allocation.reason, 'allocation_count_changed');
+    assert.equal(d.allocation.candidate_stream_bytes, 965); assert.equal(d.allocation.repaired_stream_bytes, 959);
+    assert.equal(d.allocation.candidate_units, 16); assert.equal(d.allocation.repaired_units, 15);
+    assert.equal(d.saved, false); assert.equal(d.file_changed, false);
+    assert.equal(d.retry_same_request_recommended, false);
+    assert.equal(d.automatic_partial_save_allowed, false); assert.equal(d.unrequested_edits_allowed, false);
+    assert.equal(d.suggested_action, 'report_limit_without_altering_request');
+    for (const privateValue of [compressionRejectedDoc.document_id, compressionRejectedDoc.version_id,
+      compressionRejectedDoc.sha256, compressionRejectedTarget.target_id, compressionRejectedTarget.text]) {
+      assert(!JSON.stringify(result).includes(privateValue));
+    }
+  }
   assert.deepEqual(await call('hwp_versions', { document_id: compressionRejectedDoc.document_id }), compressionRejectedHistory);
   assert.deepEqual(await blobState(), compressionRejectedBlobs);
   const compressionRejectedLink = await call('hwp_download', compressionRejectedArgs);
   assert.deepEqual(new Uint8Array(await (await mf.dispatchFetch(compressionRejectedLink.download_url, { headers })).arrayBuffer()),
     compressionRejectedBytes);
-  checks.push('both_compression_profiles_miss_allocation_no_storage_mutation');
+  checks.push('both_compression_profiles_miss_allocation_no_storage_mutation',
+    'allocation_failure_numeric_feedback_no_private_values_or_unsafe_retry');
   console.log(JSON.stringify({ authenticated_host_contract: 'passed', checks,
     real_d1_r2_and_hwp: true, local_identity_headers_are_mocks_not_oauth: true,
     fileparam_network_is_mocked: true, native_client_attachment_verified: false, workflow }));
