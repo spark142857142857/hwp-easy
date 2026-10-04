@@ -21,6 +21,7 @@ a,button{color:#174b82}button,.primary{display:inline-block;background:#172033;c
 a:focus-visible,button:focus-visible{outline:3px solid #3578c5;outline-offset:4px}code{font-size:13px;overflow-wrap:anywhere}dl{margin:16px 0}dt{font-weight:600}dd{margin:0 0 10px;overflow-wrap:anywhere}
 nav{display:flex;gap:20px;align-items:center;flex-wrap:wrap}img{display:block;width:100%;height:auto;background:#fff;border:1px solid #dde2e8}li{overflow-wrap:anywhere;margin:8px 0}.notice{padding:12px 16px;background:#eef2f7;border-radius:6px}
 .version-state{font-weight:600;margin:0 0 4px}.saved-at{color:#526075;margin:0 0 20px}.version-history{list-style:none;padding:0;margin:12px 0 0}.version-history li{padding:12px 0;border-bottom:1px solid #dde2e8}.version-history li:last-child{border-bottom:0}.version-history a{display:inline-block}.version-history time{display:block;color:#526075;font-size:14px}.viewing{font-size:14px;margin-left:12px;color:#526075}details{margin-top:20px}summary{cursor:pointer;color:#174b82;padding:8px 0}summary:focus-visible{outline:3px solid #3578c5;outline-offset:4px}
+label{display:block;font-weight:600;margin-bottom:8px}input[type=file]{display:block;max-width:100%;font:inherit}input::file-selector-button{font:inherit;color:#174b82;background:#eef2f7;border:1px solid #dde2e8;border-radius:6px;padding:10px 14px;margin-right:12px;cursor:pointer}input:focus-visible{outline:3px solid #3578c5;outline-offset:4px}button:disabled{background:#e2e6ec;color:#526075;cursor:default}
 @media(max-width:480px){body{padding:16px 10px}section,header{padding:20px 16px}h1{font-size:24px}}
 </style></head><body><main>${body}</main></body></html>`, { headers: { ...browserHeaders, 'Content-Type': 'text/html; charset=utf-8' } });
 }
@@ -69,6 +70,7 @@ ${page + 1 < preview.page_count && page < 9999 ? `<a href="${base}/view?page=${p
 <p class="saved-at">${savedTime(selected.created_at)}</p>
 <a class="primary" href="${base}.hwp" download>이 버전 HWP 다운로드</a>
 ${version_id !== current ? `<p><a href="/documents/${document_id}/versions/${current}/view">현재 저장본 보기</a></p>` : ''}
+<p><a href="/documents/upload">다른 HWP 업로드</a></p>
 <details><summary>저장 버전 (${versions.length}개)</summary><ul class="version-history">${rows}</ul></details>
 <details><summary>파일 정보</summary><dl><dt>문서 ID</dt><dd><code>${document_id}</code></dd><dt>버전 ID</dt><dd><code>${version_id}</code></dd>
 <dt>파일 크기</dt><dd>${selected.byte_size} 바이트</dd><dt>SHA-256</dt><dd><code>${escapeHtml(metadata.sha256)}</code></dd></dl>

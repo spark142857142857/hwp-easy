@@ -102,3 +102,5 @@ jobs:
         run: node scripts/check-synthetic-download.mjs
       - name: Verify stored-version viewer, passive previews and explicit synthetic seed
         run: node scripts/check-document-viewer.mjs
+      - name: Verify browser upload gate, compiled client and lost acknowledgement retry
+        run: node scripts/check-browser-upload.mjs

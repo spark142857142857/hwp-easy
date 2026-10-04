@@ -81,7 +81,7 @@ helper의 `native_client_transport_verified`, `native_file_attachment_verified`,
 | 불변 버전 회수 | 원본·편집본의 각 pin, 조각 수·재시도, 실제 resource 수신 |
 | HWP 검사 | 조각/전체 해시, 독립 생성 바이트 일치, 실제 재열기, 복구 |
 | 사용자 파일 회수 | 완성 HWP 제공 방식과 앱에서의 실제 표시·다운로드 확인 |
-| 남은 제한 | 시각 양식·다른 OAuth 사용자·Dots·일반 개인 문서 등을 따로 미검증 표시 |
+| 남은 제한 | 시각 양식·다른 OAuth 사용자·일반 개인 문서를 따로 미검증 표시. Dots는 MVP 제외·추후 확장으로 구분 |
 
 이 절차의 준비, mock 단위 검사 또는 Desktop에서 같은 helper를 통과한 결과는 실제 Codex Cloud 파일 왕복 성공이 아니다. [공통 완료 기준](codex-cloud.md#실제-codex-cloud-완료-조건)을 함께 적용한다.
 
