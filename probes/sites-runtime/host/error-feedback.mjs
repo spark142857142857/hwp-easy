@@ -1,5 +1,5 @@
 import { StorageError } from '../storage/store.mjs';
-import { fileDescriptorOrigin } from './transfer.mjs';
+import { fileDescriptorOrigin, fileOriginRejectionDiagnostic } from './transfer.mjs';
 import { publicErrorCode } from './public-errors.mjs';
 import { bodyRepairAllocationDiagnostic } from '../guard/container.mjs';
 
@@ -18,6 +18,19 @@ export function uploadDisabledError(file) {
 export function documentToolError(error) {
   const code = publicErrorCode(error);
   const result = { isError: true, content: [{ type: 'text', text: code }] };
+  const rejectedOrigin = code === 'FILE_URL_NOT_ALLOWED' ? fileOriginRejectionDiagnostic(error) : undefined;
+  if (rejectedOrigin) {
+    const feedback = { stage: 'private-development', layout_verified: false,
+      data: { error: code, transfer_diagnostic: {
+        status: 'file_origin_not_allowlisted', ...rejectedOrigin,
+        candidate_origin_is_not_authorization: true, candidate_origin_allowed: false,
+        network_request_made: false, input_file_bytes_received: false, stored: false,
+        automatic_host_expansion_allowed: false,
+      } } };
+    result.content.push({ type: 'text', text: JSON.stringify(feedback) });
+    result.structuredContent = feedback;
+    return result;
+  }
   const allocation = code === 'BODY_REPAIR_ALLOCATION_UNSUPPORTED' ? bodyRepairAllocationDiagnostic(error) : undefined;
   if (allocation) {
     const feedback = { stage: 'private-development', layout_verified: false,

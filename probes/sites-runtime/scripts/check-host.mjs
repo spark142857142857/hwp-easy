@@ -27,7 +27,8 @@ const mf = new Miniflare(convertV4MiniflareOptions({ compatibilityDate: '2026-10
     { type: 'ESModule', path: path.resolve('dist/server/index.js') },
     { type: 'CompiledWasm', path: path.resolve('dist/server/rhwp_bg.wasm') }],
   d1Databases: { DB: 'host-d1' }, r2Buckets: { BUCKET: 'host-r2' },
-  bindings: { HWP_EASY_ORIGIN: origin, HWP_EASY_ALLOW_UPLOADS: 'true' } }));
+  bindings: { HWP_EASY_ORIGIN: origin, HWP_EASY_ALLOW_UPLOADS: 'true',
+    HWP_EASY_FILE_ORIGINS: '["https://files.example.invalid"]' } }));
 const checkCode = (code) => (e) => e.code === code && e.message === code;
 const headers = { 'oai-authenticated-user-id': 'synthetic-a', 'oai-authenticated-user-email': 'a@example.invalid' };
 const other = { 'oai-authenticated-user-id': 'synthetic-b', 'oai-authenticated-user-email': 'b@example.invalid' };
@@ -343,6 +344,23 @@ try {
   const imported = await enabled.call('hwp_import', { file, request_id: crypto.randomUUID() }, authenticated);
   assert.equal(imported.structuredContent.data.saved, true);
   const countBeforeInvalid = (await db.prepare('SELECT count(*) AS n FROM hwp_documents').first()).n;
+  const blobsBeforeDeniedOrigin = await blobState();
+  const blockedOrigin = await denied('hwp_import', {
+    file: { file_id: 'PRIVATE_FILE_ID', file_name: 'PRIVATE_FILE_NAME.hwp',
+      download_url: 'https://unlisted.example.invalid/PRIVATE_PATH?token=PRIVATE_TOKEN' },
+    request_id: crypto.randomUUID(),
+  }, 'FILE_URL_NOT_ALLOWED');
+  assert.equal(blockedOrigin.structuredContent.data.transfer_diagnostic.status, 'file_origin_not_allowlisted');
+  assert.equal(blockedOrigin.structuredContent.data.transfer_diagnostic.candidate_file_origin,
+    'https://unlisted.example.invalid');
+  assert.equal(blockedOrigin.structuredContent.data.transfer_diagnostic.configured_file_origins_count, 1);
+  assert.equal(blockedOrigin.structuredContent.data.transfer_diagnostic.network_request_made, false);
+  assert.equal(blockedOrigin.structuredContent.data.transfer_diagnostic.stored, false);
+  assert.deepEqual(JSON.parse(blockedOrigin.content[1].text), blockedOrigin.structuredContent);
+  assert(!JSON.stringify(blockedOrigin).includes('PRIVATE_'));
+  assert.equal((await db.prepare('SELECT count(*) AS n FROM hwp_documents').first()).n, countBeforeInvalid);
+  assert.deepEqual(await blobState(), blobsBeforeDeniedOrigin);
+  checks.push('mcp_denied_origin_feedback_without_private_url_or_storage');
   const invalidFile = createHostApp({ DB: db, BUCKET: bucket, HWP_EASY_ORIGIN: origin,
     HWP_EASY_ALLOW_UPLOADS: 'true', HWP_EASY_FILE_ORIGINS: '["https://files.example.invalid"]' },
   engine, HwpDocument, async () => new Response(new Uint8Array([1, 2])));

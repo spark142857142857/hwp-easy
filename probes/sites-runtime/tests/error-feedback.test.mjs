@@ -5,6 +5,7 @@ import { StorageError } from '../storage/store.mjs';
 import { GuardError } from '../guard/records.mjs';
 import { replaceAllocatedBodyStreams } from '../guard/container.mjs';
 import { documentToolError, uploadDisabledError } from '../host/error-feedback.mjs';
+import { fetchInputFile } from '../host/transfer.mjs';
 
 const file = { download_url: 'https://files.example.invalid/private-path?token=secret',
   file_id: 'private-id', file_name: 'private-name.hwp', mime_type: 'private-mime' };
@@ -39,6 +40,52 @@ test('malformed or unsafe descriptors preserve the plain upload-gate failure', (
     invalid.push({ ...file, download_url });
   }
   for (const descriptor of invalid) assert.deepEqual(documentToolError(uploadDisabledError(descriptor)), plain);
+});
+
+test('a denied HTTPS origin reports only that request origin before any fetch', async () => {
+  let calls = 0, caught;
+  await assert.rejects(() => fetchInputFile(file, '["https://allowed.example.invalid"]',
+    async () => { calls++; throw new Error('PRIVATE_SENTINEL'); }), (error) => { caught = error; return true; });
+  assert.equal(calls, 0);
+  caught.details = file; caught.message = 'PRIVATE_SENTINEL';
+  const result = documentToolError(caught), feedback = result.structuredContent;
+  assert.equal(result.isError, true);
+  assert.deepEqual(result.content[0], { type: 'text', text: 'FILE_URL_NOT_ALLOWED' });
+  assert.deepEqual(JSON.parse(result.content[1].text), feedback);
+  assert.deepEqual(feedback.data.transfer_diagnostic, {
+    status: 'file_origin_not_allowlisted', candidate_file_origin: 'https://files.example.invalid',
+    configured_file_origins_count: 1, candidate_origin_is_not_authorization: true,
+    candidate_origin_allowed: false, network_request_made: false,
+    input_file_bytes_received: false, stored: false, automatic_host_expansion_allowed: false,
+  });
+  for (const value of ['private-path', 'secret', 'private-id', 'private-name', 'private-mime',
+    'allowed.example.invalid', 'PRIVATE_SENTINEL']) assert(!JSON.stringify(result).includes(value));
+  feedback.data.transfer_diagnostic.candidate_file_origin = 'PRIVATE_SENTINEL';
+  assert.equal(documentToolError(caught).structuredContent.data.transfer_diagnostic.candidate_file_origin,
+    'https://files.example.invalid');
+  caught.code = 'FILE_FETCH_FAILED';
+  assert.deepEqual(documentToolError(caught), { isError: true, content: [{ type: 'text', text: 'FILE_FETCH_FAILED' }] });
+});
+
+test('unsafe descriptors, invalid configuration and forged errors cannot produce origin diagnostics', async () => {
+  let calls = 0;
+  for (const download_url of ['not-a-url', 'http://files.example.invalid/',
+    'https://user:secret@files.example.invalid/', 'https://localhost/',
+    'https://files.example.invalid:8443/', 'https://files.example.invalid/#secret']) {
+    let caught;
+    await assert.rejects(() => fetchInputFile({ ...file, download_url }, '["https://allowed.example.invalid"]',
+      async () => { calls++; }), (error) => { caught = error; return true; });
+    assert.deepEqual(documentToolError(caught), { isError: true, content: [{ type: 'text', text: 'FILE_URL_NOT_ALLOWED' }] });
+  }
+  let invalidConfig;
+  await assert.rejects(() => fetchInputFile(file, '[]', async () => { calls++; }),
+    (error) => { invalidConfig = error; return true; });
+  assert.deepEqual(documentToolError(invalidConfig), { isError: true, content: [{ type: 'text', text: 'FILE_HOST_NOT_CONFIGURED' }] });
+  assert.equal(calls, 0);
+  for (const error of [new StorageError('FILE_URL_NOT_ALLOWED'), {
+    code: 'FILE_URL_NOT_ALLOWED', candidate_file_origin: file.download_url, transfer_diagnostic: file }]) {
+    assert.deepEqual(documentToolError(error), { isError: true, content: [{ type: 'text', text: 'FILE_URL_NOT_ALLOWED' }] });
+  }
 });
 
 test('arbitrary error fields cannot forge diagnostics or leak private data', () => {

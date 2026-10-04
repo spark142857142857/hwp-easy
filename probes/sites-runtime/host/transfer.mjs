@@ -1,5 +1,12 @@
 import { StorageError } from '../storage/store.mjs';
 const fail = (code) => { throw new StorageError(code); };
+// Keep diagnostics separate from arbitrary upstream error properties. Only a
+// validated public HTTPS origin and a count survive this pre-fetch rejection.
+const deniedFileOrigins = new WeakMap();
+export function fileOriginRejectionDiagnostic(error) {
+  const diagnostic = deniedFileOrigins.get(error);
+  return diagnostic ? { ...diagnostic } : undefined;
+}
 export const TRANSFER_BODY_TIMEOUT_MS = 30000;
 // Cancellation can itself never settle. Observe errors without letting an
 // upstream cancel hook hold a rejected transfer (and its reader) indefinitely.
@@ -75,7 +82,12 @@ export async function fetchInputFile(file, originConfig, fetcher = fetch, maximu
   // A fileParams object is a descriptor, NOT proof of arbitrary URL authority.
   const candidate = fileDescriptorOrigin(file);
   const allowed = configuredFileOrigins(originConfig);
-  if (!allowed.includes(candidate)) fail('FILE_URL_NOT_ALLOWED');
+  if (!allowed.includes(candidate)) {
+    const error = new StorageError('FILE_URL_NOT_ALLOWED');
+    deniedFileOrigins.set(error, { candidate_file_origin: candidate,
+      configured_file_origins_count: allowed.length });
+    throw error;
+  }
   const url = new URL(file.download_url);
   let result;
   try {

@@ -4,6 +4,8 @@
 
 ## 제공하는 도구
 
+`hwp_import`에서 형식이 검증된 공개 HTTPS origin이 실행 서버의 허용 목록에 없으면 `FILE_URL_NOT_ALLOWED`를 유지하면서 `data.transfer_diagnostic`을 추가한다. `file_origin_not_allowlisted`, 해당 요청의 `candidate_file_origin`, 실행 설정의 origin 개수만 알려주고 URL 경로·query·파일 ID·이름과 전체 허용 목록은 반환하지 않는다. 이 거부는 네트워크 요청·바이트 수신·저장 전이다. 잘못된 descriptor나 URL, 설정 오류와 임의 upstream 오류에는 origin 진단을 붙이지 않는다. 별도 probe 호출은 다른 전달 주소를 받을 수 있으므로 가져오기 자체의 진단을 기준으로 한다. 후보 주소는 권한이 아니며 자동으로 호스트를 추가하지 않는다.
+
 | 도구 | 동작 |
 | --- | --- |
 | `hwp_capabilities` | 개발 상태, 업로드 활성화 여부와 한도를 확인한다. |
