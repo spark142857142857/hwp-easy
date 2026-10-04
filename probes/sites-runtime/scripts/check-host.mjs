@@ -322,6 +322,73 @@ try {
   assert.deepEqual(await call('hwp_versions', { document_id: otherLossDoc.document_id }), otherLossHistory);
   assert.deepEqual(await blobState(), otherLossBlobs);
   checks.push('other_writer_metadata_loss_still_rejected_without_storage_change');
+  // Eligibility reasons must survive actual Worker/MCP reads, and rejected
+  // targets must never publish a new D1 version or R2 blob.
+  for (const kind of ['tail_style', 'missing_text']) {
+    const restrictionBase = syntheticFixture(HwpDocument, api.exportChecked,
+      { bold: kind === 'tail_style', paragraphs: ['합성 검증', '보존'] });
+    const restrictionModel = (() => {
+      const d = api.openDocument(restrictionBase);
+      try { return api.inspectDocument(d); } finally { d.free(); }
+    })();
+    const restrictedCell = restrictionModel.blocks.find((b) => b.kind === 'cell');
+    const alternateId = restrictionModel.blocks[0].style.char_shape_ids[0];
+    if (kind === 'tail_style') assert.notEqual(alternateId, 0);
+    const restrictedBytes = rewriteSyntheticBody(restrictionBase, (records) => {
+      let inFirstCell = false, finished = false;
+      return records.flatMap((r) => {
+        if (r.tag === 66) {
+          inFirstCell = !finished && r.level === 2;
+          if (inFirstCell) {
+            const payload = r.payload.slice(), v = new DataView(payload.buffer);
+            if (kind === 'tail_style') v.setUint16(12, 2, true);
+            else v.setUint32(0, (v.getUint32(0, true) & 0x80000000) | 1, true);
+            return [{ ...r, payload }];
+          }
+        }
+        if (inFirstCell && !finished && r.tag === (kind === 'tail_style' ? 68 : 67)) {
+          finished = true;
+          if (kind === 'missing_text') return [];
+          const payload = new Uint8Array(16), v = new DataView(payload.buffer);
+          v.setUint32(8, restrictedCell.text.length, true); v.setUint32(12, alternateId, true);
+          return [{ ...r, payload }];
+        }
+        return [r];
+      });
+    });
+    const restrictionUpload = await upload({}, headers, restrictedBytes); assert.equal(restrictionUpload.status, 200);
+    const restrictionDoc = await restrictionUpload.json();
+    const restrictionArgs = { document_id: restrictionDoc.document_id, version_id: restrictionDoc.version_id };
+    const restrictionRead = await call('hwp_read', restrictionArgs);
+    const restricted = restrictionRead.blocks.find((b) => b.id === restrictedCell.id);
+    assert.equal(restricted.editable, false);
+    assert.equal(restricted.edit_restrictions[0].code,
+      kind === 'tail_style' ? 'RAW_CHAR_SHAPE_REFS_UNCOVERED' : 'RAW_TEXT_RECORD_LAYOUT_UNVERIFIED');
+    assert.equal(typeof restricted.edit_restrictions[0].message_ko, 'string');
+    const restrictionEdits = { expected_sha256: restrictionDoc.sha256,
+      operations: [{ target_id: restricted.target_id, expected_old: restricted.text, new_text: '합성 새 문구' }] };
+    const restrictionHistory = await call('hwp_versions', { document_id: restrictionDoc.document_id });
+    const restrictionBlobs = await blobState();
+    await denied('hwp_plan', { ...restrictionArgs, ...restrictionEdits }, 'TARGET_NOT_EDITABLE');
+    await denied('hwp_edit', { document_id: restrictionDoc.document_id, expected_version: restrictionDoc.version_id,
+      request_id: crypto.randomUUID(), ...restrictionEdits }, 'TARGET_NOT_EDITABLE');
+    assert.deepEqual(await call('hwp_versions', { document_id: restrictionDoc.document_id }), restrictionHistory);
+    assert.deepEqual(await blobState(), restrictionBlobs);
+    const originalLink = await call('hwp_download', restrictionArgs);
+    assert.deepEqual(new Uint8Array(await (await mf.dispatchFetch(originalLink.download_url, { headers })).arrayBuffer()), restrictedBytes);
+    if (kind === 'tail_style') {
+      const eligible = restrictionRead.blocks.find((b) => b.kind === 'cell' && b.editable && b.text);
+      const allowedEdit = await call('hwp_edit', { document_id: restrictionDoc.document_id,
+        expected_version: restrictionDoc.version_id, request_id: crypto.randomUUID(), expected_sha256: restrictionDoc.sha256,
+        operations: [{ target_id: eligible.target_id, expected_old: eligible.text, new_text: '합성 정상 수정' }] });
+      assert.equal(allowedEdit.raw_preservation_verified, true);
+      const allowedRead = await call('hwp_read', { document_id: restrictionDoc.document_id, version_id: allowedEdit.version_id });
+      assert.equal(allowedRead.blocks.find((b) => b.id === eligible.id).text, '합성 정상 수정');
+      assert.equal(allowedRead.blocks.find((b) => b.id === restrictedCell.id).editable, false);
+    }
+  }
+  checks.push('raw_text_and_style_restrictions_visible_in_actual_worker_mcp',
+    'restricted_plan_save_rejected_before_d1_r2_mutation', 'other_cell_edit_keeps_nonvisible_style_refs');
   console.log(JSON.stringify({ authenticated_host_contract: 'passed', checks,
     real_d1_r2_and_hwp: true, local_identity_headers_are_mocks_not_oauth: true,
     fileparam_network_is_mocked: true, native_client_attachment_verified: false, workflow }));

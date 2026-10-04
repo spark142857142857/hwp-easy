@@ -39,7 +39,15 @@
 
 원격 어댑터는 같은 레코드 순서·수·레벨, 모델에 맞는 셀 좌표·병합·문단 수와 나머지 셀 헤더의 바이트 완전 일치를 확인한 경우에만 `0 → 0x0400`을 원래의 두 0 바이트로 되돌린다. 다른 변화와 반대 방향·다른 nonzero word는 복구 대상으로 해석하지 않는다. 압축을 다시 해도 후보 CFB의 기존 sector/mini-sector 수와 저장 종류가 같아야 한다. 할당·FAT·miniFAT·directory tree를 재구성하지 않으며, 공간이 달라지면 `BODY_REPAIR_ALLOCATION_UNSUPPORTED`로 거부한다. 전체 모델 재열기와 독립 raw 보존 검사는 보완 뒤에도 필수다.
 
-`restored_cell_list_words`는 이 정확한 보완의 개수를 알린다. 합성 문서의 무저장 계획·같은 문서 저장·다운로드·재열기, 쪽 번호 보존과의 조합, unrelated 메타데이터 거부 및 CFB v3/v4 mini/regular 경계를 검사한다. 일반 CFB/HWP writer, 서식 인증, Python 로컬 stdio의 지원 확대는 아니다.
+계획과 메모리 편집 결과의 `restored_cell_list_words`는 이 정확한 보완의 개수를 알린다. 원격 저장 응답에 이 개수가 포함된다는 뜻은 아니다. 합성 문서의 무저장 계획·같은 문서 저장·다운로드·재열기, 쪽 번호 보존과의 조합, unrelated 메타데이터 거부 및 CFB v3/v4 mini/regular 경계를 검사한다. 일반 CFB/HWP writer, 서식 인증, Python 로컬 stdio의 지원 확대는 아니다.
+
+### 조회 단계의 대상별 편집 제한
+
+`hwp_read`의 각 블록은 `editable`과 `edit_restrictions`를 반환한다. 원본 글자 서식 참조가 눈에 보이는 텍스트의 서식 검사에 모두 포함되지 않으면 `RAW_CHAR_SHAPE_REFS_UNCOVERED`, 서식 레코드의 구조를 확인하지 못하면 `RAW_CHAR_SHAPE_LAYOUT_UNVERIFIED`로 읽기만 허용한다. 기존 텍스트 레코드가 정확히 한 개가 아닌 경우에는 `RAW_TEXT_RECORD_LAYOUT_UNVERIFIED`를 표시한다. 원본 텍스트 레코드가 없는 빈 셀을 새로 채우는 기능은 현재 교체 계약에 포함되지 않는다. 사유는 고정 코드와 한국어 `message_ko`로 제공하며 문서 내용을 오류에 넣지 않는다.
+
+이 제한은 문서 전체 읽기를 막거나 다른 지원 대상을 일괄 차단하지 않는다. 제한된 대상을 선택한 계획·편집은 후보 생성 전에 `TARGET_NOT_EDITABLE`로 거부한다. `editable: true`도 저장 보존 인증이 아니므로 실제 생성·재열기·raw 검사는 여전히 필수다. 여러 대상의 결합과 텍스트 길이에 따라 후보의 압축 크기가 달라질 수 있으며, 셀 목록 보완에 필요한 기존 할당 조건이 맞지 않으면 `BODY_REPAIR_ALLOCATION_UNSUPPORTED`로 저장하지 않는다. 실패한 여러 대상의 요청을 임의로 나누어 일부만 저장하지 않는다.
+
+합성 HWP의 보이지 않는 끝 서식과 텍스트 레코드 없는 셀을 생성해 제한 사유·대상 거부·입력 불변을 검사한다. 실제 로컬 workerd/D1/R2에서는 MCP 조회에 사유가 전달되는지, 거부 뒤 버전·blob이 그대로인지, 다른 셀을 수정해도 비대상 끝 서식이 유지되는지 확인한다. 테스트 신원은 모의이며 실제 OAuth 격리나 시각 배치 인증이 아니다. Python 로컬 stdio에는 이 원격 조회 제한을 자동 적용하지 않는다.
 
 ## 입력과 출력
 

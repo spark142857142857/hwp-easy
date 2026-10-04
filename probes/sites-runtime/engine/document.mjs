@@ -8,6 +8,7 @@ import { GuardError, parseRecords } from '../guard/records.mjs';
 import { verifyPreservation } from '../guard/preservation.mjs';
 import { pageNumberPreservationProfile } from '../guard/page-number.mjs';
 import { preserveZeroCellListWords } from './cell-list-preservation.mjs';
+import { rawTargetRestrictions } from './raw-target-restrictions.mjs';
 
 const fail = (code) => { throw new GuardError(code); };
 const copy = (value) => JSON.parse(JSON.stringify(value));
@@ -120,6 +121,7 @@ export function createDocumentEngine(HwpDocument) {
       reason: 'Page-number control shape, root anchor or model coverage is unverified' });
     const preservedControls = pageNumberProfile ?? [];
     const version = await sha256(bytes);
+    const restrictions = mappingVerified ? rawTargetRestrictions(raw, inspection.blocks, mapping) : new Map();
     const targets = new Map(inspection.blocks.map((block) => [targetId(version, block.id), block]));
     const allContentSupported = mappingVerified && unsupported.length === 0;
     const editableProfile = mappingVerified && unsupported.every((item) =>
@@ -131,6 +133,7 @@ export function createDocumentEngine(HwpDocument) {
       unsupported: copy(unsupported), target_mapping_verified: mappingVerified,
       warnings: [...inspection.warnings,
         ...(preservedControls.length ? ['Page-number controls are preserved as opaque bytes only; their host paragraphs are read-only.'] : []),
+        ...(restrictions.size ? ['Some targets have unverified raw text/style layouts and are read-only; other targets still require serialization preflight.'] : []),
         ...(!mappingVerified ? ['Raw paragraph coverage could not be matched; editing is disabled.'] : [])],
       layout_verified: false, persistence: 'none' });
     function checkVersion(expected) {
@@ -158,7 +161,8 @@ export function createDocumentEngine(HwpDocument) {
         if (text.length && budget === 0) break;
         const end = Math.min(text.length, offset + budget);
         fragments.push({ ...copy(block), target_id: targetId(version, block.id),
-          editable: editableProfile && block.editable, text: text.slice(offset, end).join(''),
+          editable: editableProfile && block.editable && !restrictions.has(block.id),
+          edit_restrictions: copy(restrictions.get(block.id) ?? []), text: text.slice(offset, end).join(''),
           start_offset: offset, end_offset: end, total_chars: text.length, fragment_complete: end === text.length });
         budget -= end - offset;
         if (end < text.length) { offset = end; break; }
@@ -191,7 +195,7 @@ export function createDocumentEngine(HwpDocument) {
         seen.add(operation.target_id);
         const block = targets.get(operation.target_id);
         if (!block) fail('TARGET_VERSION_OR_ID_INVALID');
-        if (!block.editable || (!length && block.style.char_shape_ids[0] !== 0)) fail('TARGET_NOT_EDITABLE');
+        if (!block.editable || restrictions.has(block.id) || (!length && block.style.char_shape_ids[0] !== 0)) fail('TARGET_NOT_EDITABLE');
         if (block.text !== operation.expected_old) fail('EXPECTED_OLD_MISMATCH');
         return { target_id: block.id, expected_old: operation.expected_old, new_text: operation.new_text };
       });
