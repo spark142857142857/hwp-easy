@@ -235,7 +235,7 @@ try {
   assert.equal(workflow.cell_text_clear_save_reopen, true);
   assert.equal(workflow.stored_version_embedded_hwp_verified, true);
   const savedWorkflow = spawnSync(process.execPath, ['scripts/save-workflow-result.mjs'], {
-    input: JSON.stringify(workflowEnvelope), encoding: 'utf8', timeout: 15000,
+    input: JSON.stringify(workflowEnvelope) + '\r\n', encoding: 'utf8', timeout: 15000,
   });
   assert.equal(savedWorkflow.status, 0); const savedWorkflowMeta = JSON.parse(savedWorkflow.stdout);
   assert.equal(savedWorkflowMeta.independently_reproduced_bytes_match, true);

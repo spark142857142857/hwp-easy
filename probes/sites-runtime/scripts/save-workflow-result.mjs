@@ -14,14 +14,16 @@ try {
   if (process.argv.length !== 2) throw new Error();
   if (process.stdin.isTTY) process.stdin.setRawMode(true);
   let input = '', size = 0; const decoder = new StringDecoder('utf8');
-  for await (const chunk of process.stdin) {
+  for await (const chunk of process.stdin.iterator({ destroyOnReturn: false })) {
     if ((size += chunk.length) > 128 * 1024) throw new Error();
     input += decoder.write(chunk);
-    if (process.stdin.isTTY && input.includes('\n')) {
-      const end = input.indexOf('\n'); if (input.slice(end + 1).trim()) throw new Error();
+    if (input.includes('\u0003')) throw new Error();
+    if (/[\r\n]/.test(input)) {
+      const end = input.search(/[\r\n]/); if (input.slice(end + 1).trim()) throw new Error();
       input = input.slice(0, end); break;
     }
   }
+  process.stdin.pause();
   const envelope = JSON.parse(input + decoder.end()), result = envelope.result ?? envelope;
   const report = result.structuredContent?.data;
   if (result.isError || result.structuredContent?.stage !== 'private-development'
