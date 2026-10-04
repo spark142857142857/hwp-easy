@@ -139,13 +139,15 @@ Codex Desktop의 실제 native `hwp_import` 파일 인수로 13,312바이트의 
 
 ### 큰 HWP의 버전 고정 조각 회수
 
+Cloud의 작은 고정 합성 파일 왕복에는 [합성 전용 client 회수 도구](../probes/sites-runtime/scripts/save-chunk-result.mjs)와 [실행 절차](cloud-client-check.md)를 사용할 수 있다. 이 개발 helper는 알려진 합성 원본/편집본만 받아 실제 재열기와 독립 바이트 재현 뒤 새 로컬 HWP로 게시한다. 임의 개인 문서 저장이나 실제 Cloud·앱 첨부 UI 인증을 수행하는 기능은 아니다.
+
 `hwp_download`에 `delivery: chunk`, 기존 `document_id`·`version_id`, 조회된 전체 `expected_sha256`, `offset: 0`을 지정한다. 선택 `max_bytes`는 1,024~65,536바이트이며 기본 65,536이다. 마지막 조각은 더 짧을 수 있다. 선택 버전의 전체 바이트는 기존 저장 한도인 4 MiB 이하여야 한다. 매 호출은 인증·저장 해시·전체 HWP 재열기와 반환 전 삭제 상태를 확인한다. 기대 해시가 다르면 `VERSION_CONFLICT`, 파일 끝 이후의 offset은 `INVALID_DOWNLOAD_CHUNK`다. 조각 인수는 기본 링크·전체 embedded 모드에 섞어 보내지 않는다.
 
 텍스트/structuredContent에는 전체 크기·해시, 조각 offset·크기·해시와 `next_offset`, `transfer_complete`를 반환한다. 실제 base64는 별도 `application/octet-stream` resource에만 있다. `chunk_is_complete_hwp: false`이며 마지막 조각의 `transfer_complete: true`도 클라이언트가 앞 조각을 모두 받아 검증했다는 인증이 아니다. `.bin` resource 식별자는 공개 URL·재조회 API·HWP 첨부가 아니다.
 
 클라이언트는 처음 선택한 문서·버전·전체 해시·크기를 고정하고 `next_offset`을 끝까지 따라간다. 현재 버전이 다른 작업으로 갱신돼도 처음의 불변 버전을 계속 사용하고 최신 버전과 섞지 않는다. [참조 재조립 라이브러리](../probes/sites-runtime/host/document-chunks.mjs)의 `createHwpChunkCollector`는 파일/네트워크 접근 없이 bounded 메모리만 사용한다. 정확한 직전 조각 재시도는 허용하지만 다른 문서·버전·크기·해시, 누락·중복 범위·순서 변경·손상/비정규 base64는 거부하며 실패 뒤 조회 위치를 진행시키지 않는다. `finalize`는 모든 바이트, 전체 SHA-256 및 필수 독립 엔진 재열기를 확인한 후에만 완성 바이트를 반환한다. 개인 원본 덮어쓰기나 로컬 자동 저장은 수행하지 않는다. 서버를 넘어간 조각의 회수·삭제는 보장할 수 없고 클라이언트의 임시 바이트 정리와 저장 권한은 별도 책임이다.
 
-actual workerd/D1/R2의 모의 신원으로 376,832바이트 합성 HWP의 6조각 회수·재시도·전체 바이트 일치·실제 엔진 재열기와 이전 버전 회수를 시험한다. 잘못된 조각·불완전 재조립·타인/삭제 접근·생성 중 삭제 거부 및 조회 후 저장소 불변도 검사한다. `hwp_workflow_probe`의 **명시적** `diagnostic: large_chunks`만 같은 일반 도구와 라이브러리로 큰 고정 합성 문서를 서버 내부에서 회수·재열기하고 자기 생성 범위만 정리한다. 기본 무인수 검사는 기존 작은 합성 문서만 사용한다. `server_chunk_workflow_verified`와 `server_chunk_count`는 서버 내부 검사이며 **클라이언트 조각 전송/재조립 완료가 아니다**. `chunked_hwp_download_available`, `max_hwp_chunk_bytes`, `max_chunked_hwp_bytes`도 서버 기능과 한도다. 도구 스키마가 갱신되지 않은 기존 대화의 일반 chunk 호출, 앱 첨부 UI·실제 Cloud/Dots 파일 왕복·시각 배치는 별도 미검증이며 `client_chunk_reassembly_verified`는 거짓이다.
+actual workerd/D1/R2의 모의 신원으로 376,832바이트 합성 HWP의 6조각 회수·재시도·전체 바이트 일치·실제 엔진 재열기와 이전 버전 회수를 시험한다. 잘못된 조각·불완전 재조립·타인/삭제 접근·생성 중 삭제 거부 및 조회 후 저장소 불변도 검사한다. `hwp_workflow_probe`의 **명시적** `diagnostic: large_chunks`만 같은 일반 도구와 라이브러리로 큰 고정 합성 문서를 서버 내부에서 회수·재열기하고 자기 생성 범위만 정리한다. 기본 무인수 검사는 기존 작은 합성 문서만 사용한다. `server_chunk_workflow_verified`와 `server_chunk_count`는 서버 내부 검사이며 **클라이언트 조각 전송/재조립 완료가 아니다**. `chunked_hwp_download_available`, `max_hwp_chunk_bytes`, `max_chunked_hwp_bytes`도 서버 기능과 한도다. 갱신된 Desktop native 도구로 작은 고정 합성 원본/편집본의 실제 조각 회수와 client helper 재조립·독립 바이트 일치를 확인했다. 도구 스키마가 갱신되지 않은 기존 대화의 일반 chunk 호출, 앱 첨부 UI·실제 Cloud/Dots 파일 왕복·시각 배치는 별도 미검증이며 포괄적인 `client_chunk_reassembly_verified`는 거짓이다.
 
 실제 native MCP에서 확장 합성 검사가 응답 시간 초과로 끝난 사례가 있어 큰 검사를 기본 연결 검사에 묶지 않는다. 시간 초과는 재인증 요구나 서버 작업 취소·정리 완료의 근거가 아니며, 같은 무거운 진단을 자동 재시도하거나 서비스 자격으로 우회하지 않는다. 생성 범위의 정리는 정상 반환에서 확인하고, 시간 초과한 실행의 정리 상태는 확인 불가로 남긴다. 실제 클라이언트별 시간·메모리·전송 한도는 별도 실증이 필요하다.
 
