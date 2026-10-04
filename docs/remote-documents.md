@@ -129,13 +129,23 @@ Codex Desktop의 실제 native `hwp_import` 파일 인수로 13,312바이트의 
 
 `hwp_download`의 기본 및 `delivery: link` 응답은 기존 보호된 브라우저 링크다. 에이전트가 파일 바이트를 회수해야 할 때 명시적으로 `delivery: embedded`를 선택하면, 인증 사용자·문서·불변 버전을 확인한 저장 HWP를 [MCP embedded resource](https://github.com/modelcontextprotocol/modelcontextprotocol/blob/main/docs/specification/2025-06-18/schema.mdx)의 `application/x-hwp`·base64 blob으로 반환한다. 바이너리는 별도 content block에만 두고 텍스트와 structuredContent에는 복제하지 않는다. 해당 resource URI는 식별자이며 공개 다운로드 주소나 재조회 API가 아니다.
 
-직접 반환 한도는 **256 KiB**다. 더 큰 파일은 `DOCUMENT_EMBEDDED_OUTPUT_LIMIT_EXCEEDED`로 거부하고 기존 링크 방식을 사용하도록 한다. 일부 파일이나 잘린 base64를 반환하지 않는다. 조회된 바이트의 저장 해시와 엔진 재열기를 확인하고, 인코딩 뒤에도 삭제 상태와 선택 버전을 다시 확인한다. 이 마지막 확인 이후 또는 이미 받은 바이트를 회수할 수 있다는 뜻은 아니다. 읽기 작업으로 버전·blob·PC 파일을 변경하지 않는다.
+전체 `embedded` 반환 한도는 **256 KiB**다. 더 큰 파일의 전체 반환은 `DOCUMENT_EMBEDDED_OUTPUT_LIMIT_EXCEEDED`로 거부한다. 기존 링크 또는 아래 명시적 조각 회수를 사용한다. 일부 파일이나 잘린 base64를 완성된 HWP처럼 반환하지 않는다. 조회된 바이트의 저장 해시와 엔진 재열기를 확인하고, 인코딩 뒤에도 삭제 상태와 선택 버전을 다시 확인한다. 이 마지막 확인 이후 또는 이미 받은 바이트를 회수할 수 있다는 뜻은 아니다. 읽기 작업으로 버전·blob·PC 파일을 변경하지 않는다.
 
 `embedded_hwp_download_available`와 `max_embedded_hwp_bytes`는 서버의 경로·한도다. 실제 앱의 다운로드 버튼, 로컬 자동 저장, Cloud/Dots 호환과 서식 정확성 완료 플래그는 계속 별개다. 새 선택 인수가 클라이언트에 보이지 않으면 기존 연결의 도구 정보를 새로 고쳐야 할 수 있으며, 이를 자동으로 재인증 오류라고 설명하지 않는다.
 
 고정 `hwp_workflow_probe`는 이 일반 저장 버전 반환 경로를 시험하고 자기 합성 결과만 resource로 돌려준다. 임시 문서는 정리하지만 이미 반환한 바이트는 읽을 수 있다. 개발용 `scripts/save-workflow-result.mjs`는 숨긴 stdin으로 이 고정 합성 응답만 받아 별도 실행에서 같은 편집을 재현하고 전체 바이트가 일치할 때 새 ignored 합성 HWP를 만든다. 일반 사용자용 CLI나 개인 문서 저장기가 아니며 임의 파일·출력 경로·덮어쓰기를 허용하지 않는다.
 
 현재·이전 버전의 전체 바이트 일치, 타인·삭제된 문서의 거부, 출력 한도와 해시 불일치, 생성 중 삭제, 저장소 불변, 합성 결과의 로컬 재열기와 잘못된 결과의 무출력을 시험한다. actual workerd/D1/R2의 모의 신원 검사와 실제 native MCP 바이트 수신은 각각 구분해 기록한다.
+
+### 큰 HWP의 버전 고정 조각 회수
+
+`hwp_download`에 `delivery: chunk`, 기존 `document_id`·`version_id`, 조회된 전체 `expected_sha256`, `offset: 0`을 지정한다. 선택 `max_bytes`는 1,024~65,536바이트이며 기본 65,536이다. 마지막 조각은 더 짧을 수 있다. 선택 버전의 전체 바이트는 기존 저장 한도인 4 MiB 이하여야 한다. 매 호출은 인증·저장 해시·전체 HWP 재열기와 반환 전 삭제 상태를 확인한다. 기대 해시가 다르면 `VERSION_CONFLICT`, 파일 끝 이후의 offset은 `INVALID_DOWNLOAD_CHUNK`다. 조각 인수는 기본 링크·전체 embedded 모드에 섞어 보내지 않는다.
+
+텍스트/structuredContent에는 전체 크기·해시, 조각 offset·크기·해시와 `next_offset`, `transfer_complete`를 반환한다. 실제 base64는 별도 `application/octet-stream` resource에만 있다. `chunk_is_complete_hwp: false`이며 마지막 조각의 `transfer_complete: true`도 클라이언트가 앞 조각을 모두 받아 검증했다는 인증이 아니다. `.bin` resource 식별자는 공개 URL·재조회 API·HWP 첨부가 아니다.
+
+클라이언트는 처음 선택한 문서·버전·전체 해시·크기를 고정하고 `next_offset`을 끝까지 따라간다. 현재 버전이 다른 작업으로 갱신돼도 처음의 불변 버전을 계속 사용하고 최신 버전과 섞지 않는다. [참조 재조립 라이브러리](../probes/sites-runtime/host/document-chunks.mjs)의 `createHwpChunkCollector`는 파일/네트워크 접근 없이 bounded 메모리만 사용한다. 정확한 직전 조각 재시도는 허용하지만 다른 문서·버전·크기·해시, 누락·중복 범위·순서 변경·손상/비정규 base64는 거부하며 실패 뒤 조회 위치를 진행시키지 않는다. `finalize`는 모든 바이트, 전체 SHA-256 및 필수 독립 엔진 재열기를 확인한 후에만 완성 바이트를 반환한다. 개인 원본 덮어쓰기나 로컬 자동 저장은 수행하지 않는다. 서버를 넘어간 조각의 회수·삭제는 보장할 수 없고 클라이언트의 임시 바이트 정리와 저장 권한은 별도 책임이다.
+
+actual workerd/D1/R2의 모의 신원으로 376,832바이트 합성 HWP의 6조각 회수·재시도·전체 바이트 일치·실제 엔진 재열기와 이전 버전 회수를 시험한다. 잘못된 조각·불완전 재조립·타인/삭제 접근·생성 중 삭제 거부 및 조회 후 저장소 불변도 검사한다. 기본 `hwp_workflow_probe`는 추가로 같은 일반 도구와 라이브러리로 고정 큰 합성 문서를 서버 내부에서 회수·재열기하고 자기 생성 범위만 정리한다. `server_chunk_workflow_verified`와 `server_chunk_count`는 서버 내부 검사이며 **클라이언트 조각 전송/재조립 완료가 아니다**. `chunked_hwp_download_available`, `max_hwp_chunk_bytes`, `max_chunked_hwp_bytes`도 서버 기능과 한도다. 도구 스키마가 갱신되지 않은 기존 대화의 일반 chunk 호출, 앱 첨부 UI·실제 Cloud/Dots 파일 왕복·시각 배치는 별도 미검증이며 `client_chunk_reassembly_verified`는 거짓이다.
 
 ## 고정 합성 파일 전달 진단
 

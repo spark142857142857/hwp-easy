@@ -17,6 +17,8 @@ import { withPageNumber, rewriteSyntheticBody } from '../tests/page-number-fixtu
 import { compressionFallbackFixture, compressionRejectedFixture, miniGrowthFixture } from '../tests/cell-list-fixtures.mjs';
 import { readCfb, readHwp } from '../guard/container.mjs';
 import { parseRecords } from '../guard/records.mjs';
+import { createHwpChunkCollector } from '../host/document-chunks.mjs';
+import { largeSyntheticFixture } from '../host/large-synthetic.mjs';
 const require = createRequire(import.meta.url);
 initSync({ module: fs.readFileSync(new URL('./rhwp_bg.wasm', pathToFileURL(require.resolve('@rhwp/core')))) });
 const origin = 'https://probe.invalid';
@@ -131,17 +133,11 @@ try {
   assert.deepEqual(new Uint8Array(Buffer.from(oldEmbedded.content.find((c) => c.type === 'resource').resource.blob, 'base64')), bytes);
   assert.equal((await (await rpc('hwp_download', current)).json()).result.content.length, 1);
   checks.push('embedded_immutable_current_and_old_hwp_exact_bytes_no_storage_mutation_owner_scope');
-  let largeState = 12345;
-  const largeText = Array.from({ length: 350000 }, () => {
-    largeState = (Math.imul(largeState, 1664525) + 1013904223) >>> 0;
-    return String.fromCharCode(33 + largeState % 90);
-  }).join('');
-  const largeBytes = syntheticFixture(HwpDocument, api.exportChecked,
-    { paragraphs: [largeText, '합성 마지막 문단'], table: false });
+  const largeBytes = largeSyntheticFixture(HwpDocument, api.exportChecked);
   assert(largeBytes.length > 256 * 1024);
   const largeUpload = await upload({}, headers, largeBytes); assert.equal(largeUpload.status, 200);
   const largeDoc = await largeUpload.json(), largeArgs = { document_id: largeDoc.document_id, version_id: largeDoc.version_id };
-  const largeHistory = await call('hwp_versions', { document_id: largeDoc.document_id }), largeBlobs = await blobState();
+  let largeHistory = await call('hwp_versions', { document_id: largeDoc.document_id }), largeBlobs = await blobState();
   const tooLarge = await denied('hwp_download', { ...largeArgs, delivery: 'embedded' }, 'DOCUMENT_EMBEDDED_OUTPUT_LIMIT_EXCEEDED');
   assert.equal(tooLarge.content.length, 1);
   const largeLink = await call('hwp_download', largeArgs);
@@ -149,6 +145,57 @@ try {
   assert.deepEqual(await call('hwp_versions', { document_id: largeDoc.document_id }), largeHistory);
   assert.deepEqual(await blobState(), largeBlobs);
   checks.push('over_256_kib_real_synthetic_hwp_rejected_without_truncation_link_and_storage_preserved');
+  for (const [pin, original] of [[{ ...largeArgs, sha256: largeDoc.sha256 }, largeBytes],
+    [{ ...args, sha256: created.sha256 }, bytes]]) {
+    const collector = createHwpChunkCollector(pin, original.length); let count = 0;
+    while (collector.next_offset !== null) {
+      const chunkArgs = { document_id: pin.document_id, version_id: pin.version_id, delivery: 'chunk',
+        expected_sha256: pin.sha256, offset: collector.next_offset };
+      const envelope = (await (await rpc('hwp_download', chunkArgs)).json()).result;
+      assert.equal(envelope.isError, undefined);
+      const data = envelope.structuredContent.data, resources = envelope.content.filter((r) => r.type === 'resource');
+      assert.equal(resources.length, 1); assert.equal(resources[0].resource.mimeType, 'application/octet-stream');
+      assert.equal(data.chunk_is_complete_hwp, false); assert.equal(data.local_file_saved, false);
+      assert(!JSON.stringify(envelope.structuredContent).includes(resources[0].resource.blob));
+      await collector.accept(data, resources[0]);
+      const retry = (await (await rpc('hwp_download', chunkArgs)).json()).result;
+      assert.deepEqual(retry, envelope);
+      assert.equal((await collector.accept(data, resources[0])).replayed, true);
+      assert(++count <= 64);
+      if (pin.document_id === largeDoc.document_id && count === 1) {
+        // A separate save changes current_version midway. Continue the pinned
+        // old version, never silently switch to that new version.
+        const changed = await call('hwp_restore', { document_id: largeDoc.document_id,
+          expected_version: largeDoc.version_id, source_version: largeDoc.version_id, request_id: crypto.randomUUID() });
+        assert.notEqual(changed.version_id, pin.version_id);
+        largeHistory = await call('hwp_versions', { document_id: largeDoc.document_id });
+        largeBlobs = await blobState();
+      }
+    }
+    assert.deepEqual(await collector.finalize((b) => engine.open(b)), original);
+    if (pin.document_id === largeDoc.document_id) assert.equal(count, 6);
+    await denied('hwp_download', { document_id: pin.document_id, version_id: pin.version_id, delivery: 'chunk',
+      expected_sha256: pin.sha256, offset: 0 }, 'DOCUMENT_OR_VERSION_NOT_FOUND', other);
+    await denied('hwp_download', { document_id: pin.document_id, version_id: pin.version_id, delivery: 'chunk',
+      expected_sha256: '0'.repeat(64), offset: 0 }, 'VERSION_CONFLICT');
+    await denied('hwp_download', { document_id: pin.document_id, version_id: pin.version_id, delivery: 'chunk',
+      expected_sha256: pin.sha256, offset: original.length }, 'INVALID_DOWNLOAD_CHUNK');
+  }
+  assert.deepEqual(await call('hwp_versions', { document_id: largeDoc.document_id }), largeHistory);
+  assert.deepEqual(await call('hwp_versions', { document_id: created.document_id }), downloadHistory);
+  assert.deepEqual(await blobState(), largeBlobs);
+  checks.push('six_chunks_large_hwp_and_pinned_old_version_exact_retry_hash_reopen_owner_scope_storage_unchanged');
+  const unfinished = createHwpChunkCollector(largeDoc, largeBytes.length);
+  const firstChunk = (await (await rpc('hwp_download', { ...largeArgs, delivery: 'chunk',
+    expected_sha256: largeDoc.sha256, offset: 0 })).json()).result;
+  await unfinished.accept(firstChunk.structuredContent.data, firstChunk.content.find((r) => r.type === 'resource'));
+  await call('hwp_delete', { document_id: largeDoc.document_id, expected_version: largeHistory.current_version,
+    request_id: crypto.randomUUID(), confirmation: 'delete_document_and_recorded_versions' });
+  const stopped = await denied('hwp_download', { ...largeArgs, delivery: 'chunk', expected_sha256: largeDoc.sha256,
+    offset: unfinished.next_offset }, 'DOCUMENT_OR_VERSION_NOT_FOUND');
+  assert.equal(stopped.content.length, 1);
+  await assert.rejects(unfinished.finalize((b) => engine.open(b)), { code: 'DOWNLOAD_INCOMPLETE' });
+  checks.push('save_mid_transfer_keeps_pinned_version_delete_between_chunks_prevents_incomplete_publication');
   const final = reopened.read({ expected_sha256: edited.sha256 });
   assert.equal(final.blocks.find((b) => b.id === body.id).text, edits.operations[0].new_text);
   assert.equal(final.blocks.find((b) => b.id === cell.id).text, edits.operations[1].new_text);
@@ -234,6 +281,9 @@ try {
   assert.equal(workflow.empty_cell_fill_save_reopen, true);
   assert.equal(workflow.cell_text_clear_save_reopen, true);
   assert.equal(workflow.stored_version_embedded_hwp_verified, true);
+  assert.equal(workflow.server_chunk_workflow_verified, true);
+  assert.equal(workflow.server_chunk_count, 6);
+  assert.equal(workflow.client_chunk_reassembly_verified, false);
   const savedWorkflow = spawnSync(process.execPath, ['scripts/save-workflow-result.mjs'], {
     input: JSON.stringify(workflowEnvelope) + '\r\n', encoding: 'utf8', timeout: 15000,
   });

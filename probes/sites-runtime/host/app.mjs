@@ -9,6 +9,8 @@ import { uploadStatus } from './upload-status.mjs';
 import { documentViewerResponse, viewerMatch } from './document-viewer.mjs';
 import { storedSyntheticResponse } from './stored-synthetic.mjs';
 import { documentOutputResource, MAX_EMBEDDED_HWP_BYTES } from './document-output.mjs';
+import { documentChunkResource, createHwpChunkCollector, MAX_HWP_CHUNK_BYTES, MAX_CHUNKED_HWP_BYTES } from './document-chunks.mjs';
+import { largeSyntheticFixture } from './large-synthetic.mjs';
 import { createEngineApi } from '../../../src/one_hwp/rhwp_api.mjs';
 import { syntheticFixture } from '../../../src/one_hwp/synthetic_fixtures.mjs';
 const fail = (code) => { throw new StorageError(code); };
@@ -31,6 +33,8 @@ export function createHostApp(env, engine, HwpDocument, fetcher = fetch) {
       upload_status: uploadStatus(uploadsEnabled(), fileOriginsConfigured()),
       stored_document_tools_available: true,
       embedded_hwp_download_available: true, max_embedded_hwp_bytes: MAX_EMBEDDED_HWP_BYTES,
+      chunked_hwp_download_available: true, max_hwp_chunk_bytes: MAX_HWP_CHUNK_BYTES,
+      max_chunked_hwp_bytes: MAX_CHUNKED_HWP_BYTES, client_chunk_reassembly_verified: false,
       synthetic_transfer_probe_implemented: true, synthetic_transfer_fixture_sha256: SYNTHETIC_TRANSFER_SHA256,
       synthetic_transfer_fixture_bytes: SYNTHETIC_TRANSFER_BYTES,
       synthetic_transfer_origins_configured: syntheticFileOriginsConfigured(),
@@ -79,19 +83,22 @@ export function createHostApp(env, engine, HwpDocument, fetcher = fetch) {
     if (name === 'hwp_download') {
       const { bytes, ...metadata } = await store.read({ owner, document_id: args.document_id, version_id: args.version_id });
       if (args.delivery === 'embedded' && bytes.length > MAX_EMBEDDED_HWP_BYTES) fail('DOCUMENT_EMBEDDED_OUTPUT_LIMIT_EXCEEDED');
+      if (args.delivery === 'chunk' && args.expected_sha256 !== metadata.sha256) fail('VERSION_CONFLICT');
       const snapshot = await engine.open(bytes);
       if (snapshot.source_sha256 !== metadata.sha256) fail('BLOB_MISSING_OR_CORRUPT');
       const base = `${origin()}/documents/${args.document_id}/versions/${args.version_id}`;
       const data = { ...metadata, download_url: `${base}.hwp`, mime_type: 'application/x-hwp',
         viewer_url: `${base}/view`, requires_same_user_sign_in: true, public_share_link: false };
-      if (args.delivery !== 'embedded') return data;
-      const resource = await documentOutputResource(bytes, metadata);
+      if (!['embedded', 'chunk'].includes(args.delivery)) return data;
+      const chunk = args.delivery === 'chunk' ? await documentChunkResource(bytes, metadata, args) : null;
+      const resource = chunk?.resource ?? await documentOutputResource(bytes, metadata);
       // Engine open / encoding can overlap deletion. Check this pinned version
       // once more before returning the newly materialized resource, not after.
       const history = await store.history({ owner, document_id: args.document_id });
       if (!history.some((v) => v.version_id === args.version_id && v.sha256 === metadata.sha256)) {
         fail('DOCUMENT_OR_VERSION_NOT_FOUND');
       }
+      if (chunk) return { ...data, ...chunk.data, _document_output: resource };
       return { ...data, output_transport: 'mcp_embedded_resource', output_bytes: bytes.length,
         output_sha256: metadata.sha256, local_file_saved: false, native_file_attachment_verified: false,
         _document_output: resource };
@@ -139,6 +146,31 @@ export function createHostApp(env, engine, HwpDocument, fetcher = fetch) {
   }
   function syntheticFileOriginsConfigured() {
     try { return configuredFileOrigins(env.HWP_EASY_SYNTHETIC_FILE_ORIGINS).length > 0; } catch { return false; }
+  }
+  async function chunkWorkflow(owner, api) {
+    const bytes = largeSyntheticFixture(HwpDocument, api.exportChecked), requestId = crypto.randomUUID();
+    let prepared;
+    try {
+      if (bytes.length <= MAX_EMBEDDED_HWP_BYTES) fail('WORKFLOW_PROBE_FAILED');
+      prepared = await service.prepareCreate({ owner, request_id: requestId, bytes });
+      const doc = await prepared.execute(), collector = createHwpChunkCollector(doc, bytes.length);
+      let chunks = 0;
+      while (collector.next_offset !== null) {
+        if (++chunks > 64) fail('WORKFLOW_PROBE_FAILED');
+        const result = await tool('hwp_download', { document_id: doc.document_id, version_id: doc.version_id,
+          delivery: 'chunk', expected_sha256: doc.sha256, offset: collector.next_offset }, owner);
+        await collector.accept(result, result._document_output);
+      }
+      const assembled = await collector.finalize((b) => engine.open(b));
+      if (!assembled.every((b, i) => b === bytes[i]) || assembled.length !== bytes.length) fail('WORKFLOW_PROBE_FAILED');
+      return { server_chunk_workflow_verified: true, server_chunk_reassembly_bytes: bytes.length,
+        server_chunk_count: chunks, client_chunk_reassembly_verified: false };
+    } finally {
+      if (prepared) {
+        try { await removeGeneratedDocument(owner, prepared.document_id, requestId); }
+        catch { fail('SYNTHETIC_CLEANUP_FAILED'); }
+      }
+    }
   }
   async function workflow(owner, inputBytes, onOutput) {
     const api = createEngineApi(HwpDocument);
@@ -238,6 +270,7 @@ export function createHostApp(env, engine, HwpDocument, fetcher = fetch) {
       if (!inputBytes) Object.assign(report, { output_transport: embedded.output_transport,
         output_sha256: embedded.output_sha256, output_bytes: embedded.output_bytes,
         _document_output: embedded._document_output });
+      if (!inputBytes) Object.assign(report, await chunkWorkflow(owner, api));
     } finally {
       if (prepared) {
         try { await removeGeneratedDocument(owner, prepared.document_id, createRequestId); }

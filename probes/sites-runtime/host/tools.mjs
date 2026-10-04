@@ -34,13 +34,15 @@ export const documentTools = [
     document_id: uuid, expected_version: uuid, request_id: uuid,
     confirmation: { type: 'string', pattern: '^delete_document_and_recorded_versions$' },
   }, undefined, true, true),
-  tool('hwp_download', 'Retrieve your chosen immutable HWP version. Default delivery is a browser-sign-in link. Explicit delivery=embedded returns HWP bytes as an MCP resource, at most 256 KiB; larger files must use the link. Neither mode saves locally or certifies client attachment UI.', {
-    ...version, delivery: { type: 'string', pattern: '^(link|embedded)$', maxLength: 8 },
+  tool('hwp_download', 'Retrieve your chosen immutable HWP version. Default is a browser-sign-in link. Explicit embedded returns complete HWP up to 256 KiB. Explicit chunk requires expected_sha256 and offset, returns at most 64 KiB of NON-HWP partial bytes; follow next_offset with the SAME version/hash, assemble all bytes and verify full hash plus HWP reopen before publishing a file. No local saving or client attachment certification.', {
+    ...version, delivery: { type: 'string', pattern: '^(link|embedded|chunk)$', maxLength: 8 },
+    expected_sha256: hash, offset: { type: 'integer', minimum: 0, maximum: 4194303 },
+    max_bytes: { type: 'integer', minimum: 1024, maximum: 65536 },
   }, ['document_id', 'version_id']),
   tool('hwp_preview', 'Get an authenticated page SVG preview link. Layout fidelity is unverified; HWP remains the final document.', {
     ...version, page: { type: 'integer', minimum: 0, maximum: 9999 },
   }),
-  tool('hwp_workflow_probe', 'Create, read, plan, edit, retrieve and restore ONLY a built-in synthetic HWP under the signed-in user scope, then clean up that generated document. No personal file input.', {}, undefined, true),
+  tool('hwp_workflow_probe', 'Test ONLY built-in synthetic HWP under the signed-in scope: read/plan/edit/retrieve/restore, plus SERVER-INTERNAL six-chunk retrieval and reassembly of a fixed large fixture, then clean up those generated documents. No personal input; server chunk diagnostics do not certify client chunk transport.', {}, undefined, true),
 ];
 for (const name of ['hwp_import', 'hwp_transfer_probe']) {
   documentTools.find((t) => t.name === name)._meta = { 'openai/fileParams': ['file'] };
@@ -58,5 +60,10 @@ export function validateArguments(name, args) {
     if (s.type === 'integer') return Number.isSafeInteger(value) && value >= s.minimum && value <= (s.maximum ?? Number.MAX_SAFE_INTEGER);
     return typeof value === 'string' && value.length <= (s.maxLength ?? 8192) && (!s.pattern || new RegExp(s.pattern).test(value));
   };
-  return !!schema && !!valid(args, schema);
+  if (!schema || !valid(args, schema)) return false;
+  if (name === 'hwp_download') {
+    if (args.delivery === 'chunk') return Object.hasOwn(args, 'expected_sha256') && Object.hasOwn(args, 'offset');
+    if (['expected_sha256', 'offset', 'max_bytes'].some((k) => Object.hasOwn(args, k))) return false;
+  }
+  return true;
 }

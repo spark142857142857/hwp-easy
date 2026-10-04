@@ -76,6 +76,7 @@ try {
       ['hwp_read', version], ['hwp_plan', { ...version, ...operation }],
       ['hwp_preview', { ...version, page: 0 }], ['hwp_download', version],
       ['hwp_download', { ...version, delivery: 'embedded' }],
+      ['hwp_download', { ...version, delivery: 'chunk', expected_sha256: foreign.sha256, offset: 0 }],
       ['hwp_versions', { document_id: foreign.document_id }],
       ['hwp_edit', { document_id: foreign.document_id, expected_version: foreign.version_id,
         request_id: crypto.randomUUID(), ...operation }],
