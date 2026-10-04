@@ -8,6 +8,10 @@ const part = (bytes, metadata, offset = 0, max_bytes = 1024) => documentChunkRes
   { expected_sha256: metadata.sha256, offset, max_bytes });
 const invalid = { code: 'INVALID_DOWNLOAD_CHUNK' };
 test('chunk schema requires version hash and offset, rejects transport fields in whole/link mode', () => {
+  assert.equal(validateArguments('hwp_workflow_probe', {}), true);
+  assert.equal(validateArguments('hwp_workflow_probe', { diagnostic: 'large_chunks' }), true);
+  for (const value of [{ diagnostic: true }, { diagnostic: 'personal' }, { file: 'private' }])
+    assert.equal(validateArguments('hwp_workflow_probe', value), false);
   const args = { document_id: crypto.randomUUID(), version_id: crypto.randomUUID() };
   const chunk = { ...args, delivery: 'chunk', expected_sha256: '0'.repeat(64), offset: 0 };
   assert.equal(validateArguments('hwp_download', chunk), true);

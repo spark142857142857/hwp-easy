@@ -281,9 +281,13 @@ try {
   assert.equal(workflow.empty_cell_fill_save_reopen, true);
   assert.equal(workflow.cell_text_clear_save_reopen, true);
   assert.equal(workflow.stored_version_embedded_hwp_verified, true);
-  assert.equal(workflow.server_chunk_workflow_verified, true);
-  assert.equal(workflow.server_chunk_count, 6);
+  assert.equal(workflow.server_chunk_workflow_verified, false);
+  assert.equal(workflow.server_chunk_diagnostic_requested, false);
   assert.equal(workflow.client_chunk_reassembly_verified, false);
+  const expanded = await call('hwp_workflow_probe', { diagnostic: 'large_chunks' });
+  assert.equal(expanded.server_chunk_diagnostic_requested, true);
+  assert.equal(expanded.server_chunk_workflow_verified, true); assert.equal(expanded.server_chunk_count, 6);
+  assert.equal(expanded.synthetic_cleanup_complete, true); assert.equal(expanded.client_chunk_reassembly_verified, false);
   const savedWorkflow = spawnSync(process.execPath, ['scripts/save-workflow-result.mjs'], {
     input: JSON.stringify(workflowEnvelope) + '\r\n', encoding: 'utf8', timeout: 15000,
   });

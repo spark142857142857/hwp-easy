@@ -79,7 +79,7 @@ export function createHostApp(env, engine, HwpDocument, fetcher = fetch) {
         order: 'created_at_then_id_not_revision_order',
         versions: history.map(({ current_version, revision, ...entry }) => entry) };
     }
-    if (name === 'hwp_workflow_probe') return workflow(owner);
+    if (name === 'hwp_workflow_probe') return workflow(owner, undefined, undefined, args.diagnostic === 'large_chunks');
     if (name === 'hwp_download') {
       const { bytes, ...metadata } = await store.read({ owner, document_id: args.document_id, version_id: args.version_id });
       if (args.delivery === 'embedded' && bytes.length > MAX_EMBEDDED_HWP_BYTES) fail('DOCUMENT_EMBEDDED_OUTPUT_LIMIT_EXCEEDED');
@@ -172,7 +172,7 @@ export function createHostApp(env, engine, HwpDocument, fetcher = fetch) {
       }
     }
   }
-  async function workflow(owner, inputBytes, onOutput) {
+  async function workflow(owner, inputBytes, onOutput, checkLargeChunks = false) {
     const api = createEngineApi(HwpDocument);
     const bytes = inputBytes ?? syntheticFixture(HwpDocument, api.exportChecked, {
       paragraphs: ['합성 에이전트 문서', '합성 에이전트 문서'], cells: [['문항', '합성 답변'], ['', '보존']] });
@@ -270,7 +270,9 @@ export function createHostApp(env, engine, HwpDocument, fetcher = fetch) {
       if (!inputBytes) Object.assign(report, { output_transport: embedded.output_transport,
         output_sha256: embedded.output_sha256, output_bytes: embedded.output_bytes,
         _document_output: embedded._document_output });
-      if (!inputBytes) Object.assign(report, await chunkWorkflow(owner, api));
+      if (!inputBytes) Object.assign(report, { server_chunk_diagnostic_requested: checkLargeChunks,
+        server_chunk_workflow_verified: false, client_chunk_reassembly_verified: false },
+      checkLargeChunks ? await chunkWorkflow(owner, api) : {});
     } finally {
       if (prepared) {
         try { await removeGeneratedDocument(owner, prepared.document_id, createRequestId); }

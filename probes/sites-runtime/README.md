@@ -49,7 +49,7 @@ npm test
 
 ## 배포 경계
 
-저장 결과의 명시적 `hwp_download delivery: chunk`는 4 MiB 이하 불변 버전에서 최대 64 KiB씩 회수한다. 조각은 `application/octet-stream`이며 HWP 완성본이 아니다. 참조 collector로 같은 문서·버전·전체 해시·크기의 연속 조각을 검증하고 전체 SHA-256·독립 HWP 재열기까지 통과해야 완성 바이트를 받는다. 기존 브라우저 링크와 256 KiB 전체 embedded는 유지한다. 고정 workflow의 큰 합성 파일 6조각 검사는 서버 내부이며 native 클라이언트 조각 전송·PC 자동 저장·Cloud/Dots 완료를 뜻하지 않는다. [결과 반환 계약](../../docs/remote-documents.md#큰-hwp의-버전-고정-조각-회수)
+저장 결과의 명시적 `hwp_download delivery: chunk`는 4 MiB 이하 불변 버전에서 최대 64 KiB씩 회수한다. 조각은 `application/octet-stream`이며 HWP 완성본이 아니다. 참조 collector로 같은 문서·버전·전체 해시·크기의 연속 조각을 검증하고 전체 SHA-256·독립 HWP 재열기까지 통과해야 완성 바이트를 받는다. 기존 브라우저 링크와 256 KiB 전체 embedded는 유지한다. workflow의 **명시적** `diagnostic: large_chunks`만 큰 합성 파일 6조각을 서버 내부에서 검사한다. 실제 native 확장 진단의 응답 시간 초과 사례는 성공·정리 완료로 집계하지 않고 자동 재시도하지 않는다. 기본 작은 검사는 유지하며 native 클라이언트 조각 전송·PC 자동 저장·Cloud/Dots 완료를 뜻하지 않는다. [결과 반환 계약](../../docs/remote-documents.md#큰-hwp의-버전-고정-조각-회수)
 
 `/diagnostics/stored-document`는 GET에서 생성하지 않고, 동일 origin의 명시적 POST에서 서버 지문이 고정된 합성 HWP 한 개만 D1/R2에 보관한다. 시험 form GET에만 same-origin referrer 정책을 사용해 기본 POST의 출처를 유지하며 null·누락·다른 출처는 거부한다. 이후 `/documents/{id}/versions/{version}/view`는 저장된 선택 버전의 HWP·수동 SVG·페이지와 이전 버전 링크를 표시한다. 읽기는 저장·복구·자동 삭제를 하지 않는다. `check-document-viewer.mjs`는 모의 신원의 실제 workerd/D1/R2/WASM으로 재시도·읽기 불변·MCP 편집·재시작·명시적 삭제 후 접근 차단을 시험한다. 별도로 실제 한 사용자의 Chrome 합성 문서 저장 → Codex Desktop native MCP 문단·셀 편집 → 새 버전 SVG 표시·이전/현재 HWP 다운로드·해시·재열기를 실증했다. 일반 파일·두 OAuth 사용자 격리·Cloud/Dots·서식 정확성의 인증은 아니다. [저장 버전 화면](../../docs/remote-documents.md#저장된-버전의-보기-화면)
 

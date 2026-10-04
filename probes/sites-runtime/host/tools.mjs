@@ -42,7 +42,9 @@ export const documentTools = [
   tool('hwp_preview', 'Get an authenticated page SVG preview link. Layout fidelity is unverified; HWP remains the final document.', {
     ...version, page: { type: 'integer', minimum: 0, maximum: 9999 },
   }),
-  tool('hwp_workflow_probe', 'Test ONLY built-in synthetic HWP under the signed-in scope: read/plan/edit/retrieve/restore, plus SERVER-INTERNAL six-chunk retrieval and reassembly of a fixed large fixture, then clean up those generated documents. No personal input; server chunk diagnostics do not certify client chunk transport.', {}, undefined, true),
+  tool('hwp_workflow_probe', 'Test ONLY a built-in synthetic HWP under the signed-in scope: read/plan/edit/retrieve/restore and generated-document cleanup. Optional diagnostic=large_chunks adds a heavier SERVER-INTERNAL fixed large fixture test; use only explicitly, never automatically retry timeouts. No personal input; server diagnostics do not certify client chunk transport.', {
+    diagnostic: { type: 'string', pattern: '^large_chunks$', maxLength: 12 },
+  }, [], true),
 ];
 for (const name of ['hwp_import', 'hwp_transfer_probe']) {
   documentTools.find((t) => t.name === name)._meta = { 'openai/fileParams': ['file'] };
