@@ -18,7 +18,7 @@
 
 원격 `hwp_plan`은 `snapshot.preflight`로 HWP 후보를 메모리 안에서 생성·재열기하고 내용 및 독립 raw 보존을 검사한다. 저장 버전·바이트·후보 링크를 만들거나 반환하지 않는다. 성공은 `serialization_checked: true`를 표시하지만 `storage_checked: false`, `layout_verified: false`는 유지한다. 이후 실제 저장은 현재 버전과 보존을 다시 검사한다.
 
-동기 라이브러리 `snapshot.plan`은 대상·이전 값만 확인하며 `serialization_checked: false`다. 합성 셀 LIST_HEADER 속성을 writer가 변경하는 사례는 사전 검사와 실제 저장에서 모두 거부한다. 계획 거부 전후 D1 버전과 R2 객체 메타데이터·원본 바이트 불변을 actual workerd에서 확인한다. 원문과 개인 문서 경로를 회귀 fixture로 사용하지 않는다.
+동기 라이브러리 `snapshot.plan`은 대상·이전 값만 확인하며 `serialization_checked: false`다. writer가 셀 LIST_HEADER offset 6–7의 0 word를 `0x0400`으로 기본화하는 사례는 나머지 헤더·모델 좌표·문단 수가 일치할 때만 원래 두 바이트를 유지한다. 기존 CFB 할당을 넘으면 거부하며, 보완 후 전체 모델과 raw 검사는 필수다. 다른 메타데이터 손실은 계획·편집에서 계속 거부하고 D1/R2를 유지한다. 원문과 개인 문서 경로를 회귀 fixture로 사용하지 않는다. [정확한 보존 계약](../../docs/remote-documents.md#셀-목록의-0-값-보존)
 
 ## 재현 방법
 

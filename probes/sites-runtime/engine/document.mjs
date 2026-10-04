@@ -7,6 +7,7 @@ import { readHwp } from '../guard/container.mjs';
 import { GuardError, parseRecords } from '../guard/records.mjs';
 import { verifyPreservation } from '../guard/preservation.mjs';
 import { pageNumberPreservationProfile } from '../guard/page-number.mjs';
+import { preserveZeroCellListWords } from './cell-list-preservation.mjs';
 
 const fail = (code) => { throw new GuardError(code); };
 const copy = (value) => JSON.parse(JSON.stringify(value));
@@ -204,13 +205,17 @@ export function createDocumentEngine(HwpDocument) {
     }
     async function edit(options) {
       const operations = plans(options);
-      const output = quietEngine(() => api.editDocument(bytes, operations,
+      const candidate = quietEngine(() => api.editDocument(bytes, operations,
         { preservePageNumbers: preservedControls.length > 0 }));
+      const repaired = preserveZeroCellListWords(raw, candidate, inspection), output = repaired.bytes;
+      const reopened = inspect(output);
+      // The adapter may restore an opaque word, never change the engine model.
+      if (repaired.restored_cell_list_words && JSON.stringify(reopened) !== JSON.stringify(inspect(candidate))) fail('PRESERVATION_MISMATCH');
       const after = readHwp(output);
       // api.editDocument already reopens and compares exact text/style/table model.
       // Independently match raw AFTER text and nesting to that reopened model.
       // The raw preservation canonicalizer intentionally does not prove text.
-      const afterMapping = mapRawTargets(after, inspect(output).blocks);
+      const afterMapping = mapRawTargets(after, reopened.blocks);
       for (const [id, position] of mapping) {
         const saved = afterMapping.get(id);
         if (!saved || saved.section !== position.section || saved.record_index !== position.record_index) fail('TARGET_MAPPING_UNVERIFIED');
@@ -221,6 +226,7 @@ export function createDocumentEngine(HwpDocument) {
       return { bytes: output, source_sha256: version, output_sha256: outputVersion,
         content_verified: true, raw_preservation_verified: preservation.verified,
         raw_preservation_scope: preservation.scope, layout_verified: false,
+        restored_cell_list_words: repaired.restored_cell_list_words,
         saved: false, persistence: 'none' };
     }
     async function preflight(options) {
@@ -232,6 +238,7 @@ export function createDocumentEngine(HwpDocument) {
       return { ...prepared, validation_scope: 'targets_and_in_memory_serialization',
         serialization_checked: true, content_verified: candidate.content_verified,
         raw_preservation_verified: candidate.raw_preservation_verified,
+        restored_cell_list_words: candidate.restored_cell_list_words,
         raw_preservation_scope: candidate.raw_preservation_scope, saved: false };
     }
     function preview(options) {

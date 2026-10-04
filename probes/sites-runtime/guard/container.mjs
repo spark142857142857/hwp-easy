@@ -71,7 +71,7 @@ export function inflateBoundedRaw(input, limit, { allowZeroPadding = true } = {}
   } finally { zlibInflateEnd(stream); }
 }
 
-export function readCfb(input, options = {}) {
+function parseCfb(input, options = {}, captureLayout = false) {
   const limits = boundedOptions(options);
   if (!(input instanceof Uint8Array) || input.length > limits.maxDocumentBytes || input.length < 512) fail('input_limit');
   const view = new DataView(input.buffer, input.byteOffset, input.byteLength);
@@ -138,7 +138,7 @@ export function readCfb(input, options = {}) {
     // CFB v3 readers MUST ignore high DWORD, including uninitialized bytes.
     const size = dv.getUint32(p + 120, true) + (major === 4 ? dv.getUint32(p + 124, true) * 2 ** 32 : 0);
     if (!Number.isSafeInteger(size) || size > limits.maxDocumentBytes) fail('stream_limit');
-    entries.push({ name, type, left: dv.getUint32(p + 68, true), right: dv.getUint32(p + 72, true),
+    entries.push({ name, type, directoryOffset: p, left: dv.getUint32(p + 68, true), right: dv.getUint32(p + 72, true),
       child: dv.getUint32(p + 76, true), first: dv.getUint32(p + 116, true), size });
   }
   const root = entries[0];
@@ -147,7 +147,7 @@ export function readCfb(input, options = {}) {
   const miniRoot = join(rootIds.map(sector), root.size);
   const miniIds = chain(u32(60), 4, miniCount), miniFat = join(miniIds.map(sector), miniCount * sectorSize);
   const miniView = new DataView(miniFat.buffer), miniOwners = new Uint8Array(Math.ceil(miniRoot.length / 64));
-  const streams = new Map(), names = new Set(), visited = new Set([0]);
+  const streams = new Map(), layouts = new Map(), names = new Set(), visited = new Set([0]);
   let pathChars = 0;
   const stack = root.child === FREE ? [] : [[root.child, '']];
   while (stack.length) {
@@ -171,22 +171,67 @@ export function readCfb(input, options = {}) {
       continue;
     }
     if (entry.child !== FREE) fail('directory_invalid');
-    let content;
-    if (entry.size >= 4096) content = join(chain(entry.first, 6, Math.ceil(entry.size / sectorSize)).map(sector), entry.size);
+    let content, locations;
+    if (entry.size >= 4096) {
+      const ids = chain(entry.first, 6, Math.ceil(entry.size / sectorSize));
+      content = join(ids.map(sector), entry.size);
+      if (captureLayout) locations = ids.map((id) => (id + 1) * sectorSize);
+    }
     else {
       const parts = []; let id = entry.first;
+      if (captureLayout) locations = [];
       while (id !== END) {
         if (parts.length >= Math.ceil(entry.size / 64) || id >= miniOwners.length || miniOwners[id]
           || id * 4 + 4 > miniFat.length || (id + 1) * 64 > miniRoot.length) fail('mini_chain_invalid');
-        miniOwners[id] = 1; parts.push(miniRoot.subarray(id * 64, (id + 1) * 64)); id = miniView.getUint32(id * 4, true);
+        miniOwners[id] = 1; parts.push(miniRoot.subarray(id * 64, (id + 1) * 64));
+        if (captureLayout) locations.push((rootIds[Math.floor(id * 64 / sectorSize)] + 1) * sectorSize + id * 64 % sectorSize);
+        id = miniView.getUint32(id * 4, true);
       }
       if (parts.length !== Math.ceil(entry.size / 64)) fail('mini_chain_invalid');
       content = join(parts, entry.size);
     }
     streams.set(path, content);
+    if (captureLayout) layouts.set(path, { locations, unit: entry.size >= 4096 ? sectorSize : 64,
+      sizeOffset: (directoryIds[Math.floor(entry.directoryOffset / sectorSize)] + 1) * sectorSize
+        + entry.directoryOffset % sectorSize + 120 });
   }
   for (let index = 1; index < entries.length; index++) if (entries[index] && !visited.has(index)) fail('directory_invalid');
-  return streams;
+  return { streams, layouts };
+}
+
+export function readCfb(input, options = {}) {
+  return parseCfb(input, options).streams;
+}
+
+/**
+ * Narrow, allocation-preserving BodyText replacement. Never adds/removes a
+ * stream, changes FAT/miniFAT/directory trees, or reallocates sectors. Used only
+ * after a known writer defect is matched; this is NOT a general CFB writer.
+ * A changed allocation count/storage class is rejected without touching input.
+ */
+export function replaceAllocatedBodyStreams(input, replacements) {
+  if (!(replacements instanceof Map) || !replacements.size || replacements.size > 64) fail('BODY_REPAIR_INVALID');
+  const { streams, layouts } = parseCfb(input, {}, true);
+  for (const [name, bytes] of replacements) {
+    if (typeof name !== 'string' || !/^BodyText\/Section(?:0|[1-9]\d*)$/.test(name)
+      || !(bytes instanceof Uint8Array) || !bytes.length) fail('BODY_REPAIR_INVALID');
+    const original = streams.get(name), layout = layouts.get(name);
+    if (!original || !layout || (bytes.length >= 4096) !== (original.length >= 4096)
+      || Math.ceil(bytes.length / layout.unit) !== layout.locations.length) fail('BODY_REPAIR_ALLOCATION_UNSUPPORTED');
+  }
+  const output = new Uint8Array(input), view = new DataView(output.buffer, output.byteOffset, output.byteLength);
+  for (const [name, bytes] of replacements) {
+    const { locations, unit, sizeOffset } = layouts.get(name);
+    locations.forEach((offset, index) => {
+      output.fill(0, offset, offset + unit);
+      output.set(bytes.subarray(index * unit, (index + 1) * unit), offset);
+    });
+    view.setUint32(sizeOffset, bytes.length, true);
+  }
+  const checked = readCfb(output);
+  if (streams.size !== checked.size || [...streams].some(([name, original]) =>
+    !checked.has(name) || !equal(replacements.get(name) ?? original, checked.get(name)))) fail('BODY_REPAIR_INVALID');
+  return output;
 }
 
 export function readHwp(input, options = {}) {

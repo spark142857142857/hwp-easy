@@ -6,6 +6,7 @@ __pycache__/
 .venv/
 node_modules/
 work/
+.work/
 outputs/
 testdocs/
 # Personal documents and per-session operations are never source fixtures.

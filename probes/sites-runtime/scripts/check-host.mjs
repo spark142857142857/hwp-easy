@@ -13,6 +13,8 @@ import { authenticatedOwner, boundedBytes, fetchInputFile } from '../host/transf
 import { applyTestMigrations } from './migrations.mjs';
 import { withCheckedDeflateTrailers } from '../tests/trailer-fixtures.mjs';
 import { withPageNumber, rewriteSyntheticBody } from '../tests/page-number-fixtures.mjs';
+import { readHwp } from '../guard/container.mjs';
+import { parseRecords } from '../guard/records.mjs';
 const require = createRequire(import.meta.url);
 initSync({ module: fs.readFileSync(new URL('./rhwp_bg.wasm', pathToFileURL(require.resolve('@rhwp/core')))) });
 const origin = 'https://probe.invalid';
@@ -281,14 +283,45 @@ try {
   }] };
   const normalizedHistory = await call('hwp_versions', { document_id: normalizedDoc.document_id });
   const normalizedBlobs = await blobState();
-  await denied('hwp_plan', { ...normalizedArgs, ...normalizedEdits }, 'PRESERVATION_MISMATCH');
-  await denied('hwp_edit', { document_id: normalizedDoc.document_id, expected_version: normalizedDoc.version_id,
-    request_id: crypto.randomUUID(), ...normalizedEdits }, 'PRESERVATION_MISMATCH');
+  const normalizedPlan = await call('hwp_plan', { ...normalizedArgs, ...normalizedEdits });
+  assert.equal(normalizedPlan.restored_cell_list_words, 4);
+  assert.equal(normalizedPlan.raw_preservation_verified, true);
   assert.deepEqual(await call('hwp_versions', { document_id: normalizedDoc.document_id }), normalizedHistory);
   assert.deepEqual(await blobState(), normalizedBlobs);
   const normalizedLink = await call('hwp_download', normalizedArgs);
   assert.deepEqual(new Uint8Array(await (await mf.dispatchFetch(normalizedLink.download_url, { headers })).arrayBuffer()), normalizedBytes);
-  checks.push('writer_normalized_cell_attribute_rejected_by_plan_and_edit_without_storage_change');
+  const normalizedSaved = await call('hwp_edit', { document_id: normalizedDoc.document_id,
+    expected_version: normalizedDoc.version_id, request_id: crypto.randomUUID(), ...normalizedEdits });
+  const normalizedCurrent = { document_id: normalizedDoc.document_id, version_id: normalizedSaved.version_id };
+  const normalizedReopened = await call('hwp_read', normalizedCurrent);
+  assert.equal(normalizedReopened.blocks.find((b) => b.id === normalizedTarget.id).text, '합성 새 문구');
+  const repairedLink = await call('hwp_download', normalizedCurrent);
+  const repairedBytes = new Uint8Array(await (await mf.dispatchFetch(repairedLink.download_url, { headers })).arrayBuffer());
+  const repairedRaw = readHwp(repairedBytes);
+  assert.ok([...parseRecords(repairedRaw.streams.get('BodyText/Section0'))]
+    .filter((r) => r.tag === 72).every((r) => r.payload[6] === 0 && r.payload[7] === 0));
+  checks.push('zero_cell_list_words_preserved_through_plan_save_download_reopen');
+  const otherLossBytes = rewriteSyntheticBody(syntheticFixture(HwpDocument, api.exportChecked,
+    { paragraphs: ['합성 검증', '보존'] }), (records) => records.map((record) => {
+    if (record.tag !== 72 || record.level !== 2) return record;
+    const payload = record.payload.slice(); payload[2] ^= 1;
+    return { ...record, payload };
+  }));
+  const otherLossDoc = await (await upload({}, headers, otherLossBytes)).json();
+  const otherLossArgs = { document_id: otherLossDoc.document_id, version_id: otherLossDoc.version_id };
+  const otherLossRead = await call('hwp_read', otherLossArgs);
+  const otherLossTarget = otherLossRead.blocks.find((b) => b.editable && b.kind === 'cell' && b.text);
+  const otherLossEdits = { expected_sha256: otherLossDoc.sha256, operations: [{
+    target_id: otherLossTarget.target_id, expected_old: otherLossTarget.text, new_text: '합성 새 문구',
+  }] };
+  const otherLossHistory = await call('hwp_versions', { document_id: otherLossDoc.document_id });
+  const otherLossBlobs = await blobState();
+  await denied('hwp_plan', { ...otherLossArgs, ...otherLossEdits }, 'PRESERVATION_MISMATCH');
+  await denied('hwp_edit', { document_id: otherLossDoc.document_id, expected_version: otherLossDoc.version_id,
+    request_id: crypto.randomUUID(), ...otherLossEdits }, 'PRESERVATION_MISMATCH');
+  assert.deepEqual(await call('hwp_versions', { document_id: otherLossDoc.document_id }), otherLossHistory);
+  assert.deepEqual(await blobState(), otherLossBlobs);
+  checks.push('other_writer_metadata_loss_still_rejected_without_storage_change');
   console.log(JSON.stringify({ authenticated_host_contract: 'passed', checks,
     real_d1_r2_and_hwp: true, local_identity_headers_are_mocks_not_oauth: true,
     fileparam_network_is_mocked: true, native_client_attachment_verified: false, workflow }));

@@ -29,9 +29,17 @@
 
 성공 결과는 `validation_scope: targets_and_in_memory_serialization`, `serialization_checked: true`, `content_verified: true`, `raw_preservation_verified: true`, `saved: false`, `file_changed: false`, `persistence: none`을 알린다. `storage_checked: false`와 `layout_verified: false`는 유지한다. 이후 저장 시 현재 버전·소유권·저장 한도와 편집 검사를 다시 확인하므로 사전 검사 성공이 미래 저장 성공이나 배치 정확성을 보장하지 않는다. 과거 버전의 검사가 통과해도 `stale_for_save`는 별도로 표시한다.
 
-`edit_profile_supported`는 입력의 대상/제어 계약이 맞는다는 뜻이며 writer 보존 인증이 아니다. 같은 값을 다시 넣는 요청도 생성·보존 검사에서 실패할 수 있다. 합성 셀 LIST_HEADER의 불투명 속성 한 비트를 writer가 바꾸는 사례를 재현했고, 계획과 편집이 모두 `PRESERVATION_MISMATCH`로 거부되고 저장 버전·R2 바이트가 유지됨을 실제 로컬 workerd/D1/R2에서 확인했다. 이 속성의 의미를 추정해 무시하거나 보존 검사 예외를 추가하지 않는다.
+`edit_profile_supported`는 입력의 대상/제어 계약이 맞는다는 뜻이며 writer 보존 인증이 아니다. 같은 값을 다시 넣는 요청도 생성·보존 검사에서 실패할 수 있다. writer가 바꾸는 미지원 메타데이터는 계획과 편집에서 모두 `PRESERVATION_MISMATCH`로 거부하고 D1/R2를 유지한다. 확인된 셀 목록의 0 값 기본화만 아래의 정확한 바이트 보존 경로로 처리하며, raw 보존 검사 예외는 추가하지 않는다.
 
 라이브러리의 동기 `snapshot.plan`은 빠른 대상·값 검사로 남아 `validation_scope: targets_and_values_only`, `serialization_checked: false`를 반환한다. 원격 MCP는 비동기 `snapshot.preflight`를 사용한다. Python 로컬 stdio의 계획 계약까지 강화됐다고 표현하지 않는다.
+
+### 셀 목록의 0 값 보존
+
+고정 엔진 0.8.6은 셀 LIST_HEADER의 offset 6–7 원래 word가 0일 때 재생성 경로에서 `0x0400`을 넣는다. 합성 HWP와 [해당 버전 writer 소스](https://github.com/edwardkim/rhwp/blob/v0.8.6/src/serializer/control.rs#L690)에서 이 동작을 확인했다. 이 word의 의미를 추정하거나 차이를 무시하지 않는다.
+
+원격 어댑터는 같은 레코드 순서·수·레벨, 모델에 맞는 셀 좌표·병합·문단 수와 나머지 셀 헤더의 바이트 완전 일치를 확인한 경우에만 `0 → 0x0400`을 원래의 두 0 바이트로 되돌린다. 다른 변화와 반대 방향·다른 nonzero word는 복구 대상으로 해석하지 않는다. 압축을 다시 해도 후보 CFB의 기존 sector/mini-sector 수와 저장 종류가 같아야 한다. 할당·FAT·miniFAT·directory tree를 재구성하지 않으며, 공간이 달라지면 `BODY_REPAIR_ALLOCATION_UNSUPPORTED`로 거부한다. 전체 모델 재열기와 독립 raw 보존 검사는 보완 뒤에도 필수다.
+
+`restored_cell_list_words`는 이 정확한 보완의 개수를 알린다. 합성 문서의 무저장 계획·같은 문서 저장·다운로드·재열기, 쪽 번호 보존과의 조합, unrelated 메타데이터 거부 및 CFB v3/v4 mini/regular 경계를 검사한다. 일반 CFB/HWP writer, 서식 인증, Python 로컬 stdio의 지원 확대는 아니다.
 
 ## 입력과 출력
 

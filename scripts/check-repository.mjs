@@ -10,14 +10,14 @@ const tracked = git(['ls-files', '-z']).split('\0').filter(Boolean);
 const trackedSet = new Set(tracked);
 const errors = [];
 for (const file of tracked) {
-  if (/^(?:docs\/local\/|testdocs\/|outputs\/|node_modules\/|dist\/|\.sites-runtime\/)/.test(file)
+  if (/^(?:docs\/local\/|testdocs\/|outputs\/|node_modules\/|dist\/|\.sites-runtime\/|\.work\/)/.test(file)
     || /\.(?:hwp|hwpx|pdf|docx|whl|tgz|tar(?:\.gz)?|zip)$/i.test(file)
     || (/(?:^|\/)\.env(?:\.|$)/.test(file) && !/\.example$/.test(file))) {
     errors.push(`Unexpected tracked private/generated file: ${file}`);
   }
 }
 const ignored = ['docs/local/session.md', 'testdocs/example.hwp', 'outputs/result.hwp',
-  '.env', '.env.local', 'release.tgz', 'release.tar.gz', '.sites-runtime/session.json'];
+  '.env', '.env.local', 'release.tgz', 'release.tar.gz', '.sites-runtime/session.json', '.work/research.txt'];
 const found = git(['check-ignore', '--stdin'], ignored.join('\n') + '\n').trim().split(/\r?\n/);
 for (const file of ignored) if (!found.includes(file)) errors.push(`Missing ignore rule: ${file}`);
 // Example configuration is safe source documentation, not a secret file.
