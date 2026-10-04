@@ -34,7 +34,7 @@ const savedTimeFormat = new Intl.DateTimeFormat('ko-KR', {
   timeZone: 'Asia/Seoul', year: 'numeric', month: '2-digit', day: '2-digit',
   hour: '2-digit', minute: '2-digit', second: '2-digit', hourCycle: 'h23',
 });
-function savedTime(value) {
+export function savedTime(value) {
   if (!Number.isSafeInteger(value) || value < 0 || value > 8640000000000000) return '저장 시각 확인 불가';
   return `<time datetime="${new Date(value).toISOString()}">${escapeHtml(savedTimeFormat.format(value))} (한국 시간)</time>`;
 }
@@ -70,7 +70,7 @@ ${page + 1 < preview.page_count && page < 9999 ? `<a href="${base}/view?page=${p
 <p class="saved-at">${savedTime(selected.created_at)}</p>
 <a class="primary" href="${base}.hwp" download>이 버전 HWP 다운로드</a>
 ${version_id !== current ? `<p><a href="/documents/${document_id}/versions/${current}/view">현재 저장본 보기</a></p>` : ''}
-<p><a href="/documents/upload">다른 HWP 업로드</a></p>
+<p><a href="/documents">내 문서</a> · <a href="/documents/upload">다른 HWP 업로드</a></p>
 <details><summary>저장 버전 (${versions.length}개)</summary><ul class="version-history">${rows}</ul></details>
 <details><summary>파일 정보</summary><dl><dt>문서 ID</dt><dd><code>${document_id}</code></dd><dt>버전 ID</dt><dd><code>${version_id}</code></dd>
 <dt>파일 크기</dt><dd>${selected.byte_size} 바이트</dd><dt>SHA-256</dt><dd><code>${escapeHtml(metadata.sha256)}</code></dd></dl>

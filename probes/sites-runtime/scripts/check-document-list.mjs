@@ -1,0 +1,87 @@
+// Actual workerd + durable storage + compiled WASM. User headers are mock
+// identities, not proof of two real OAuth users. All HWP data is synthetic.
+import assert from 'node:assert/strict';
+import path from 'node:path';
+import { Miniflare, convertV4MiniflareOptions } from 'miniflare';
+import { applyTestMigrations } from './migrations.mjs';
+const origin = 'https://list.invalid'; let outbound = 0;
+const options = () => convertV4MiniflareOptions({ compatibilityDate:'2026-10-01', modulesRoot:path.resolve('dist/server'),
+  modules:[{type:'ESModule',path:path.resolve('dist/server/index.js')},{type:'CompiledWasm',path:path.resolve('dist/server/rhwp_bg.wasm')}],
+  d1Databases:{DB:'document-list-d1'},r2Buckets:{BUCKET:'document-list-r2'},
+  bindings:{HWP_EASY_ORIGIN:origin,HWP_EASY_ALLOW_UPLOADS:'true',HWP_EASY_FILE_ORIGINS:'[]'},
+  outboundService:()=>{outbound++;throw new Error('No network');} });
+const mf = new Miniflare(options());
+const a = {'oai-authenticated-user-id':'list-a','oai-authenticated-user-email':'same@example.invalid'};
+const b = {...a,'oai-authenticated-user-id':'list-b'};
+const get = (route='/documents', headers=a) => mf.dispatchFetch(origin + route, {headers});
+const invoke = async (name,args,headers=a) => {
+  const response=await mf.dispatchFetch(origin+'/mcp',{method:'POST',headers:{...headers,'Content-Type':'application/json'},
+    body:JSON.stringify({jsonrpc:'2.0',id:1,method:'tools/call',params:{name,arguments:args}})});
+  assert.equal(response.status,200);const result=(await response.json()).result;assert(!result.isError);return result.structuredContent.data;
+};
+const links = html => [...html.matchAll(/href="(\/documents\/([0-9a-f-]+)\/versions\/([0-9a-f-]+)\/view)"/g)].map(m=>({path:m[1],doc:m[2],version:m[3]}));
+const next = html => html.match(/href="(\/documents\?before=[^"]+)"/)?.[1];
+try {
+  let db=await mf.getD1Database('DB'), bucket=await mf.getR2Bucket('BUCKET');await applyTestMigrations(db);
+  assert.equal((await get('/documents',{})).status,401);
+  assert.equal((await get('/documents',{'oai-authenticated-user-id':'list-a'})).status,401);
+  const empty=await get();assert.equal(empty.status,200);assert((await empty.text()).includes('아직 저장된 문서가 없습니다'));
+  const fixed=await mf.dispatchFetch(origin+'/diagnostics/synthetic-result.hwp',{headers:a});
+  assert.equal(fixed.status,200);const bytes=new Uint8Array(await fixed.arrayBuffer());
+  const importFile=async headers=>{const response=await mf.dispatchFetch(origin+'/documents/import',{method:'POST',
+    headers:{...headers,Origin:origin,'Content-Type':'application/x-hwp','hwp-request-id':crypto.randomUUID()},body:bytes});
+    assert.equal(response.status,200);return response.json();};
+  const documents=[];for(let i=0;i<22;i++)documents.push(await importFile(a));const other=await importFile(b);
+  // Force ties and creation/current timestamp disagreement to exercise SQL.
+  await db.prepare('UPDATE hwp_documents SET created_at=9').run();
+  await db.prepare('UPDATE hwp_versions SET created_at=1000').run();
+  const capture=async()=>({docs:(await db.prepare('SELECT * FROM hwp_documents ORDER BY owner,id').all()).results,
+    versions:(await db.prepare('SELECT * FROM hwp_versions ORDER BY owner,document_id,id').all()).results,
+    requests:(await db.prepare('SELECT * FROM hwp_requests ORDER BY owner,id').all()).results,
+    blobs:(await bucket.list()).objects.map(o=>({key:o.key,etag:o.etag})).sort((x,y)=>x.key.localeCompare(y.key))});
+  const before=await capture();
+  let response=await get();assert.equal(response.status,200);let html=await response.text();const firstPage=links(html);
+  assert.equal(firstPage.length,20);assert(!html.includes(other.document_id));
+  const secondPage=links(await (await get(next(html))).text());assert.equal(secondPage.length,2);
+  const expected=documents.map(d=>d.document_id).sort().reverse();
+  assert.deepEqual([...firstPage,...secondPage].map(l=>l.doc),expected);
+  const otherPage=links(await (await get('/documents',b)).text());assert.deepEqual(otherPage.map(l=>l.doc),[other.document_id]);
+  // A foreign cursor is only an ordering position; owner isolation still applies.
+  const foreign=links(await (await get(`/documents?before=1000.${other.document_id}`,a)).text());
+  assert(foreign.every(l=>expected.includes(l.doc)));
+  for(const route of ['/documents?owner=private','/documents?before=private','/documents?before=&before=private']) {
+    const denied=await get(route);assert.equal(denied.status,400);assert.equal((await denied.json()).error,'INVALID_DOCUMENT_LIST_REQUEST');
+  }
+  assert.equal((await mf.dispatchFetch(origin+'/documents',{method:'POST',headers:a})).status,405);
+  assert.equal((await get('/documents',{...a,Range:'bytes=0-1'})).status,400);
+  assert.equal(response.headers.get('Cache-Control'),'private, no-store');
+  assert(response.headers.get('Content-Security-Policy').includes("default-src 'none'"));
+  assert(!/<script|<iframe|<svg|<img/.test(html));assert.deepEqual(await capture(),before);
+  assert.equal((await get(firstPage[0].path,b)).status,404);assert.equal((await get(firstPage[0].path,a)).status,200);
+  // Real edit: the new explicit current pointer wins even when its timestamp is
+  // older than another version. Never infer current by MAX(created_at).
+  const doc=documents[0],read=await invoke('hwp_read',{document_id:doc.document_id,version_id:doc.version_id});
+  const target=read.blocks.find(x=>x.editable&&x.text);
+  const edited=await invoke('hwp_edit',{document_id:doc.document_id,expected_version:doc.version_id,expected_sha256:doc.sha256,
+    request_id:crypto.randomUUID(),operations:[{target_id:target.target_id,expected_old:target.text,new_text:'목록 현재 버전 시험'}]});
+  assert(edited.saved);
+  await db.prepare('UPDATE hwp_versions SET created_at=500 WHERE id=?').bind(edited.version_id).run();
+  let allLinks=[],route='/documents';do {html=await (await get(route)).text();allLinks.push(...links(html));route=next(html);}while(route);
+  assert.equal(allLinks.find(l=>l.doc===doc.document_id).version,edited.version_id);
+  // Pending deletion is excluded even while the document row still exists.
+  const hidden=documents[1],owner=(await db.prepare('SELECT owner FROM hwp_documents WHERE id=?').bind(hidden.document_id).first()).owner;
+  await db.prepare("INSERT INTO hwp_deletions (owner,document_id,request_id,expected_version,phase,version_count,created_at) VALUES (?,?,?,?,'pending',1,1)")
+    .bind(owner,hidden.document_id,crypto.randomUUID(),hidden.version_id).run();
+  html=await (await get()).text();assert(!html.includes(hidden.document_id));
+  // Malformed metadata must never become an HTML href or expose an arbitrary row.
+  const corrupt=documents.find(d=>d.document_id!==hidden.document_id && d.document_id!==doc.document_id && firstPage.some(l=>l.doc===d.document_id));
+  await db.prepare('UPDATE hwp_versions SET byte_size=-1 WHERE id=?').bind(corrupt.version_id).run();
+  const refused=await get();assert.equal(refused.status,400);assert.equal((await refused.json()).error,'BLOB_MISSING_OR_CORRUPT');
+  await db.prepare('UPDATE hwp_versions SET byte_size=? WHERE id=?').bind(bytes.length,corrupt.version_id).run();
+  await mf.setOptions(options());db=await mf.getD1Database('DB');bucket=await mf.getR2Bucket('BUCKET');
+  const afterRestart=await get();assert.equal(afterRestart.status,200);assert(!links(await afterRestart.text()).some(l=>l.doc===hidden.document_id));
+  assert.equal(outbound,0);
+  console.log(JSON.stringify({document_list_contract:'passed',actual_workerd_d1_r2_wasm:true,identity_is_mock_not_oauth:true,
+    owner_scope:true,tied_timestamp_pagination_no_gaps:true,explicit_current_version:true,pending_deletion_excluded:true,
+    metadata_corruption_refused:true,read_only_capture_unchanged:true,restart_verified:true,layout_verified:false}));
+}finally{await mf.dispose();}

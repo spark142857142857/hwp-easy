@@ -9,6 +9,7 @@ import { uploadStatus } from './upload-status.mjs';
 import { documentViewerResponse, viewerMatch } from './document-viewer.mjs';
 import { storedSyntheticResponse } from './stored-synthetic.mjs';
 import { browserUploadResponse, UPLOAD_PAGE, UPLOAD_SCRIPT } from './browser-upload.mjs';
+import { documentListResponse } from './document-list.mjs';
 import { documentOutputResource, MAX_EMBEDDED_HWP_BYTES } from './document-output.mjs';
 import { documentChunkResource, createHwpChunkCollector, MAX_HWP_CHUNK_BYTES, MAX_CHUNKED_HWP_BYTES } from './document-chunks.mjs';
 import { largeSyntheticFixture } from './large-synthetic.mjs';
@@ -306,6 +307,7 @@ export function createHostApp(env, engine, HwpDocument, fetcher = fetch) {
     catch { return jsonResponse({ error: 'AUTHENTICATION_REQUIRED' }, 401); }
     try {
       const url = new URL(request.url);
+      if (url.pathname === '/documents') return await documentListResponse(request, owner, store);
       if ([UPLOAD_PAGE, UPLOAD_SCRIPT].includes(url.pathname)) return browserUploadResponse(request, uploadsEnabled());
       if (url.pathname === '/diagnostics/stored-document') return await storedSyntheticResponse(request, owner, service, HwpDocument, origin());
       if (url.pathname === '/documents/import') {

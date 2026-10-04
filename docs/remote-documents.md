@@ -87,6 +87,14 @@
 
 ## 입력과 출력
 
+### 브라우저에서 저장 문서 다시 열기
+
+인증된 `GET /documents`는 같은 사용자의 저장 문서를 최대 20개씩 표시한다. 업로드·보기 화면의 **내 문서** 링크로 이동한다. 문서 내용·파일 이름·blob key·SHA-256을 조회하거나 표시하지 않고, D1의 현재 버전 포인터에 연결된 저장 시각·크기·revision만 사용한다. 삭제 영수증이 있는 문서는 완료 여부와 관계없이 제외한다. 보기 링크는 조회 당시의 명시적 현재 버전에 고정하며, 버전 시간의 최댓값으로 현재를 추정하지 않는다.
+
+마지막 저장 시각 내림차순과 문서 ID 내림차순으로 정렬하며, `before=<저장시각>.<문서 UUID>`의 엄격한 단일 위치 인수만 받는다. 이 값은 인증 토큰이 아니며 위치를 변경해도 서버에서 인증한 owner 필터를 유지한다. 한 번에 21개 metadata row만 읽어 다음 페이지 여부를 판단한다. 같은 시각의 22개 합성 문서에서 누락·중복 없는 두 페이지를 검사했다. 동시 수정으로 순서가 바뀌는 동안 전체 목록을 하나의 불변 snapshot으로 보장하지는 않는다. 최근 상태는 첫 목록을 다시 열어 확인한다.
+
+GET 목록은 문서 생성·수정·삭제, R2 읽기와 엔진 실행을 하지 않는다. 비GET은 405, 익명·불완전한 신원은 401이며, Range·body·추가/중복/잘못된 위치 인수는 거부한다. private/no-store와 수동 보기 화면의 CSP를 유지하고 script·외부 자원을 추가하지 않는다. 실제 로컬 workerd/D1/R2/WASM에서 모의 두 owner의 같은 이메일 격리, 타인 버전 보기 거부, 요청 전후 저장 metadata·blob 불변, 명시적 현재 버전·삭제 진행 제외·손상 metadata 거부·재시작을 검사한다. 실제 두 OAuth 사용자 격리와 일반 개인 문서·시각 배치 인증은 별도다.
+
 `hwp_import`는 공식 OpenAI 플러그인의 `openai/fileParams` 계약을 사용한다. `file`에는 필수 `download_url`, `file_id`와 선택 `mime_type`, `file_name`을 선언한다. 이 선언만으로 Codex의 로컬 경로나 클라우드 첨부가 자동 전달되는 것은 아니다. [OpenAI 플러그인 도구 참조](https://developers.openai.com/plugins/reference)
 
 업로드가 꺼진 MCP `hwp_import`는 계속 `isError: true`와 첫 text block의 `DOCUMENT_UPLOADS_NOT_ENABLED`로 실패한다. 안전한 descriptor라면 추가 text block과 기존 출력 schema에 맞는 `structuredContent`로 공개 HTTPS origin만 알려준다. 파일명·ID·임시 URL 경로·query·MIME은 반환하지 않고 네트워크·바이트 수신·저장도 하지 않는다. 관찰된 origin은 허가 근거가 아니다. 잘못되거나 안전하지 않은 descriptor는 추가 진단 없이 기존 게이트 오류를 유지한다. 입력 schema, 업로드 플래그와 일반 HTTP import 동작은 바꾸지 않았다.

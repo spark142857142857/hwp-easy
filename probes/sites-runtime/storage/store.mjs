@@ -216,6 +216,31 @@ export function createVersionStore(db, bucket) {
       || !rows.some((row) => row.version_id === rows[0].current_version)) fail('BLOB_MISSING_OR_CORRUPT');
     return rows;
   }
+  async function listDocuments({ owner, before }) {
+    ownerKey(owner);
+    if (before !== undefined && (!before || typeof before !== 'object'
+      || Object.keys(before).sort().join(',') !== 'document_id,saved_at'
+      || typeof before.document_id !== 'string' || !uuidPattern.test(before.document_id) || !Number.isSafeInteger(before.saved_at)
+      || before.saved_at < 0 || before.saved_at > 8640000000000000)) fail('INVALID_DOCUMENT_LIST_REQUEST');
+    // Metadata only: no HWP text, blob keys, R2 reads or engine execution.
+    // Current is an explicit document pointer, never MAX(version timestamp).
+    const rows = await all(`SELECT d.id AS document_id, d.current_version AS version_id,
+      v.created_at AS saved_at, v.byte_size, d.revision
+      FROM hwp_documents d LEFT JOIN hwp_versions v
+      ON v.owner = d.owner AND v.document_id = d.id AND v.id = d.current_version
+      WHERE d.owner = ?
+      AND NOT EXISTS (SELECT 1 FROM hwp_deletions x WHERE x.owner = d.owner AND x.document_id = d.id)
+      ${before ? 'AND (v.created_at < ? OR (v.created_at = ? AND d.id < ?))' : ''}
+      ORDER BY v.created_at DESC, d.id DESC LIMIT 21`,
+      [owner, ...(before ? [before.saved_at, before.saved_at, before.document_id] : [])]);
+    if (!Array.isArray(rows) || rows.length > 21 || rows.some((row) =>
+      !uuidPattern.test(row.document_id) || !uuidPattern.test(row.version_id)
+      || !Number.isSafeInteger(row.saved_at) || row.saved_at < 0 || row.saved_at > 8640000000000000
+      || !Number.isSafeInteger(row.byte_size) || row.byte_size < 1 || row.byte_size > MAX_BYTES
+      || !Number.isSafeInteger(row.revision) || row.revision < 1)) fail('BLOB_MISSING_OR_CORRUPT');
+    const documents = rows.slice(0, 20), last = documents.at(-1);
+    return { documents, next: rows.length > 20 ? { saved_at: last.saved_at, document_id: last.document_id } : null };
+  }
   async function restore({ owner, document_id, expected_version, source_version, request_id }) {
     ownerKey(owner); id(document_id); id(expected_version); id(source_version); id(request_id);
     const intent = await fingerprint(['restore', source_version]);
@@ -250,6 +275,6 @@ export function createVersionStore(db, bucket) {
     return { synthetic_blobs_removed: count, cleanup_complete: true };
   }
   const deletion = createDeletionStore({ db, bucket, statement, first, all, fail, ownerKey, id });
-  return Object.freeze({ create, prepareCreate, read, replace, history, restore, remove: deletion.remove, purgeSyntheticOwner,
+  return Object.freeze({ create, prepareCreate, read, replace, history, listDocuments, restore, remove: deletion.remove, purgeSyntheticOwner,
     limits: Object.freeze({ max_bytes: MAX_BYTES, max_versions_per_document: MAX_VERSIONS }) });
 }

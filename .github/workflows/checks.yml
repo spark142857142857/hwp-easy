@@ -104,3 +104,5 @@ jobs:
         run: node scripts/check-document-viewer.mjs
       - name: Verify browser upload gate, compiled client and lost acknowledgement retry
         run: node scripts/check-browser-upload.mjs
+      - name: Verify stored document listing, owner isolation and bounded pagination
+        run: node scripts/check-document-list.mjs

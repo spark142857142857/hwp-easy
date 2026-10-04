@@ -256,7 +256,7 @@ export default {
     if (path.startsWith('/diagnostics/') && path !== '/diagnostics/stored-document') {
       return syntheticDownloadResponse(request, () => syntheticDownloadBytes(HwpDocument));
     }
-    if (path.startsWith('/documents/') || path === '/diagnostics/stored-document') {
+    if (path === '/documents' || path.startsWith('/documents/') || path === '/diagnostics/stored-document') {
       try { return await createHostApp(env, createDocumentEngine(HwpDocument), HwpDocument).http(request); }
       catch { return response({ error: 'DOCUMENT_SERVICE_UNAVAILABLE' }, 503); }
     }
