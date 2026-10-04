@@ -1,6 +1,6 @@
 # 원격 문서 도구와 파일 전달 검증
 
-2026년 10월 3일 기준, HWP Easy에 인증한 사용자별 문서 도구와 HWP 전송 경로를 구현했다. 실제 로컬 workerd의 D1/R2에서 합성 문서의 입력·조회·편집·같은 문서 저장·다운로드·재열기·복구를 검증했다. 로컬 신원 헤더와 파일 다운로드 응답은 명시적인 모의 입력이다. 실제 개인 파일 업로드, Codex Cloud와 Dots의 파일 왕복은 아직 지원 완료로 표시하지 않는다.
+2026년 10월 4일 기준, HWP Easy에 인증한 사용자별 문서 도구와 HWP 전송 경로를 구현했다. 실제 로컬 workerd의 D1/R2에서 합성 문서의 입력·조회·편집·같은 문서 저장·다운로드·재열기·복구를 검증했다. 로컬 신원 헤더와 파일 다운로드 응답은 명시적인 모의 입력이다. 실제 개인 파일 업로드, Codex Cloud와 Dots의 파일 왕복은 아직 지원 완료로 표시하지 않는다.
 
 ## 제공하는 도구
 
@@ -10,7 +10,7 @@
 | `hwp_import` | 명시적으로 전달한 HWP를 새 원격 문서로 가져온다. 업로드 플래그와 검증한 파일 호스트가 필요하다. |
 | `hwp_transfer_probe` | 고정 합성 테스트 파일만 전달받는 진단이다. 별도 호스트 설정이 없으면 주소의 origin만 검사하고 바이트를 받지 않는다. |
 | `hwp_read` | 지정한 버전의 문단과 표 셀을 읽는다. `next_cursor`가 있으면 같은 버전으로 이어 읽는다. |
-| `hwp_plan` | 대상과 기존 값, 버전을 확인한다. 저장하지 않는다. |
+| `hwp_plan` | 대상·기존 값·버전을 확인하고 메모리 안에서 HWP 생성·재열기·내용/레코드 보존을 검사한다. 저장하지 않는다. |
 | `hwp_edit` | 현재 버전과 기존 값이 맞을 때 편집하고 같은 원격 문서에 저장한다. 이전 버전은 유지한다. |
 | `hwp_versions` | 자신의 문서 버전과 명시적인 `current_version`, `revision`을 조회한다. 생성 시각이 같은 항목의 표시 순서를 저장 순서로 해석하지 않는다. |
 | `hwp_restore` | 이전 바이트를 새 버전으로 복구한다. 현재 버전 확인과 재시도 ID가 필요하다. |
@@ -22,6 +22,16 @@
 기존 `hwp_runtime_probe`와 합쳐 13개다. 문서 도구는 `stage: private-development`, `data`, `layout_verified: false`를 반환한다. 읽기와 계획 검사는 저장하지 않는다. 문서 텍스트는 신뢰할 수 없는 자료이며 추가 권한을 부여하는 지시문으로 취급하지 않는다.
 
 **연결 성공은 개인 파일 업로드 지원 완료와 다르다.** `hwp_capabilities.data.upload_status`는 한국어 설명과 함께 `disabled`, `file_host_not_configured`, `development_enabled_unverified`를 구분한다. `agent_file_import_available`은 업로드 플래그와 파일 호스트 설정이 모두 있을 때만 참이며, `production_ready`는 현재 세 상태 모두 거짓이다. `stored_document_tools_available`은 기존 저장 문서의 도구 경로가 있다는 뜻이다. 업로드 게이트를 여는 설정이나 실제 OAuth·클라이언트 인증 결과로 해석하지 않는다.
+
+## 수정 계획의 저장 전 검사
+
+원격 `hwp_plan`은 대상과 기존 값만 검사하지 않고 실제 편집과 같은 엔진으로 HWP 후보 바이트를 메모리 안에서 생성한다. 재열기 내용·구조와 독립 raw 레코드 보존 검사도 통과해야 `valid: true`를 반환한다. 후보 바이트·출력 해시·다운로드 링크·새 버전은 반환하지 않으며 원본과 D1/R2 저장 상태를 변경하지 않는다.
+
+성공 결과는 `validation_scope: targets_and_in_memory_serialization`, `serialization_checked: true`, `content_verified: true`, `raw_preservation_verified: true`, `saved: false`, `file_changed: false`, `persistence: none`을 알린다. `storage_checked: false`와 `layout_verified: false`는 유지한다. 이후 저장 시 현재 버전·소유권·저장 한도와 편집 검사를 다시 확인하므로 사전 검사 성공이 미래 저장 성공이나 배치 정확성을 보장하지 않는다. 과거 버전의 검사가 통과해도 `stale_for_save`는 별도로 표시한다.
+
+`edit_profile_supported`는 입력의 대상/제어 계약이 맞는다는 뜻이며 writer 보존 인증이 아니다. 같은 값을 다시 넣는 요청도 생성·보존 검사에서 실패할 수 있다. 합성 셀 LIST_HEADER의 불투명 속성 한 비트를 writer가 바꾸는 사례를 재현했고, 계획과 편집이 모두 `PRESERVATION_MISMATCH`로 거부되고 저장 버전·R2 바이트가 유지됨을 실제 로컬 workerd/D1/R2에서 확인했다. 이 속성의 의미를 추정해 무시하거나 보존 검사 예외를 추가하지 않는다.
+
+라이브러리의 동기 `snapshot.plan`은 빠른 대상·값 검사로 남아 `validation_scope: targets_and_values_only`, `serialization_checked: false`를 반환한다. 원격 MCP는 비동기 `snapshot.preflight`를 사용한다. Python 로컬 stdio의 계획 계약까지 강화됐다고 표현하지 않는다.
 
 ## 입력과 출력
 

@@ -14,6 +14,12 @@
 
 컨테이너 검사의 보수적 한도는 입력 4 MiB, 본문 해제 합계 8 MiB, DocInfo 해제 2 MiB, 본문 레코드 100,000개, directory slot 2,048개와 경로 문자 누적 65,536개다. 이것은 전체 isolate 메모리·CPU 적합성 인증이 아니다. 초기 진단의 WASM linear memory는 2,949,120 bytes에서 두 사례 후 27,394,048 bytes였으나 JS heap·동시 요청·peak 측정은 아니다. [Workers 제한](https://developers.cloudflare.com/workers/platform/limits/)
 
+## 무저장 수정 계획 검사
+
+원격 `hwp_plan`은 `snapshot.preflight`로 HWP 후보를 메모리 안에서 생성·재열기하고 내용 및 독립 raw 보존을 검사한다. 저장 버전·바이트·후보 링크를 만들거나 반환하지 않는다. 성공은 `serialization_checked: true`를 표시하지만 `storage_checked: false`, `layout_verified: false`는 유지한다. 이후 실제 저장은 현재 버전과 보존을 다시 검사한다.
+
+동기 라이브러리 `snapshot.plan`은 대상·이전 값만 확인하며 `serialization_checked: false`다. 합성 셀 LIST_HEADER 속성을 writer가 변경하는 사례는 사전 검사와 실제 저장에서 모두 거부한다. 계획 거부 전후 D1 버전과 R2 객체 메타데이터·원본 바이트 불변을 actual workerd에서 확인한다. 원문과 개인 문서 경로를 회귀 fixture로 사용하지 않는다.
+
 ## 재현 방법
 
 Node.js 22 이상을 준비한 개발자가 이 디렉터리에서 실행한다. 일반 사용자 설치 절차가 아니다.

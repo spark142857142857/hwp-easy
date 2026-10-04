@@ -198,6 +198,8 @@ export function createDocumentEngine(HwpDocument) {
     function plan(options) {
       const operations = plans(options);
       return { source_sha256: version, valid: true, operation_count: operations.length,
+        validation_scope: 'targets_and_values_only', serialization_checked: false,
+        storage_checked: false,
         file_changed: false, persistence: 'none', layout_verified: false };
     }
     async function edit(options) {
@@ -221,6 +223,17 @@ export function createDocumentEngine(HwpDocument) {
         raw_preservation_scope: preservation.scope, layout_verified: false,
         saved: false, persistence: 'none' };
     }
+    async function preflight(options) {
+      const prepared = plan(options);
+      // A valid target is not proof that the writer preserves this document.
+      // Run the SAME edit/reopen/raw guard as saving, but discard candidate bytes.
+      // Never publish an output hash, link, receipt, or stored version here.
+      const candidate = await edit(options);
+      return { ...prepared, validation_scope: 'targets_and_in_memory_serialization',
+        serialization_checked: true, content_verified: candidate.content_verified,
+        raw_preservation_verified: candidate.raw_preservation_verified,
+        raw_preservation_scope: candidate.raw_preservation_scope, saved: false };
+    }
     function preview(options) {
       object(options, ['expected_sha256', 'page']); checkVersion(options.expected_sha256);
       const result = quietEngine(() => {
@@ -230,7 +243,7 @@ export function createDocumentEngine(HwpDocument) {
       });
       return { ...result, source_sha256: version };
     }
-    return Object.freeze({ source_sha256: version, read, plan, edit, preview });
+    return Object.freeze({ source_sha256: version, read, plan, preflight, edit, preview });
   }
   return Object.freeze({ open, limits });
 }

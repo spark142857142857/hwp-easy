@@ -78,7 +78,7 @@ export function createHostApp(env, engine, HwpDocument, fetcher = fetch) {
     if (name === 'hwp_read') return { ...snapshot.read({ expected_sha256: metadata.sha256,
       ...(args.cursor ? { cursor: args.cursor } : {}), ...(args.max_chars ? { max_chars: args.max_chars } : {}),
       ...(args.max_blocks ? { max_blocks: args.max_blocks } : {}) }), storage: metadata };
-    if (name === 'hwp_plan') return { ...snapshot.plan({ expected_sha256: args.expected_sha256, operations: args.operations }),
+    if (name === 'hwp_plan') return { ...await snapshot.preflight({ expected_sha256: args.expected_sha256, operations: args.operations }),
       storage: metadata, stale_for_save: metadata.version_id !== metadata.current_version };
     const base = `${origin()}/documents/${args.document_id}/versions/${args.version_id}`;
     if (name === 'hwp_download') return { ...metadata, download_url: `${base}.hwp`, mime_type: 'application/x-hwp',

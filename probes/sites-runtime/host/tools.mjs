@@ -22,7 +22,7 @@ export const documentTools = [
     ...version, max_chars: { type: 'integer', minimum: 1, maximum: 64000 }, max_blocks: { type: 'integer', minimum: 1, maximum: 128 },
     cursor: object({ sha256: hash, block_index: { type: 'integer', minimum: 0 }, offset: { type: 'integer', minimum: 0 } }),
   }, ['document_id', 'version_id']),
-  tool('hwp_plan', 'Validate whole old values and version-bound edit targets without writing any HWP.', { ...version, ...edits }),
+  tool('hwp_plan', 'Validate version-bound targets, serialize and reopen in memory, and check content/raw preservation. Does not save any HWP or version; a later save still checks the current version.', { ...version, ...edits }),
   tool('hwp_edit', 'Apply validated edits and save the SAME remote document. Keeps earlier versions. Requires expected current version and exact-request retry ID; does not update the PC original.', {
     document_id: uuid, expected_version: uuid, request_id: uuid, ...edits,
   }, undefined, true, true),

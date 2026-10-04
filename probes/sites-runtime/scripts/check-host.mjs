@@ -12,7 +12,7 @@ import { createHostApp } from '../host/app.mjs';
 import { authenticatedOwner, boundedBytes, fetchInputFile } from '../host/transfer.mjs';
 import { applyTestMigrations } from './migrations.mjs';
 import { withCheckedDeflateTrailers } from '../tests/trailer-fixtures.mjs';
-import { withPageNumber } from '../tests/page-number-fixtures.mjs';
+import { withPageNumber, rewriteSyntheticBody } from '../tests/page-number-fixtures.mjs';
 const require = createRequire(import.meta.url);
 initSync({ module: fs.readFileSync(new URL('./rhwp_bg.wasm', pathToFileURL(require.resolve('@rhwp/core')))) });
 const origin = 'https://probe.invalid';
@@ -28,6 +28,12 @@ const other = { 'oai-authenticated-user-id': 'synthetic-b', 'oai-authenticated-u
 const checks = [];
 try {
   const db = await mf.getD1Database('DB'), bucket = await mf.getR2Bucket('BUCKET');
+  const blobState = async () => {
+    const page = await bucket.list();
+    return { truncated: page.truncated, objects: page.objects.map((item) => ({
+      key: item.key, size: item.size, etag: item.etag, uploaded: Number(item.uploaded),
+    })) };
+  };
   await applyTestMigrations(db);
   const api = createEngineApi(HwpDocument), engine = createDocumentEngine(HwpDocument);
   const bytes = syntheticFixture(HwpDocument, api.exportChecked, { paragraphs: ['파일 왕복 합성 문서', '파일 왕복 합성 문서'] });
@@ -78,7 +84,20 @@ try {
     cell = before.blocks.find((b) => b.kind === 'cell' && b.editable && b.text);
   const edits = { expected_sha256: created.sha256, operations: [body, cell].map((b, i) => ({
     target_id: b.target_id, expected_old: b.text, new_text: `왕복 수정 ${i} 😀` })) };
-  assert.equal((await call('hwp_plan', { ...args, ...edits })).file_changed, false);
+  const planHistory = await call('hwp_versions', { document_id: created.document_id });
+  const planBlobs = await blobState();
+  const planned = await call('hwp_plan', { ...args, ...edits });
+  assert.equal(planned.file_changed, false);
+  assert.equal(planned.serialization_checked, true);
+  assert.equal(planned.content_verified, true);
+  assert.equal(planned.raw_preservation_verified, true);
+  assert.equal(planned.storage_checked, false);
+  assert.equal(planned.saved, false);
+  assert.equal(Object.hasOwn(planned, 'bytes'), false);
+  assert.equal(Object.hasOwn(planned, 'output_sha256'), false);
+  assert.deepEqual(await call('hwp_versions', { document_id: created.document_id }), planHistory);
+  assert.deepEqual(await blobState(), planBlobs);
+  checks.push('plan_serializes_and_verifies_without_d1_r2_mutation');
   const editArgs = { document_id: created.document_id, expected_version: created.version_id,
     request_id: crypto.randomUUID(), ...edits };
   const edited = await call('hwp_edit', editArgs);
@@ -247,6 +266,29 @@ try {
   assert.equal(pageOriginal.storage.sha256, pageDoc.sha256);
   await denied('hwp_read', pageArgs, 'DOCUMENT_OR_VERSION_NOT_FOUND', other);
   checks.push('pgnp_actual_workerd_d1_r2_body_cell_save_download_reopen', 'pgnp_previous_version_unchanged_and_mock_other_user_denied');
+  const normalizedBytes = rewriteSyntheticBody(syntheticFixture(HwpDocument, api.exportChecked,
+    { paragraphs: ['합성 검증', '보존'] }), (records) => records.map((record) => {
+    if (record.tag !== 72 || record.level !== 2) return record;
+    const payload = record.payload.slice(); payload[7] ^= 4;
+    return { ...record, payload };
+  }));
+  const normalizedDoc = await (await upload({}, headers, normalizedBytes)).json();
+  const normalizedArgs = { document_id: normalizedDoc.document_id, version_id: normalizedDoc.version_id };
+  const normalizedRead = await call('hwp_read', normalizedArgs);
+  const normalizedTarget = normalizedRead.blocks.find((b) => b.editable && b.kind === 'cell' && b.text);
+  const normalizedEdits = { expected_sha256: normalizedDoc.sha256, operations: [{
+    target_id: normalizedTarget.target_id, expected_old: normalizedTarget.text, new_text: '합성 새 문구',
+  }] };
+  const normalizedHistory = await call('hwp_versions', { document_id: normalizedDoc.document_id });
+  const normalizedBlobs = await blobState();
+  await denied('hwp_plan', { ...normalizedArgs, ...normalizedEdits }, 'PRESERVATION_MISMATCH');
+  await denied('hwp_edit', { document_id: normalizedDoc.document_id, expected_version: normalizedDoc.version_id,
+    request_id: crypto.randomUUID(), ...normalizedEdits }, 'PRESERVATION_MISMATCH');
+  assert.deepEqual(await call('hwp_versions', { document_id: normalizedDoc.document_id }), normalizedHistory);
+  assert.deepEqual(await blobState(), normalizedBlobs);
+  const normalizedLink = await call('hwp_download', normalizedArgs);
+  assert.deepEqual(new Uint8Array(await (await mf.dispatchFetch(normalizedLink.download_url, { headers })).arrayBuffer()), normalizedBytes);
+  checks.push('writer_normalized_cell_attribute_rejected_by_plan_and_edit_without_storage_change');
   console.log(JSON.stringify({ authenticated_host_contract: 'passed', checks,
     real_d1_r2_and_hwp: true, local_identity_headers_are_mocks_not_oauth: true,
     fileparam_network_is_mocked: true, native_client_attachment_verified: false, workflow }));
