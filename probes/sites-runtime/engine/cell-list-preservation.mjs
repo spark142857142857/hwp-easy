@@ -1,6 +1,6 @@
 /** Pinned @rhwp/core 0.8.6 zero -> 0x0400 cell LIST_HEADER fallback only. */
 import { deflateRaw } from 'pako';
-import { readHwp, replaceAllocatedBodyStreams } from '../guard/container.mjs';
+import { readCfb, readHwp, replaceAllocatedBodyStreams } from '../guard/container.mjs';
 import { GuardError, parseRecords } from '../guard/records.mjs';
 
 const fail = () => { throw new GuardError('PRESERVATION_MISMATCH'); };
@@ -17,7 +17,7 @@ const equal = (a, b) => a.length === b.length && a.every((value, index) => value
  */
 export function preserveZeroCellListWords(before, candidate, inspection) {
   const after = readHwp(candidate), replacements = new Map();
-  let restored = 0;
+  let restored = 0, packedStreams;
   for (const section of before.profile.sections) {
     const name = `BodyText/Section${section.section}`, original = before.streams.get(name), saved = after.streams.get(name);
     if (!saved) fail();
@@ -45,7 +45,19 @@ export function preserveZeroCellListWords(before, candidate, inspection) {
     if (cellIndex !== cells.length) fail();
     if (patched) {
       const compressed = view(before.streams.get('FileHeader')).getUint32(36, true) & 1;
-      replacements.set(name, compressed ? deflateRaw(patched) : patched);
+      let packed = compressed ? deflateRaw(patched) : patched;
+      if (compressed) {
+        packedStreams ??= readCfb(candidate);
+        const allocated = packedStreams.get(name);
+        const unit = allocated.length < 4096 ? 64 : 2 ** view(candidate).getUint16(30, true);
+        const fits = (bytes) => (bytes.length >= 4096) === (allocated.length >= 4096)
+          && Math.ceil(bytes.length / unit) === Math.ceil(allocated.length / unit);
+        // One bounded alternate compression profile, NOT allocation changes or
+        // padding that could hide data. The final writer and raw guard remain
+        // authoritative; if level 9 also cannot fit, replacement rejects it.
+        if (!fits(packed)) packed = deflateRaw(patched, { level: 9 });
+      }
+      replacements.set(name, packed);
     }
   }
   return { bytes: replacements.size ? replaceAllocatedBodyStreams(candidate, replacements) : candidate,

@@ -6,11 +6,12 @@ import { pathToFileURL } from 'node:url';
 import { HwpDocument, initSync } from '@rhwp/core';
 import { createEngineApi } from '../../../src/one_hwp/rhwp_api.mjs';
 import { syntheticFixture } from '../../../src/one_hwp/synthetic_fixtures.mjs';
-import { readHwp } from '../guard/container.mjs';
+import { readCfb, readHwp, replaceAllocatedBodyStreams } from '../guard/container.mjs';
 import { verifyPreservation } from '../guard/preservation.mjs';
 import { preserveZeroCellListWords } from '../engine/cell-list-preservation.mjs';
 import { createDocumentEngine } from '../engine/document.mjs';
 import { rewriteSyntheticBody, withPageNumber } from './page-number-fixtures.mjs';
+import { compressionFallbackFixture, compressionRejectedFixture } from './cell-list-fixtures.mjs';
 
 const require = createRequire(import.meta.url);
 initSync({ module: fs.readFileSync(new URL('./rhwp_bg.wasm', pathToFileURL(require.resolve('@rhwp/core')))) });
@@ -75,4 +76,40 @@ test('cell-word preservation composes with the opaque page-number profile and tw
   assert.deepEqual(after.preserved_controls, before.preserved_controls);
   for (const [i, b] of targets.entries()) assert.equal(after.blocks.find((z) => z.id === b.id).text, operations[i].new_text);
   assert.deepEqual(input, original);
+});
+
+test('one alternate compression profile preserves the same allocation without relaxing raw checks', async () => {
+  const f = compressionFallbackFixture(HwpDocument, api), original = f.bytes.slice(), candidate = f.candidate.slice();
+  const name = 'BodyText/Section0';
+  assert.notEqual(Math.ceil(f.preferred.length / 64), Math.ceil(f.allocated_packed_bytes / 64));
+  assert.equal(Math.ceil(f.fallback.length / 64), Math.ceil(f.allocated_packed_bytes / 64));
+  assert.throws(() => replaceAllocatedBodyStreams(f.candidate, new Map([[name, f.preferred]])),
+    /BODY_REPAIR_ALLOCATION_UNSUPPORTED/);
+  const repaired = preserveZeroCellListWords(readHwp(f.bytes), f.candidate, inspect(f.bytes));
+  assert.equal(repaired.restored_cell_list_words, 16);
+  assert.equal(repaired.bytes.length, f.candidate.length);
+  assert.deepEqual(readCfb(repaired.bytes).get(name), f.fallback);
+  assert.equal(verifyPreservation(readHwp(f.bytes).streams, readHwp(repaired.bytes).streams, []).verified, true);
+  assert.deepEqual(inspect(repaired.bytes), inspect(f.candidate));
+  const snapshot = await createDocumentEngine(HwpDocument).open(f.bytes);
+  const target = snapshot.read({ expected_sha256: snapshot.source_sha256 }).blocks.find((b) => b.editable && b.text);
+  const result = await snapshot.preflight({ expected_sha256: snapshot.source_sha256,
+    operations: [{ target_id: target.target_id, expected_old: target.text, new_text: target.text }] });
+  assert.equal(result.raw_preservation_verified, true); assert.equal(result.restored_cell_list_words, 16);
+  assert.deepEqual(f.bytes, original); assert.deepEqual(f.candidate, candidate);
+});
+
+test('repair still fails if both compression profiles miss the existing allocation', async () => {
+  const f = compressionRejectedFixture(HwpDocument, api), original = f.bytes.slice(), candidate = f.candidate.slice();
+  for (const packed of [f.preferred, f.fallback]) assert.notEqual(Math.ceil(packed.length / 64),
+    Math.ceil(f.allocated_packed_bytes / 64));
+  assert.throws(() => preserveZeroCellListWords(readHwp(f.bytes), f.candidate, inspect(f.bytes)),
+    /BODY_REPAIR_ALLOCATION_UNSUPPORTED/);
+  const snapshot = await createDocumentEngine(HwpDocument).open(f.bytes);
+  const target = snapshot.read({ expected_sha256: snapshot.source_sha256 }).blocks.find((b) => b.editable && b.text);
+  const request = { expected_sha256: snapshot.source_sha256,
+    operations: [{ target_id: target.target_id, expected_old: target.text, new_text: target.text }] };
+  await assert.rejects(snapshot.preflight(request), /BODY_REPAIR_ALLOCATION_UNSUPPORTED/);
+  await assert.rejects(snapshot.edit(request), /BODY_REPAIR_ALLOCATION_UNSUPPORTED/);
+  assert.deepEqual(f.bytes, original); assert.deepEqual(f.candidate, candidate);
 });

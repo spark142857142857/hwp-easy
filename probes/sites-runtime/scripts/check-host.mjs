@@ -13,7 +13,8 @@ import { authenticatedOwner, boundedBytes, fetchInputFile } from '../host/transf
 import { applyTestMigrations } from './migrations.mjs';
 import { withCheckedDeflateTrailers } from '../tests/trailer-fixtures.mjs';
 import { withPageNumber, rewriteSyntheticBody } from '../tests/page-number-fixtures.mjs';
-import { readHwp } from '../guard/container.mjs';
+import { compressionFallbackFixture, compressionRejectedFixture } from '../tests/cell-list-fixtures.mjs';
+import { readCfb, readHwp } from '../guard/container.mjs';
 import { parseRecords } from '../guard/records.mjs';
 const require = createRequire(import.meta.url);
 initSync({ module: fs.readFileSync(new URL('./rhwp_bg.wasm', pathToFileURL(require.resolve('@rhwp/core')))) });
@@ -389,6 +390,55 @@ try {
   }
   checks.push('raw_text_and_style_restrictions_visible_in_actual_worker_mcp',
     'restricted_plan_save_rejected_before_d1_r2_mutation', 'other_cell_edit_keeps_nonvisible_style_refs');
+  const compressionBytes = compressionFallbackFixture(HwpDocument, api).bytes;
+  const compressionUpload = await upload({}, headers, compressionBytes); assert.equal(compressionUpload.status, 200);
+  const compressionDoc = await compressionUpload.json();
+  const compressionArgs = { document_id: compressionDoc.document_id, version_id: compressionDoc.version_id };
+  const compressionRead = await call('hwp_read', compressionArgs);
+  const compressionTarget = compressionRead.blocks.find((b) => b.editable && b.text);
+  const compressionEdits = { expected_sha256: compressionDoc.sha256, operations: [{
+    target_id: compressionTarget.target_id, expected_old: compressionTarget.text, new_text: compressionTarget.text,
+  }] };
+  const compressionHistory = await call('hwp_versions', { document_id: compressionDoc.document_id });
+  const compressionBlobs = await blobState();
+  const compressionPlan = await call('hwp_plan', { ...compressionArgs, ...compressionEdits });
+  assert.equal(compressionPlan.restored_cell_list_words, 16);
+  assert.equal(compressionPlan.raw_preservation_verified, true);
+  assert.deepEqual(await call('hwp_versions', { document_id: compressionDoc.document_id }), compressionHistory);
+  assert.deepEqual(await blobState(), compressionBlobs);
+  const compressionSaved = await call('hwp_edit', { document_id: compressionDoc.document_id,
+    expected_version: compressionDoc.version_id, request_id: crypto.randomUUID(), ...compressionEdits });
+  assert.equal(compressionSaved.raw_preservation_verified, true);
+  const compressionLink = await call('hwp_download', { document_id: compressionDoc.document_id, version_id: compressionSaved.version_id });
+  const compressionOutput = new Uint8Array(await (await mf.dispatchFetch(compressionLink.download_url, { headers })).arrayBuffer());
+  const compressionReopened = await engine.open(compressionOutput);
+  assert.equal(compressionReopened.read({ expected_sha256: compressionSaved.sha256 }).blocks
+    .find((b) => b.id === compressionTarget.id).text, compressionTarget.text);
+  assert.equal(readCfb(compressionOutput).get('BodyText/Section0').length,
+    compressionFallbackFixture(HwpDocument, api).fallback.length);
+  checks.push('alternate_compression_same_allocation_actual_worker_plan_save_download_reopen');
+  const compressionRejectedBytes = compressionRejectedFixture(HwpDocument, api).bytes;
+  const compressionRejectedUpload = await upload({}, headers, compressionRejectedBytes);
+  assert.equal(compressionRejectedUpload.status, 200);
+  const compressionRejectedDoc = await compressionRejectedUpload.json();
+  const compressionRejectedArgs = { document_id: compressionRejectedDoc.document_id, version_id: compressionRejectedDoc.version_id };
+  const compressionRejectedRead = await call('hwp_read', compressionRejectedArgs);
+  const compressionRejectedTarget = compressionRejectedRead.blocks.find((b) => b.editable && b.text);
+  const compressionRejectedEdits = { expected_sha256: compressionRejectedDoc.sha256, operations: [{
+    target_id: compressionRejectedTarget.target_id, expected_old: compressionRejectedTarget.text, new_text: compressionRejectedTarget.text,
+  }] };
+  const compressionRejectedHistory = await call('hwp_versions', { document_id: compressionRejectedDoc.document_id });
+  const compressionRejectedBlobs = await blobState();
+  await denied('hwp_plan', { ...compressionRejectedArgs, ...compressionRejectedEdits }, 'BODY_REPAIR_ALLOCATION_UNSUPPORTED');
+  await denied('hwp_edit', { document_id: compressionRejectedDoc.document_id,
+    expected_version: compressionRejectedDoc.version_id, request_id: crypto.randomUUID(), ...compressionRejectedEdits },
+  'BODY_REPAIR_ALLOCATION_UNSUPPORTED');
+  assert.deepEqual(await call('hwp_versions', { document_id: compressionRejectedDoc.document_id }), compressionRejectedHistory);
+  assert.deepEqual(await blobState(), compressionRejectedBlobs);
+  const compressionRejectedLink = await call('hwp_download', compressionRejectedArgs);
+  assert.deepEqual(new Uint8Array(await (await mf.dispatchFetch(compressionRejectedLink.download_url, { headers })).arrayBuffer()),
+    compressionRejectedBytes);
+  checks.push('both_compression_profiles_miss_allocation_no_storage_mutation');
   console.log(JSON.stringify({ authenticated_host_contract: 'passed', checks,
     real_d1_r2_and_hwp: true, local_identity_headers_are_mocks_not_oauth: true,
     fileparam_network_is_mocked: true, native_client_attachment_verified: false, workflow }));
