@@ -69,7 +69,7 @@ try {
     assert.equal(response.status, 200);
     if (suffix === '.hwp') await verifySyntheticDownload(new Uint8Array(await response.arrayBuffer()));
     if (suffix === '/pages/0.svg') { assert.equal(response.headers.get('Content-Type'), 'image/svg+xml; charset=utf-8'); assert((await response.text()).includes('<svg')); }
-    if (suffix === '/view') { assert.equal(response.headers.get('Referrer-Policy'), 'no-referrer'); const text = await response.text(); assert(text.includes('현재 저장본')); assert(text.includes('서식 정확성')); }
+    if (suffix === '/view') { assert.equal(response.headers.get('Referrer-Policy'), 'no-referrer'); const text = await response.text(); assert(text.includes('현재 저장본')); assert(text.includes('세부 배치는 미검증')); }
   }
   assert.deepEqual(await capture(), before);
   checks.push('exact_seed_retry_one_document_one_version_owner_scoped_view_hwp_svg_reads_without_mutation');
@@ -84,7 +84,9 @@ try {
   const preview = (await invoke('hwp_preview', { document_id, version_id: edited.version_id, page: 0 })).structuredContent.data;
   assert.equal(preview.viewer_url, download.viewer_url + '?page=0');
   const oldView = await mf.dispatchFetch(origin + location, { headers: a });
-  const oldHtml = await oldView.text(); assert(oldHtml.includes('이전 저장본')); assert(oldHtml.includes('다른 저장 버전 (2개)'));
+  const oldHtml = await oldView.text(); assert(oldHtml.includes('이전 저장본')); assert(oldHtml.includes('저장 버전 (2개)'));
+  assert(oldHtml.includes(`href="/documents/${document_id}/versions/${edited.version_id}/view">현재 저장본 보기`));
+  assert(oldHtml.includes('<details><summary>파일 정보</summary>'));
   const oldHwp = await mf.dispatchFetch(origin + location.replace('/view', '.hwp'), { headers: a });
   await verifySyntheticDownload(new Uint8Array(await oldHwp.arrayBuffer()));
   const currentHwp = await mf.dispatchFetch(download.download_url, { headers: a });

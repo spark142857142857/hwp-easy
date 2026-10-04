@@ -8,8 +8,8 @@ function service(preview = () => ({ page_count: 3, svg: '<svg><script>never inli
   return { calls,
     async open(args) { calls.push(['open', args]); return { metadata: { sha256 }, snapshot: { preview } }; },
     async history(args) { calls.push(['history', args]); return [
-      { version_id, sha256, byte_size: 13312, current_version: other },
-      { version_id: other, sha256, byte_size: 13312, current_version: other },
+      { version_id, sha256, byte_size: 13312, current_version: other, created_at: Date.UTC(2026, 9, 4, 1, 2, 3) },
+      { version_id: other, sha256, byte_size: 13312, current_version: other, created_at: Date.UTC(2026, 9, 4, 2, 3, 4) },
     ]; },
   };
 }
@@ -43,6 +43,26 @@ test('preview failure does not hide the immutable HWP download', async () => {
     assert(html.includes('미리보기를 만들 수 없습니다')); assert(html.includes('.hwp" download'));
     assert(!html.includes('private content')); assert(!html.includes('<img'));
   }
+});
+
+test('version selection uses explicit current metadata despite clock order or equal save times', async () => {
+  const s = service(), history = s.history.bind(s);
+  s.history = async (args) => (await history(args)).map((v) => ({ ...v, created_at: 1791075723000 }));
+  const html = await (await documentViewerResponse(url, 'user:mock', s)).text();
+  const list = html.match(/<ul class="version-history">([\s\S]*?)<\/ul>/)[1];
+  assert(list.indexOf(`/versions/${other}/view`) < list.indexOf(`/versions/${version_id}/view`));
+  assert(list.includes(`<code>${other}</code>`)); assert(list.includes(`<code>${version_id}</code>`));
+  assert(list.includes('aria-current="page">이전 저장본'));
+  assert(html.includes('현재 저장본 보기')); assert(html.includes('(한국 시간)'));
+  assert(html.includes('<details><summary>파일 정보</summary>'));
+  assert(!html.slice(0, html.indexOf('<details>')).includes(sha256));
+  // A clock moving backwards also cannot turn the selected old version into current.
+  s.history = async (args) => (await history(args)).map((v) => ({ ...v, created_at: v.version_id === other ? 0 : 1 }));
+  const currentUrl = new URL(url.toString().replace(version_id, other));
+  const currentHtml = await (await documentViewerResponse(currentUrl, 'user:mock', s)).text();
+  assert(currentHtml.includes('<p class="version-state">현재 저장본</p>'));
+  assert(!currentHtml.includes('현재 저장본 보기'));
+  assert(currentHtml.includes(`href="/documents/${document_id}/versions/${other}.hwp"`));
 });
 test('nonzero invalid preview pages are rejected instead of silently showing a different page', async () => {
   await assert.rejects(() => documentViewerResponse(new URL(url + '?page=9999'), 'user:mock',
