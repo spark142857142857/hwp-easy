@@ -106,3 +106,5 @@ jobs:
         run: node scripts/check-browser-upload.mjs
       - name: Verify stored document listing, owner isolation and bounded pagination
         run: node scripts/check-document-list.mjs
+      - name: Verify full-size upload boundaries and synthetic measured workflows
+        run: node scripts/check-performance-limits.mjs

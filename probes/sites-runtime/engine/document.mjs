@@ -11,6 +11,7 @@ import { preserveZeroCellListWords } from './cell-list-preservation.mjs';
 import { rawTargetRestrictions } from './raw-target-restrictions.mjs';
 import { emptyCellFillProfiles, projectVerifiedCellTextTransitions } from '../guard/empty-cell-fill.mjs';
 import { cellTextClearProfiles } from '../guard/empty-cell-clear.mjs';
+import { enforceRawTextBudget } from '../guard/text-budget.mjs';
 
 const fail = (code) => { throw new GuardError(code); };
 const copy = (value) => JSON.parse(JSON.stringify(value));
@@ -111,7 +112,9 @@ export function createDocumentEngine(HwpDocument) {
     // Bound before cloning or calling the WASM reader. Copy before async hashing.
     if (input.length > 4 * 1024 * 1024) fail('INPUT_LIMIT_EXCEEDED');
     const bytes = new Uint8Array(input);
-    const raw = readHwp(bytes), inspection = inspect(bytes);
+    const raw = readHwp(bytes);
+    enforceRawTextBudget(raw);
+    const inspection = inspect(bytes);
     let mapping, mappingVerified = false;
     try { mapping = mapRawTargets(raw, inspection.blocks); mappingVerified = true; }
     catch (error) {

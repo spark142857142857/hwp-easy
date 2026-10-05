@@ -10,6 +10,7 @@ export function installUploadForm({ document, fetch, crypto, location, AbortCont
     DOCUMENT_UPLOADS_NOT_ENABLED: '현재 파일 업로드가 꺼져 있습니다.',
     TRANSFER_LIMIT_EXCEEDED: '4 MiB 이하의 HWP 파일을 선택해주세요.',
     INPUT_LIMIT_EXCEEDED: '이 파일은 현재 처리 한도를 넘습니다. 다른 HWP 파일을 선택해주세요.',
+    RAW_TEXT_LIMIT_EXCEEDED: '파일 크기는 작아도 본문 길이가 현재 처리 한도를 넘습니다. 다른 HWP 파일을 선택해주세요.',
   };
   input.addEventListener('change', () => {
     if (busy) return;
