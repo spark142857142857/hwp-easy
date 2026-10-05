@@ -24,6 +24,7 @@ nav{display:flex;gap:20px;align-items:center;flex-wrap:wrap}img{display:block;wi
 .version-state{font-weight:600;margin:0 0 4px}.saved-at{color:#526075;margin:0 0 20px}.version-history{list-style:none;padding:0;margin:12px 0 0}.version-history li{padding:12px 0;border-bottom:1px solid #dde2e8}.version-history li:last-child{border-bottom:0}.version-history a{display:inline-block}.version-history time{display:block;color:#526075;font-size:14px}.viewing{font-size:14px;margin-left:12px;color:#526075}details{margin-top:20px}summary{cursor:pointer;color:#174b82;padding:8px 0}summary:focus-visible{outline:3px solid #3578c5;outline-offset:4px}
 label{display:block;font-weight:600;margin-bottom:8px}input[type=file]{display:block;max-width:100%;font:inherit}input::file-selector-button{font:inherit;color:#174b82;background:#eef2f7;border:1px solid #dde2e8;border-radius:6px;padding:10px 14px;margin-right:12px;cursor:pointer}input:focus-visible,textarea:focus-visible{outline:3px solid #3578c5;outline-offset:4px}button:disabled{background:#e2e6ec;color:#526075;cursor:default}
 textarea{display:block;box-sizing:border-box;width:100%;padding:12px;font:inherit;font-size:14px;line-height:1.6;border:1px solid #dde2e8;border-radius:6px;resize:vertical}.secondary{background:#eef2f7;color:#174b82}
+input[type=text]{box-sizing:border-box;width:100%;padding:12px;font:inherit;border:1px solid #dde2e8;border-radius:6px}
 @media(max-width:480px){body{padding:16px 10px}section,header{padding:20px 16px}h1{font-size:24px}}
 </style></head><body><main>${body}</main></body></html>`, { headers: { ...browserHeaders, 'Content-Type': 'text/html; charset=utf-8' } });
 }
@@ -40,7 +41,7 @@ export function savedTime(value) {
   if (!Number.isSafeInteger(value) || value < 0 || value > 8640000000000000) return '저장 시각 확인 불가';
   return `<time datetime="${new Date(value).toISOString()}">${escapeHtml(savedTimeFormat.format(value))} (한국 시간)</time>`;
 }
-export async function documentViewerResponse(url, owner, service, canonicalOrigin = url.origin) {
+export async function documentViewerResponse(url, owner, service, canonicalOrigin = url.origin, store) {
   const match = viewerMatch(url.pathname);
   if (!match) fail('INVALID_VIEWER_REQUEST');
   const page = viewerPageNumber(url), document_id = match[1], version_id = match[2];
@@ -68,12 +69,15 @@ export async function documentViewerResponse(url, owner, service, canonicalOrigi
 ${page > 0 ? `<a href="${base}/view?page=${page - 1}">이전 페이지</a>` : ''}
 ${page + 1 < preview.page_count && page < 9999 ? `<a href="${base}/view?page=${page + 1}">다음 페이지</a>` : ''}</nav>` : '';
   const requestText = handoffRequest(canonicalOrigin, document_id, version_id);
+  const name = store ? (await store.documentName({owner, document_id})).display_name : '';
   const response = browserPage('저장된 HWP 확인', `<header><small>HWP Easy · 비공개 개발 단계</small><h1>저장된 HWP 확인</h1>
+<p>${escapeHtml(name || `HWP 문서 · ${document_id.slice(0, 8)}`)}</p>
 <p class="version-state">${version_id === current ? '현재 저장본' : '이전 저장본을 보고 있습니다'}</p>
 <p class="saved-at">${savedTime(selected.created_at)}</p>
 <a class="primary" href="${base}.hwp" download>이 버전 HWP 다운로드</a>
 ${version_id !== current ? `<p><a href="/documents/${document_id}/versions/${current}/view">현재 저장본 보기</a></p>` : ''}
 <p><a href="/documents">내 문서</a> · <a href="/documents/upload">다른 HWP 업로드</a></p>
+<p><a href="/documents/${document_id}/name">문서 이름 설정</a></p>
 <details><summary>저장 버전 (${versions.length}개)</summary><ul class="version-history">${rows}</ul></details>
 <details><summary>파일 정보</summary><dl><dt>문서 ID</dt><dd><code>${document_id}</code></dd><dt>버전 ID</dt><dd><code>${version_id}</code></dd>
 <dt>파일 크기</dt><dd>${selected.byte_size} 바이트</dd><dt>SHA-256</dt><dd><code>${escapeHtml(metadata.sha256)}</code></dd></dl>

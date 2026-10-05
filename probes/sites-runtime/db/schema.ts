@@ -4,6 +4,8 @@ export const documents = sqliteTable('hwp_documents', {
   owner: text('owner').notNull(), id: text('id').notNull(),
   currentVersion: text('current_version').notNull(),
   revision: integer('revision').notNull(), createdAt: integer('created_at').notNull(),
+  displayName: text('display_name').notNull().default(''),
+  nameRevision: integer('name_revision').notNull().default(0),
 }, (t) => [primaryKey({ columns: [t.owner, t.id] })]);
 
 export const versions = sqliteTable('hwp_versions', {

@@ -3,6 +3,7 @@
  * HWP validation belongs to the service layer BEFORE mutation.
  */
 import { createDeletionStore } from './deletion.mjs';
+import { createDocumentNames, validDocumentName } from './document-names.mjs';
 export class StorageError extends Error {
   constructor(code) { super(code); this.name = 'StorageError'; this.code = code; }
 }
@@ -249,7 +250,7 @@ export function createVersionStore(db, bucket) {
     // Metadata only: no HWP text, blob keys, R2 reads or engine execution.
     // Current is an explicit document pointer, never MAX(version timestamp).
     const rows = await all(`SELECT d.id AS document_id, d.current_version AS version_id,
-      v.created_at AS saved_at, v.byte_size, d.revision
+      v.created_at AS saved_at, v.byte_size, d.revision, d.display_name
       FROM hwp_documents d LEFT JOIN hwp_versions v
       ON v.owner = d.owner AND v.document_id = d.id AND v.id = d.current_version
       WHERE d.owner = ?
@@ -261,7 +262,8 @@ export function createVersionStore(db, bucket) {
       !uuidPattern.test(row.document_id) || !uuidPattern.test(row.version_id)
       || !Number.isSafeInteger(row.saved_at) || row.saved_at < 0 || row.saved_at > 8640000000000000
       || !Number.isSafeInteger(row.byte_size) || row.byte_size < 1 || row.byte_size > MAX_BYTES
-      || !Number.isSafeInteger(row.revision) || row.revision < 1)) fail('BLOB_MISSING_OR_CORRUPT');
+      || !Number.isSafeInteger(row.revision) || row.revision < 1
+      || !validDocumentName(row.display_name))) fail('BLOB_MISSING_OR_CORRUPT');
     const documents = rows.slice(0, 20), last = documents.at(-1);
     return { documents, next: rows.length > 20 ? { saved_at: last.saved_at, document_id: last.document_id } : null };
   }
@@ -299,6 +301,7 @@ export function createVersionStore(db, bucket) {
     return { synthetic_blobs_removed: count, cleanup_complete: true };
   }
   const deletion = createDeletionStore({ db, bucket, statement, first, all, fail, ownerKey, id });
-  return Object.freeze({ create, prepareCreate, read, replace, history, listDocuments, restore, remove: deletion.remove, purgeSyntheticOwner,
+  const names = createDocumentNames({ first, all, fail, ownerKey, id });
+  return Object.freeze({ create, prepareCreate, read, replace, history, listDocuments, ...names, restore, remove: deletion.remove, purgeSyntheticOwner,
     limits: Object.freeze({ max_bytes: MAX_BYTES, max_versions_per_document: MAX_VERSIONS }) });
 }

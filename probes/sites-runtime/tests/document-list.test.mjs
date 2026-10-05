@@ -35,3 +35,11 @@ test('empty lists offer upload and non-GET requests never query storage', async 
   const denied = await documentListResponse(new Request(origin + '/documents', {method:'POST'}), 'owner', store);
   assert.equal(denied.status,405); assert.equal(queries,1);
 });
+
+test('explicit names replace the ID label and remain escaped passive text', async () => {
+  const response=await documentListResponse(new Request(origin+'/documents'),'owner',{
+    listDocuments(){return {documents:[{document_id,version_id,saved_at:0,byte_size:13312,revision:1,display_name:'<script>이름</script> & 😀'}],next:null};}
+  });
+  const html=await response.text();assert(html.includes('&lt;script&gt;이름&lt;/script&gt; &amp; 😀'));
+  assert(!html.includes('<script>'));assert(!html.includes(`HWP 문서 · ${document_id.slice(0,8)}</a>`));
+});

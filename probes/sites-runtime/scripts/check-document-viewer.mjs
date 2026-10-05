@@ -90,6 +90,13 @@ try {
     request_id: crypto.randomUUID(), operations: [{ target_id: target.target_id, expected_old: target.text, new_text: '저장 버전 연결 시험 😀' }] })).structuredContent.data;
   assert(edited.saved); assert.notEqual(edited.version_id, version_id);
   const download = (await invoke('hwp_download', { document_id, version_id: edited.version_id })).structuredContent.data;
+  for (const version of [version_id, edited.version_id]) {
+    const file = await mf.dispatchFetch(`${origin}/documents/${document_id}/versions/${version}.hwp`, {headers:a});
+    assert.equal(file.status,200);
+    assert.equal(file.headers.get('Content-Disposition'),`attachment; filename="hwp-${document_id.slice(0,8)}-${version}.hwp"`);
+    assert.equal(file.headers.get('Content-Type'),'application/x-hwp');
+  }
+  checks.push('download_names_distinguish_immutable_versions_without_user_text');
   assert.equal(download.viewer_url, `${origin}/documents/${document_id}/versions/${edited.version_id}/view`);
   const preview = (await invoke('hwp_preview', { document_id, version_id: edited.version_id, page: 0 })).structuredContent.data;
   assert.equal(preview.viewer_url, download.viewer_url + '?page=0');
