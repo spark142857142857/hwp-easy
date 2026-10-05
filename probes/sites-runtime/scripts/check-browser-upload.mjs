@@ -67,13 +67,16 @@ try {
   assert.deepEqual(client.navigations, [viewer]);
   assert.equal((await mf.dispatchFetch(origin + viewer, {headers:other})).status, 404);
   const viewed = await mf.dispatchFetch(origin + viewer, {headers:owner}); assert.equal(viewed.status, 200);
-  assert(!viewed.headers.get('Content-Security-Policy').includes('script-src'));
+  assert(viewed.headers.get('Content-Security-Policy').includes("script-src 'self'; connect-src 'none'"));
+  const viewerHtml = await viewed.text();
+  assert(viewerHtml.includes('<script src="/documents/handoff-client.js" defer></script>'));
+  assert(!viewerHtml.includes('upload-client.js'));
   const download = await mf.dispatchFetch(origin + viewer.replace('/view', '.hwp'), {headers:owner});
   assert.deepEqual(new Uint8Array(await download.arrayBuffer()), bytes);
   const bucket = await mf.getR2Bucket('BUCKET'); assert.equal((await bucket.list()).objects.length, 1);
   assert.equal(await count(), 1); assert.equal(outbound, 0);
   console.log(JSON.stringify({browser_upload_contract:'passed',actual_compiled_workerd_d1_r2_wasm:true,
     page_and_selection_read_only:true,disabled_gate_and_csrf_enforced:true,lost_ack_same_request_one_document:true,
-    selected_saved_version_viewer_and_exact_download:true,viewer_stays_passive:true,
+    selected_saved_version_viewer_and_exact_download:true,document_preview_stays_passive:true,
     identity_and_dom_are_mocks:true,actual_oauth_browser_upload_verified:false,layout_verified:false}));
 } finally { await mf.dispose(); }

@@ -68,8 +68,18 @@ try {
     const response = await mf.dispatchFetch(origin + address, { headers: a });
     assert.equal(response.status, 200);
     if (suffix === '.hwp') await verifySyntheticDownload(new Uint8Array(await response.arrayBuffer()));
-    if (suffix === '/pages/0.svg') { assert.equal(response.headers.get('Content-Type'), 'image/svg+xml; charset=utf-8'); assert((await response.text()).includes('<svg')); }
+    if (suffix === '/pages/0.svg') { assert.equal(response.headers.get('Content-Type'), 'image/svg+xml; charset=utf-8'); assert((await response.text()).includes('<svg')); assert(response.headers.get('Content-Security-Policy').includes('sandbox')); assert(!response.headers.get('Content-Security-Policy').includes('script-src')); }
     if (suffix === '/view') { assert.equal(response.headers.get('Referrer-Policy'), 'no-referrer'); const text = await response.text(); assert(text.includes('현재 저장본')); assert(text.includes('세부 배치는 미검증')); }
+  }
+  assert.equal((await mf.dispatchFetch(origin + '/documents/handoff-client.js')).status, 401);
+  const handoffScript = await mf.dispatchFetch(origin + '/documents/handoff-client.js', { headers: a });
+  assert.equal(handoffScript.status, 200);
+  assert.equal(handoffScript.headers.get('Content-Type'), 'text/javascript; charset=utf-8');
+  assert(!(await handoffScript.text()).includes(document_id));
+  for (const [suffix, init, status] of [['?token=private', {}, 400], ['', { method: 'POST' }, 405],
+    ['', { headers: { Range: 'bytes=0-1' } }, 400]]) {
+    assert.equal((await mf.dispatchFetch(origin + '/documents/handoff-client.js' + suffix,
+      { ...init, headers: { ...a, ...init.headers } })).status, status);
   }
   assert.deepEqual(await capture(), before);
   checks.push('exact_seed_retry_one_document_one_version_owner_scoped_view_hwp_svg_reads_without_mutation');
@@ -87,6 +97,18 @@ try {
   const oldHtml = await oldView.text(); assert(oldHtml.includes('이전 저장본')); assert(oldHtml.includes('저장 버전 (2개)'));
   assert(oldHtml.includes(`href="/documents/${document_id}/versions/${edited.version_id}/view">현재 저장본 보기`));
   assert(oldHtml.includes('<details><summary>파일 정보</summary>'));
+  const oldRequest = oldHtml.match(/<textarea[^>]+>([^<]+)<\/textarea>/)[1];
+  assert(oldRequest.includes(origin + location));
+  assert(oldRequest.includes(`버전 ID: ${version_id}`));
+  assert(!oldRequest.includes(edited.version_id));
+  const afterSave = await capture();
+  const currentView = await mf.dispatchFetch(download.viewer_url, { headers: a });
+  const currentHtml = await currentView.text(), currentRequest = currentHtml.match(/<textarea[^>]+>([^<]+)<\/textarea>/)[1];
+  assert(currentRequest.includes(`버전 ID: ${edited.version_id}`));
+  assert(currentRequest.includes(download.viewer_url));
+  assert(currentView.headers.get('Content-Security-Policy').includes("script-src 'self'; connect-src 'none'"));
+  assert.deepEqual(await capture(), afterSave);
+  checks.push('authenticated_fixed_copy_client_and_immutable_current_old_requests_without_storage_changes');
   const oldHwp = await mf.dispatchFetch(origin + location.replace('/view', '.hwp'), { headers: a });
   await verifySyntheticDownload(new Uint8Array(await oldHwp.arrayBuffer()));
   const currentHwp = await mf.dispatchFetch(download.download_url, { headers: a });

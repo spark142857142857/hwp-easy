@@ -1,6 +1,7 @@
 // Read-only, version-bound HTML viewer. All content uses owner-scoped service
 // reads; SVG stays a separate passive image request, never inline document HTML.
 import { StorageError } from '../storage/store.mjs';
+import { HANDOFF_SCRIPT, handoffRequest } from './handoff.mjs';
 export const UUID_SOURCE = '[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}';
 export const viewerMatch = (pathname) => pathname.match(new RegExp(`^/documents/(${UUID_SOURCE})/versions/(${UUID_SOURCE})/view$`));
 const fail = (code) => { throw new StorageError(code); };
@@ -21,7 +22,8 @@ a,button{color:#174b82}button,.primary{display:inline-block;background:#172033;c
 a:focus-visible,button:focus-visible{outline:3px solid #3578c5;outline-offset:4px}code{font-size:13px;overflow-wrap:anywhere}dl{margin:16px 0}dt{font-weight:600}dd{margin:0 0 10px;overflow-wrap:anywhere}
 nav{display:flex;gap:20px;align-items:center;flex-wrap:wrap}img{display:block;width:100%;height:auto;background:#fff;border:1px solid #dde2e8}li{overflow-wrap:anywhere;margin:8px 0}.notice{padding:12px 16px;background:#eef2f7;border-radius:6px}
 .version-state{font-weight:600;margin:0 0 4px}.saved-at{color:#526075;margin:0 0 20px}.version-history{list-style:none;padding:0;margin:12px 0 0}.version-history li{padding:12px 0;border-bottom:1px solid #dde2e8}.version-history li:last-child{border-bottom:0}.version-history a{display:inline-block}.version-history time{display:block;color:#526075;font-size:14px}.viewing{font-size:14px;margin-left:12px;color:#526075}details{margin-top:20px}summary{cursor:pointer;color:#174b82;padding:8px 0}summary:focus-visible{outline:3px solid #3578c5;outline-offset:4px}
-label{display:block;font-weight:600;margin-bottom:8px}input[type=file]{display:block;max-width:100%;font:inherit}input::file-selector-button{font:inherit;color:#174b82;background:#eef2f7;border:1px solid #dde2e8;border-radius:6px;padding:10px 14px;margin-right:12px;cursor:pointer}input:focus-visible{outline:3px solid #3578c5;outline-offset:4px}button:disabled{background:#e2e6ec;color:#526075;cursor:default}
+label{display:block;font-weight:600;margin-bottom:8px}input[type=file]{display:block;max-width:100%;font:inherit}input::file-selector-button{font:inherit;color:#174b82;background:#eef2f7;border:1px solid #dde2e8;border-radius:6px;padding:10px 14px;margin-right:12px;cursor:pointer}input:focus-visible,textarea:focus-visible{outline:3px solid #3578c5;outline-offset:4px}button:disabled{background:#e2e6ec;color:#526075;cursor:default}
+textarea{display:block;box-sizing:border-box;width:100%;padding:12px;font:inherit;font-size:14px;line-height:1.6;border:1px solid #dde2e8;border-radius:6px;resize:vertical}.secondary{background:#eef2f7;color:#174b82}
 @media(max-width:480px){body{padding:16px 10px}section,header{padding:20px 16px}h1{font-size:24px}}
 </style></head><body><main>${body}</main></body></html>`, { headers: { ...browserHeaders, 'Content-Type': 'text/html; charset=utf-8' } });
 }
@@ -38,7 +40,7 @@ export function savedTime(value) {
   if (!Number.isSafeInteger(value) || value < 0 || value > 8640000000000000) return '저장 시각 확인 불가';
   return `<time datetime="${new Date(value).toISOString()}">${escapeHtml(savedTimeFormat.format(value))} (한국 시간)</time>`;
 }
-export async function documentViewerResponse(url, owner, service) {
+export async function documentViewerResponse(url, owner, service, canonicalOrigin = url.origin) {
   const match = viewerMatch(url.pathname);
   if (!match) fail('INVALID_VIEWER_REQUEST');
   const page = viewerPageNumber(url), document_id = match[1], version_id = match[2];
@@ -65,7 +67,8 @@ export async function documentViewerResponse(url, owner, service) {
   const navigation = preview ? `<nav aria-label="미리보기 페이지"><span>${page + 1} / ${preview.page_count} 페이지</span>
 ${page > 0 ? `<a href="${base}/view?page=${page - 1}">이전 페이지</a>` : ''}
 ${page + 1 < preview.page_count && page < 9999 ? `<a href="${base}/view?page=${page + 1}">다음 페이지</a>` : ''}</nav>` : '';
-  return browserPage('저장된 HWP 확인', `<header><small>HWP Easy · 비공개 개발 단계</small><h1>저장된 HWP 확인</h1>
+  const requestText = handoffRequest(canonicalOrigin, document_id, version_id);
+  const response = browserPage('저장된 HWP 확인', `<header><small>HWP Easy · 비공개 개발 단계</small><h1>저장된 HWP 확인</h1>
 <p class="version-state">${version_id === current ? '현재 저장본' : '이전 저장본을 보고 있습니다'}</p>
 <p class="saved-at">${savedTime(selected.created_at)}</p>
 <a class="primary" href="${base}.hwp" download>이 버전 HWP 다운로드</a>
@@ -76,10 +79,21 @@ ${version_id !== current ? `<p><a href="/documents/${document_id}/versions/${cur
 <dt>파일 크기</dt><dd>${selected.byte_size} 바이트</dd><dt>SHA-256</dt><dd><code>${escapeHtml(metadata.sha256)}</code></dd></dl>
 </details>
 <p class="notice">보기와 다운로드는 문서를 수정하지 않습니다. 이전 버전을 열어도 현재 저장본은 바뀌지 않습니다.</p></header>
+<section aria-labelledby="handoff-heading"><h2 id="handoff-heading">에이전트에게 전달</h2>
+<p>HWP Easy가 연결된 대화에 붙여넣고 원하는 작업을 이어서 적으세요. 같은 계정의 접근 권한이 필요합니다.</p>
+<button type="button" class="secondary" id="handoff-copy" aria-describedby="handoff-hint" disabled>링크와 읽기 요청 복사</button>
+<p id="handoff-status" role="status" aria-live="polite"></p>
+<small id="handoff-hint">이 요청은 지금 보고 있는 저장본을 읽기만 합니다. 수정 내용은 대화에서 따로 요청하세요.</small>
+<details id="handoff-details"><summary>요청 확인 · 직접 복사</summary><label for="handoff-request">복사할 요청</label>
+<textarea id="handoff-request" readonly rows="8" spellcheck="false">${escapeHtml(requestText)}</textarea></details>
+<noscript><p>요청 확인을 열고 내용을 직접 복사해 주세요.</p></noscript></section>
 <section aria-label="HWP 기본 미리보기"><h2>기본 미리보기</h2>
 <p>글꼴, 줄바꿈과 세부 배치는 미검증입니다. 최종 제출 전 외부 HWP 뷰어에서도 확인하세요.</p>
 ${navigation}
 ${preview ? `<p><a href="${base}/pages/${page}.svg">미리보기 이미지 직접 열기</a></p><img src="${base}/pages/${page}.svg" alt="${page + 1}페이지 HWP 기본 미리보기">`
   : '<p role="status">미리보기를 만들 수 없습니다. HWP 다운로드는 계속 사용할 수 있습니다.</p>'}
-</section>`);
+</section><script src="${HANDOFF_SCRIPT}" defer></script>`);
+  // Only this fixed host client is active. Document SVG remains a passive image.
+  response.headers.set('Content-Security-Policy', "default-src 'none'; script-src 'self'; connect-src 'none'; img-src 'self'; style-src 'unsafe-inline'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'");
+  return response;
 }

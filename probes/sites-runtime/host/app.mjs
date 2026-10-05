@@ -10,6 +10,7 @@ import { documentViewerResponse, viewerMatch } from './document-viewer.mjs';
 import { storedSyntheticResponse } from './stored-synthetic.mjs';
 import { browserUploadResponse, UPLOAD_PAGE, UPLOAD_SCRIPT } from './browser-upload.mjs';
 import { documentListResponse } from './document-list.mjs';
+import { HANDOFF_SCRIPT, handoffScriptResponse } from './handoff.mjs';
 import { documentOutputResource, MAX_EMBEDDED_HWP_BYTES } from './document-output.mjs';
 import { documentChunkResource, createHwpChunkCollector, MAX_HWP_CHUNK_BYTES, MAX_CHUNKED_HWP_BYTES } from './document-chunks.mjs';
 import { largeSyntheticFixture } from './large-synthetic.mjs';
@@ -308,6 +309,7 @@ export function createHostApp(env, engine, HwpDocument, fetcher = fetch) {
     try {
       const url = new URL(request.url);
       if (url.pathname === '/documents') return await documentListResponse(request, owner, store);
+      if (url.pathname === HANDOFF_SCRIPT) return handoffScriptResponse(request);
       if ([UPLOAD_PAGE, UPLOAD_SCRIPT].includes(url.pathname)) return browserUploadResponse(request, uploadsEnabled());
       if (url.pathname === '/diagnostics/stored-document') return await storedSyntheticResponse(request, owner, service, HwpDocument, origin());
       if (url.pathname === '/documents/import') {
@@ -324,7 +326,7 @@ export function createHostApp(env, engine, HwpDocument, fetcher = fetch) {
         return jsonResponse(await service.create({ owner, request_id, bytes }));
       }
       if (request.method !== 'GET') return new Response(null, { status: 405, headers: { Allow: 'GET' } });
-      if (viewerMatch(url.pathname)) return await documentViewerResponse(url, owner, service);
+      if (viewerMatch(url.pathname)) return await documentViewerResponse(url, owner, service, origin());
       return await download(request.url, owner);
     } catch (error) {
       const code = errorCode(error);

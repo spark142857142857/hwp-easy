@@ -31,10 +31,13 @@ test('viewer reads selected owner/version, keeps previews passive and labels old
   assert(html.includes(`href="/documents/${document_id}/versions/${version_id}.hwp"`));
   assert(html.includes(`src="/documents/${document_id}/versions/${version_id}/pages/0.svg"`));
   assert(html.includes('이전 저장본')); assert(html.includes('현재 저장본')); assert(html.includes('다음 페이지'));
-  assert(!html.includes('<script')); assert(!html.includes('<svg')); assert(!html.includes('<iframe')); assert(!html.includes('<object'));
+  assert.equal((html.match(/<script/g) ?? []).length, 1);
+  assert(html.includes('<script src="/documents/handoff-client.js" defer></script>'));
+  assert(!html.includes('<svg')); assert(!html.includes('<iframe')); assert(!html.includes('<object'));
   assert.equal(response.headers.get('Cache-Control'), 'private, no-store');
   assert(response.headers.get('Content-Security-Policy').includes("img-src 'self'"));
   assert(response.headers.get('Content-Security-Policy').includes("default-src 'none'"));
+  assert(response.headers.get('Content-Security-Policy').includes("script-src 'self'; connect-src 'none'"));
 });
 test('preview failure does not hide the immutable HWP download', async () => {
   for (const preview of [() => { throw new Error('private content'); }, () => ({ svg: 'x'.repeat(4 * 1024 * 1024 + 1) })]) {
