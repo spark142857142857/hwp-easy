@@ -13,7 +13,8 @@ import { makePerformanceFixture, performanceCases } from './performance-fixtures
 import { profileSyntheticEngine } from './synthetic-engine-profile.mjs';
 
 const name = process.argv[2];
-const singleLarge = process.argv.length === 4 && name === 'entropy1200k' && process.argv[3] === '--single-large';
+const requestSessions = process.argv.length === 4 && name === 'entropy1200k' && process.argv[3] === '--single-large-requests';
+const singleLarge = requestSessions || (process.argv.length === 4 && name === 'entropy1200k' && process.argv[3] === '--single-large');
 if ((!singleLarge && process.argv.length !== 3) || !performanceCases.includes(name)) throw Error('INVALID_ARGUMENTS');
 const require = createRequire(import.meta.url), runtime = pathToFileURL(require.resolve('@rhwp/core'));
 assert.equal(JSON.parse(fs.readFileSync(new URL('./package.json', runtime))).version, '0.8.6');
@@ -89,10 +90,23 @@ async function cycle() {
   assert(target);
   const request = { expected_sha256: snapshot.source_sha256, operations: [{ target_id: target.target_id,
     expected_old: target.text, new_text: '합성 성능 검사 완료 😀' }] };
-  const preflight = await timed('preflight', () => snapshot.preflight(request));
+  let preflight, edited;
+  if (requestSessions) {
+    // Each old request independently opened a snapshot, then reopened the same
+    // source to mutate it. Compare that full per-request cost with the direct
+    // path on identical bytes/operations, including independent result reopen.
+    const previousPlan = await timed('preflight_before', async () => (await engine.open(bytes)).preflight(request));
+    const previousEdit = await timed('edit_before', async () => (await engine.open(bytes)).edit(request));
+    preflight = await timed('preflight_after', () => engine.preflight(bytes, request, originalHash));
+    edited = await timed('edit_after', () => engine.edit(bytes, request, originalHash));
+    assert.deepEqual(preflight, previousPlan);
+    assert.deepEqual(edited, previousEdit);
+  } else {
+    preflight = await timed('preflight', () => snapshot.preflight(request));
+    edited = await timed('edit', () => snapshot.edit(request));
+  }
   assert.equal(preflight.serialization_checked, true);
   assert.equal(preflight.saved, false);
-  const edited = await timed('edit', () => snapshot.edit(request));
   assert.equal(edited.raw_preservation_verified, true);
   assert.equal(edited.content_verified, true);
   assert.equal(edited.saved, false);
@@ -121,6 +135,7 @@ for (let iteration = 0; iteration < iterations; iteration++) {
   process.send?.({ completed_iteration: iteration });
 }
 console.log(JSON.stringify({ case: name, input_bytes: bytes.length, init_ms, fixture_ms,
+  comparison: requestSessions ? 'full_per_request_open_and_checked_edit_vs_direct_checked_session' : 'snapshot_workflow',
   baseline_after_fixture_gc, samples, final: memory(), synthetic_only: true,
   ...(profiler ? { engine_calls: profiler.report(), call_timing_overhead_included: true } : {}),
   scope: 'node_hosted_engine_adapter_not_deployed_worker', total_isolate_memory_measured: false }));

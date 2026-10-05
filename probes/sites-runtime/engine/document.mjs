@@ -45,7 +45,10 @@ function quietEngine(action) {
   try {
     console.error = () => {};
     return action();
-  } catch {
+  } catch (error) {
+    // Preparation callbacks run host validation inside the same synchronous
+    // engine scope. Preserve our fixed public guard codes, never engine text.
+    if (error instanceof GuardError) throw error;
     fail('ENGINE_OPERATION_FAILED');
   } finally { console.error = previous; }
 }
@@ -108,14 +111,21 @@ export function createDocumentEngine(HwpDocument) {
       finally { document.free(); }
     });
   }
-  async function open(input) {
+  function source(input) {
     if (!(input instanceof Uint8Array)) fail('INVALID_INPUT_BYTES');
     // Bound before cloning or calling the WASM reader. Copy before async hashing.
     if (input.length > 4 * 1024 * 1024) fail('INPUT_LIMIT_EXCEEDED');
     const bytes = new Uint8Array(input);
     const raw = readHwp(bytes);
     enforceRawTextBudget(raw);
+    return { bytes, raw };
+  }
+  async function open(input) {
+    const { bytes, raw } = source(input);
     const inspection = inspect(bytes);
+    return createSnapshot(bytes, raw, inspection, await sha256(bytes)).snapshot;
+  }
+  function createSnapshot(bytes, raw, inspection, version) {
     let mapping, mappingVerified = false;
     try { mapping = mapRawTargets(raw, inspection.blocks); mappingVerified = true; }
     catch (error) {
@@ -126,7 +136,6 @@ export function createDocumentEngine(HwpDocument) {
     if (pageNumberProfile === null) unsupported.push({ kind: 'page_number_profile',
       reason: 'Page-number control shape, root anchor or model coverage is unverified' });
     const preservedControls = pageNumberProfile ?? [];
-    const version = await sha256(bytes);
     const emptyCellProfiles = mappingVerified ? emptyCellFillProfiles(raw, inspection.blocks, mapping) : new Map();
     const clearCellProfiles = mappingVerified ? cellTextClearProfiles(raw, inspection.blocks, mapping) : new Map();
     const restrictions = mappingVerified ? rawTargetRestrictions(raw, inspection.blocks, mapping, emptyCellProfiles) : new Map();
@@ -227,11 +236,17 @@ export function createDocumentEngine(HwpDocument) {
         storage_checked: false,
         file_changed: false, persistence: 'none', layout_verified: false };
     }
-    async function edit(options) {
+    function prepareEdit(options) {
       const operations = plans(options);
-      const checked = quietEngine(() => api.editDocumentChecked(bytes, operations,
-        { preservePageNumbers: preservedControls.length > 0,
-          clearCellTargets: new Set(operations.filter((o) => o.new_text === '' && clearCellProfiles.has(o.target_id)).map((o) => o.target_id)) }));
+      return { operations, preservePageNumbers: preservedControls.length > 0,
+        clearCellTargets: new Set(operations.filter((o) => o.new_text === '' && clearCellProfiles.has(o.target_id)).map((o) => o.target_id)) };
+    }
+    async function edit(options) {
+      const prepared = prepareEdit(options);
+      const checked = quietEngine(() => api.editDocumentChecked(bytes, prepared.operations, prepared));
+      return finishEdit(prepared.operations, checked);
+    }
+    async function finishEdit(operations, checked) {
       const candidate = checked.bytes;
       const projection = projectVerifiedCellTextTransitions(raw, readHwp(candidate), operations, emptyCellProfiles, clearCellProfiles);
       const proofSource = { ...raw, streams: projection.streams };
@@ -270,6 +285,9 @@ export function createDocumentEngine(HwpDocument) {
       // Run the SAME edit/reopen/raw guard as saving, but discard candidate bytes.
       // Never publish an output hash, link, receipt, or stored version here.
       const candidate = await edit(options);
+      return preflightResult(prepared, candidate);
+    }
+    function preflightResult(prepared, candidate) {
       return { ...prepared, validation_scope: 'targets_and_in_memory_serialization',
         serialization_checked: true, content_verified: candidate.content_verified,
         raw_preservation_verified: candidate.raw_preservation_verified,
@@ -288,7 +306,32 @@ export function createDocumentEngine(HwpDocument) {
       });
       return { ...result, source_sha256: version };
     }
-    return Object.freeze({ source_sha256: version, read, plan, preflight, edit, preview });
+    return { snapshot: Object.freeze({ source_sha256: version, read, plan, preflight, edit, preview }),
+      prepareEdit, finishEdit, preflightResult };
   }
-  return Object.freeze({ open, limits });
+  // A fresh per-call source session performs the same source inspection, host
+  // target/raw checks and writer checks without first opening a throwaway
+  // snapshot. No live WASM document survives this call or crosses users.
+  async function prepareChecked(input, options, expectedSourceHash) {
+    try { options = structuredClone(options); } catch { fail('INVALID_ARGUMENTS'); }
+    const { bytes, raw } = source(input), version = await sha256(bytes);
+    if (expectedSourceHash !== undefined && version !== expectedSourceHash) fail('BLOB_MISSING_OR_CORRUPT');
+    let context, prepared;
+    const checked = quietEngine(() => api.editDocumentPrepared(bytes, (inspection) => {
+      context = createSnapshot(bytes, raw, inspection, version);
+      prepared = context.prepareEdit(options);
+      return prepared;
+    }));
+    return { context, prepared, checked, options };
+  }
+  async function edit(input, options, expectedSourceHash) {
+    const { context, prepared, checked } = await prepareChecked(input, options, expectedSourceHash);
+    return context.finishEdit(prepared.operations, checked);
+  }
+  async function preflight(input, options, expectedSourceHash) {
+    const { context, prepared, checked, options: copied } = await prepareChecked(input, options, expectedSourceHash);
+    const result = await context.finishEdit(prepared.operations, checked);
+    return context.preflightResult(context.snapshot.plan(copied), result);
+  }
+  return Object.freeze({ open, edit, preflight, limits });
 }

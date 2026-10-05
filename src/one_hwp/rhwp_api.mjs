@@ -168,9 +168,24 @@ export function createEngineApi(HwpDocument) {
     // Remote host opt-in ONLY after independent plain-cell raw profiling. The
     // local default remains unchanged; full model/raw verification is required.
     if (!(clearCellTargets instanceof Set) || clearCellTargets.size > 100) throw new Error('Invalid clear-cell profile');
+    return editDocumentPrepared(bytes, () => ({ operations, preservePageNumbers, clearCellTargets }));
+  }
+
+  // Internal synchronous preparation hook: hosts validate raw target coverage
+  // against this freshly inspected source before any mutation. The callback
+  // gets a detached model, never the live WASM document or authoritative model.
+  function editDocumentPrepared(bytes, prepare) {
+    if (typeof prepare !== 'function') throw new Error('Invalid edit preparation');
     const document = openDocument(bytes);
     try {
       const before = inspectDocument(document);
+      const prepared = prepare(JSON.parse(JSON.stringify(before)));
+      if (!prepared || Object.getPrototypeOf(prepared) !== Object.prototype
+        || Object.keys(prepared).some((key) => !['operations', 'preservePageNumbers', 'clearCellTargets'].includes(key))) {
+        throw new Error('Invalid edit preparation');
+      }
+      const { operations, preservePageNumbers = false, clearCellTargets = new Set() } = prepared;
+      if (!(clearCellTargets instanceof Set) || clearCellTargets.size > 100) throw new Error('Invalid clear-cell profile');
       const blocking = before.unsupported.some((item) => !(preservePageNumbers === true
         && item.kind === 'control' && item.control_id === 'pgnp' && item.list === 0));
       if (blocking || !Array.isArray(operations) || operations.length === 0) {
@@ -253,5 +268,5 @@ export function createEngineApi(HwpDocument) {
       layout_verified: false };
   }
 
-  return { openDocument, inspectDocument, exportChecked, editDocument, editDocumentChecked, previewDocument };
+  return { openDocument, inspectDocument, exportChecked, editDocument, editDocumentChecked, editDocumentPrepared, previewDocument };
 }
