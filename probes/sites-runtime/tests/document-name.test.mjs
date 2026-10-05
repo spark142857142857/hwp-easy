@@ -20,6 +20,7 @@ test('name form escapes attributes and performs metadata-only reads; GET never r
   const html=await response.text();assert.equal(reads,1); assert(html.includes('&quot;&gt;&lt;img'));
   assert(!/<img|<script/.test(html)); assert(html.includes('name="expected_name_revision" value="3"'));
   assert.equal(response.headers.get('Cache-Control'),'private, no-store');
+  assert.equal(response.headers.get('Referrer-Policy'),'same-origin');
   assert(response.headers.get('Content-Security-Policy').includes("form-action 'self'"));
 });
 test('POST requires same-origin bounded exact fields and never reflects rejected input', async () => {
@@ -38,7 +39,7 @@ test('successful rename trims input and redirects to explicit current version; c
   },origin);
   assert.equal(response.status,303);assert.equal(response.headers.get('Location'),`/documents/${document_id}/versions/${current_version}/view`);
   const denied=await documentNameResponse(post(valid),'owner',{renameDocument(){throw Object.assign(Error('private'),{code:'DOCUMENT_NAME_CONFLICT'});}},origin);
-  assert.equal(denied.status,409);assert((await denied.text()).includes('새로 열어')); 
+  assert.equal(denied.status,409);assert((await denied.text()).includes('새로 열어'));
 });
 function fixture() {
   let row={display_name:'',name_revision:0,current_version}, writes=0, loseAck=false;

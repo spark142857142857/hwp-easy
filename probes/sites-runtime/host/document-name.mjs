@@ -31,7 +31,7 @@ export async function documentNameResponse(request, owner, store, origin) {
     }
     if (request.body) fail('INVALID_DOCUMENT_NAME_REQUEST');
     const metadata = await store.documentName({owner,document_id});
-    return browserPage('문서 이름', `<header><small>HWP Easy</small><h1>문서 이름</h1>
+    const response = browserPage('문서 이름', `<header><small>HWP Easy</small><h1>문서 이름</h1>
 <form action="/documents/${document_id}/name" method="post">
 <label for="display-name">내 문서에서 표시할 이름</label>
 <input id="display-name" name="display_name" type="text" maxlength="160" value="${escapeHtml(metadata.display_name)}" aria-describedby="name-hint" autocomplete="off">
@@ -39,6 +39,9 @@ export async function documentNameResponse(request, owner, store, origin) {
 <p id="name-hint"><small>80자 이내. 비우면 문서 번호로 표시합니다. 직접 입력한 이름은 이 문서와 함께 보관되며 원래 파일 이름은 자동 수집하지 않습니다.</small></p>
 <nav><button type="submit">이름 저장</button><a href="/documents/${document_id}/versions/${metadata.current_version}/view">취소</a></nav></form>
 <p class="notice">이름을 바꿔도 HWP 내용과 이전 저장본은 그대로 유지됩니다.</p></header>`);
+    // Retain the browser's same-origin form POST Origin, as on the upload page.
+    response.headers.set('Referrer-Policy','same-origin');
+    return response;
   } catch (error) {
     if (!messages[error.code]) throw error;
     const response = browserPage('문서 이름 확인', `<header><h1>문서 이름을 확인해 주세요</h1><p role="alert">${messages[error.code]}</p>
