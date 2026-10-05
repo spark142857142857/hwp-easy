@@ -67,9 +67,18 @@ try {
   assert.equal(firstOwner, renamedOwner); assert.match(firstOwner, /^user:[0-9a-f]{64}$/);
   assert.notEqual(firstOwner, await authenticatedOwner(new Headers(other)));
   checks.push('mock_headers_not_oauth_identity_checks', 'stable_owner_ignores_email_and_name_changes');
-  const oversized = await mf.dispatchFetch(`${origin}/mcp`, { method: 'POST',
-    headers: { ...headers, 'Content-Type': 'application/json' }, body: ' '.repeat(3 * 1024 * 1024 + 1) });
+  // Unknown-length streaming exercises the accumulated-byte limit. A fixed
+  // string adds Content-Length and can hit an early response/socket-reset race
+  // in Miniflare's Node transport before its request upload has completed.
+  const oversizedBody = new ReadableStream({ start(controller) {
+    controller.enqueue(new TextEncoder().encode(' '.repeat(3 * 1024 * 1024 + 1))); controller.close();
+  } });
+  const oversized = await mf.dispatchFetch(`${origin}/mcp`, { method: 'POST', duplex: 'half',
+    headers: { ...headers, 'Content-Type': 'application/json' }, body: oversizedBody });
   assert.equal(oversized.status, 413);
+  assert.equal((await db.prepare('SELECT COUNT(*) AS n FROM hwp_documents').first()).n, 0);
+  assert.equal((await db.prepare('SELECT COUNT(*) AS n FROM hwp_versions').first()).n, 0);
+  assert.deepEqual((await bucket.list()).objects, []);
   checks.push('rpc_actual_stream_over_three_mib_rejected');
   const upload = (extra = {}, identity = headers, input = bytes) => mf.dispatchFetch(`${origin}/documents/import`, {
     method: 'POST', headers: { ...identity, Origin: origin, 'Content-Type': 'application/x-hwp',

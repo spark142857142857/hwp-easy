@@ -71,7 +71,9 @@ try {
   assert.equal((await get(firstPage[0].path,b)).status,404);assert.equal((await get(firstPage[0].path,a)).status,200);
   // Real edit: the new explicit current pointer wins even when its timestamp is
   // older than another version. Never infer current by MAX(created_at).
-  const doc=documents[0],read=await invoke('hwp_read',{document_id:doc.document_id,version_id:doc.version_id});
+  // Timestamp ties are ordered by random UUID, not insertion order. Select a
+  // document proven to be on page one for the name-escaping assertion below.
+  const doc=documents.find(d=>d.document_id===firstPage[0].doc),read=await invoke('hwp_read',{document_id:doc.document_id,version_id:doc.version_id});
   const nameRoute=`/documents/${doc.document_id}/name`;
   const rename=async (name,revision,headers=a)=>mf.dispatchFetch(origin+nameRoute,{method:'POST',
     headers:{...headers,Origin:origin,'Content-Type':'application/x-www-form-urlencoded'},
