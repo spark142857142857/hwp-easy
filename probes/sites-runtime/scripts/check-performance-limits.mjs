@@ -19,9 +19,31 @@ if (process.argv.length !== 2) throw Error('Synthetic limit check accepts no arg
 const maximum = 4 * 1024 * 1024, require = createRequire(import.meta.url);
 initSync({ module: fs.readFileSync(new URL('./rhwp_bg.wasm', pathToFileURL(require.resolve('@rhwp/core')))) });
 const api = createEngineApi(HwpDocument), origin = 'https://performance.invalid';
+// Test-only entrypoint, supplied to Miniflare in memory and never built or
+// packaged. It calls the actual compiled production Worker with a fixed
+// synthetic request inside workerd. Cancelling that request cannot reset the
+// Node HTTP bridge carrying the small test command and response.
+const boundaryEntry = `import production from './index.js';
+export default { fetch(request, env, ctx) {
+  const url = new URL(request.url);
+  const declared = url.pathname === '/__synthetic_declared_boundary';
+  if (!declared && url.pathname !== '/__synthetic_stream_boundary')
+    return production.fetch(request, env, ctx);
+  if (request.method !== 'GET' || url.search) return new Response(null, {status: 405});
+  const bytes = new Uint8Array(4 * 1024 * 1024 + 1);
+  const headers = new Headers(request.headers);
+  headers.set('Content-Type', 'application/x-hwp');
+  headers.set('hwp-request-id', crypto.randomUUID());
+  headers.delete('Content-Length');
+  if (declared) headers.set('Content-Length', String(bytes.length));
+  const body = new ReadableStream({start(controller) {controller.enqueue(bytes); controller.close();}});
+  return production.fetch(new Request(url.origin + '/documents/import',
+    {method: 'POST', headers, body}), env, ctx);
+} };`;
 let outbound = 0;
 const mf = new Miniflare(convertV4MiniflareOptions({ compatibilityDate: '2026-10-01',
   modulesRoot: path.resolve('dist/server'), modules: [
+    { type: 'ESModule', path: path.resolve('dist/server/synthetic-limit-entry.js'), contents: boundaryEntry },
     { type: 'ESModule', path: path.resolve('dist/server/index.js') },
     { type: 'CompiledWasm', path: path.resolve('dist/server/rhwp_bg.wasm') }],
   d1Databases: { DB: 'performance-d1' }, r2Buckets: { BUCKET: 'performance-r2' },
@@ -54,7 +76,11 @@ try {
   // must pass transfer and then fail the container without publishing data.
   for (const length of [maximum - 1, maximum, maximum + 1]) {
     const bytes = new Uint8Array(length);
-    const response = await upload(bytes);
+    // The oversized stream is constructed inside the compiled Worker harness;
+    // at/below-boundary bytes still traverse the real Node HTTP upload bridge.
+    const response = length > maximum
+      ? await mf.dispatchFetch(origin + '/__synthetic_stream_boundary', { headers: { ...identity, Origin: origin } })
+      : await upload(bytes);
     assert.equal(response.status, 400);
     const error = (await response.json()).error;
     if (length > maximum) assert.equal(error, 'TRANSFER_LIMIT_EXCEEDED');
@@ -62,13 +88,17 @@ try {
     assert.equal(await count(), 0);
     assert.equal((await bucket.list()).objects.length, 0);
     boundaries.push({ layer: 'compiled_worker_upload', bytes: length, error, published: false,
+      transport: length > maximum ? 'in_worker_synthetic_request' : 'node_http_upload',
       valid_hwp: false, transfer_admitted: length <= maximum });
   }
-  const declared = await upload(new Uint8Array(maximum + 1), { 'Content-Length': String(maximum + 1) });
+  const declared = await mf.dispatchFetch(origin + '/__synthetic_declared_boundary',
+    { headers: { ...identity, Origin: origin } });
+  assert.equal(declared.status, 400);
   assert.equal((await declared.json()).error, 'TRANSFER_LIMIT_EXCEEDED');
   assert.equal(await count(), 0);
   assert.equal((await bucket.list()).objects.length, 0);
-  boundaries.push({ layer: 'compiled_worker_upload_declared_length', error: 'TRANSFER_LIMIT_EXCEEDED', published: false });
+  boundaries.push({ layer: 'compiled_worker_upload_declared_length', transport: 'in_worker_synthetic_request',
+    error: 'TRANSFER_LIMIT_EXCEEDED', published: false });
   let readerAcquired = false, declaredCancelled = false;
   await assert.rejects(() => boundedBytes({ getReader() { readerAcquired = true; throw Error('Unexpected read'); },
     cancel() { declaredCancelled = true; } }, maximum, String(maximum + 1)),
