@@ -10,6 +10,7 @@ import { HwpDocument, initSync } from '@rhwp/core';
 import { createEngineApi } from '../../../src/one_hwp/rhwp_api.mjs';
 import { createDocumentEngine } from '../engine/document.mjs';
 import { makePerformanceFixture, performanceCases } from './performance-fixtures.mjs';
+import { profileSyntheticEngine } from './synthetic-engine-profile.mjs';
 
 const name = process.argv[2];
 const singleLarge = process.argv.length === 4 && name === 'entropy1200k' && process.argv[3] === '--single-large';
@@ -22,9 +23,12 @@ const wasm = initSync({ module: fs.readFileSync(new URL('./rhwp_bg.wasm', runtim
 const init_ms = performance.now() - started;
 const memory = () => ({ ...process.memoryUsage(), wasm_linear_bytes: wasm.memory.buffer.byteLength,
   process_peak_rss_bytes: process.resourceUsage().maxRSS * 1024 });
-const engine = createDocumentEngine(HwpDocument), api = createEngineApi(HwpDocument);
+const profiler = singleLarge ? profileSyntheticEngine(HwpDocument) : null;
+const Document = profiler?.Document ?? HwpDocument;
+const engine = createDocumentEngine(Document), api = createEngineApi(Document);
 process.send?.({ phase: 'fixture' });
-const fixtureStart = performance.now(), bytes = makePerformanceFixture(name, HwpDocument, api);
+profiler?.setPhase('fixture');
+const fixtureStart = performance.now(), bytes = makePerformanceFixture(name, Document, api);
 const fixture_ms = performance.now() - fixtureStart;
 process.send?.({ completed_phase: 'fixture', duration_ms: fixture_ms, memory: memory() });
 const hash = (input) => createHash('sha256').update(input).digest('hex');
@@ -61,6 +65,7 @@ async function cycle() {
   const timings_ms = {}, checkpoints = {};
   const timed = async (phase, action) => {
     process.send?.({ phase });
+    profiler?.setPhase(phase);
     const start = performance.now();
     try { return await action(); }
     finally {
@@ -117,4 +122,5 @@ for (let iteration = 0; iteration < iterations; iteration++) {
 }
 console.log(JSON.stringify({ case: name, input_bytes: bytes.length, init_ms, fixture_ms,
   baseline_after_fixture_gc, samples, final: memory(), synthetic_only: true,
+  ...(profiler ? { engine_calls: profiler.report(), call_timing_overhead_included: true } : {}),
   scope: 'node_hosted_engine_adapter_not_deployed_worker', total_isolate_memory_measured: false }));

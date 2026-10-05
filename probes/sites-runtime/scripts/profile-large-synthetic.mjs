@@ -50,6 +50,7 @@ const result = await new Promise((resolve) => {
 const report = { schema_version: 1, recorded_at: new Date().toISOString(),
   host: { platform: process.platform, arch: process.arch, node: process.version, cpu_model: os.cpus()[0]?.model },
   method: { single_iteration: true, stage_timeout_ms: 45000, total_timeout_ms: 180000,
+    call_timing_overhead_included: true, engine_call_arguments_and_results_recorded: false,
     fixture_generation_separate: true, uploaded_to_hosted_site: false,
     deployed_worker_memory_measured: false, production_limits_changed: false, layout_verified: false }, ...result };
 const destination = path.join(root, 'outputs', 'synthetic-performance');

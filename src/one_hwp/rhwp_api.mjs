@@ -27,6 +27,20 @@ export function createEngineApi(HwpDocument) {
         block.cell, block.cell_paragraph, offset));
   }
 
+  function needsCharShapeRestore(document, block, count, shapeId) {
+    // Insert/replace can already retain the requested shape. Check the entire
+    // inserted code-point range before skipping a setter that repaginates the
+    // whole document. Final reopened model/raw checks remain authoritative.
+    // The upstream property query walks to each offset to determine its language.
+    // Avoid adding another long-range scan: larger replacements keep the old
+    // unconditional restore path. This is an optimization bound, not an edit limit.
+    if (count > 1024) return true;
+    for (let offset = 0; offset < count; offset++) {
+      if (charProperties(document, block, offset).charShapeId !== shapeId) return true;
+    }
+    return false;
+  }
+
   function formatProfile(document, block, budget) {
     const paragraph = json(block.kind === 'paragraph'
       ? document.getParaPropertiesAt(block.section, block.paragraph)
@@ -185,15 +199,18 @@ export function createEngineApi(HwpDocument) {
         const shapeId = block.style.char_shape_ids[0];
         if (block.kind === 'paragraph') {
           checked(document.replaceText(block.section, block.paragraph, 0, oldCount, operation.new_text));
-          if (newCount) checked(document.setCharShapeId(block.section, block.paragraph, 0, newCount, shapeId));
+          if (newCount && needsCharShapeRestore(document, block, newCount, shapeId)) {
+            checked(document.setCharShapeId(block.section, block.paragraph, 0, newCount, shapeId));
+          }
         } else {
           checked(document.deleteTextInCell(block.section, block.paragraph, block.control,
             block.cell, block.cell_paragraph, 0, oldCount));
           checked(document.insertTextInCell(block.section, block.paragraph, block.control,
             block.cell, block.cell_paragraph, 0, operation.new_text));
-          if (newCount) checked(document.setCharShapeIdInCell(block.section, block.paragraph,
-            block.control, block.cell, block.cell_paragraph, 0, newCount, shapeId));
-          else if (clearCellTargets.has(block.id)) checked(document.setCharShapeIdInCell(block.section, block.paragraph,
+          if (newCount && needsCharShapeRestore(document, block, newCount, shapeId)) {
+            checked(document.setCharShapeIdInCell(block.section, block.paragraph,
+              block.control, block.cell, block.cell_paragraph, 0, newCount, shapeId));
+          } else if (!newCount && clearCellTargets.has(block.id)) checked(document.setCharShapeIdInCell(block.section, block.paragraph,
             block.control, block.cell, block.cell_paragraph, 0, 0, shapeId));
         }
       }

@@ -183,6 +183,52 @@ test('unchanged edit bytes reuse their checked inspection; repaired bytes are fr
     assert.deepEqual(after.map((block) => block.text), before.map((block) => block.id === target.id ? '검증된 수정 😀' : block.text));
   }
 });
+
+test('style restore is skipped only after the whole new range matches, and rejection returns no output', async () => {
+  for (const mode of ['already_correct', 'interior_mismatch', 'restore_rejected', 'large_range']) {
+    let setters = 0, exports = 0, addedRangeQueries = 0;
+    const wrapped = new Proxy(HwpDocument, { construct(Type, args) {
+      const document = Reflect.construct(Type, args, Type); let replaced = false;
+      return new Proxy(document, { get(target, key) {
+        const value = Reflect.get(target, key, target);
+        if (typeof value !== 'function') return value;
+        return (...args) => {
+          if (key === 'getCharPropertiesAt' && replaced) addedRangeQueries++;
+          if (key === 'getCharPropertiesAt' && replaced && args[1] === 0 && args[2] === 1
+            && ['interior_mismatch', 'restore_rejected'].includes(mode)) {
+            // Both endpoints match. A middle emoji still has to be checked.
+            return JSON.stringify({ ...JSON.parse(value.apply(target, args)), charShapeId: 42 });
+          }
+          if (key === 'setCharShapeId') {
+            setters++;
+            if (mode === 'restore_rejected') return JSON.stringify({ ok: false });
+            replaced = false;
+          }
+          if (key === 'exportHwpWithReport') exports++;
+          const result = value.apply(target, args);
+          if (key === 'replaceText') replaced = true;
+          return result;
+        };
+      } });
+    } });
+    const bytes = fixture({ table: false }), original = bytes.slice();
+    const snapshot = await createDocumentEngine(wrapped).open(bytes), block = readAll(snapshot).blocks[0];
+    const newText = mode === 'large_range' ? '가'.repeat(1025) : '가😀끝';
+    const request = options(snapshot, { operations: [{ target_id: block.target_id, expected_old: block.text, new_text: newText }] });
+    if (mode === 'restore_rejected') {
+      await assert.rejects(() => snapshot.edit(request));
+      assert.equal(exports, 0);
+    } else {
+      const changed = await snapshot.edit(request);
+      assert.equal(changed.content_verified, true);
+      assert.equal(changed.raw_preservation_verified, true);
+      assert.equal(readAll(await engine.open(changed.bytes)).blocks[0].text, newText);
+    }
+    assert.equal(setters, mode === 'already_correct' ? 0 : 1);
+    if (mode === 'large_range') assert.equal(addedRangeQueries, 0);
+    assert.deepEqual(bytes, original);
+  }
+});
 test('version, cursor, whole old value, duplicates and unknown arguments reject before output', async () => {
   const snapshot = await engine.open(fixture());
   const read = readAll(snapshot), block = read.blocks.find((b) => b.editable && b.text);
