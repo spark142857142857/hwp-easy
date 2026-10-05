@@ -160,7 +160,8 @@ try {
     else await store.replace(write(doc));
     const spy = { get: (...args) => bucket.get(...args), delete: (...args) => bucket.delete(...args),
       put(...args) { puts++; return bucket.put(...args); } };
-    await assert.rejects(() => createVersionStore(db, spy).replace(write(doc)), code('VERSION_CONFLICT_OR_HISTORY_LIMIT'));
+    await assert.rejects(() => createVersionStore(db, spy).replace(write(doc)),
+      code(phase === 'stale' ? 'VERSION_CONFLICT' : 'DOCUMENT_OR_VERSION_NOT_FOUND'));
     assert.equal(puts, 0);
     if (phase === 'pending') await store.remove(request);
     await intact();
@@ -182,7 +183,7 @@ try {
     const writing = outcome(createVersionStore(db, heldWriter).replace(write(doc)));
     try { await reached(gate); await store.remove(deletion(doc)); }
     finally { gate.release(); }
-    rejected(await writing, 'VERSION_CONFLICT_OR_HISTORY_LIMIT');
+    rejected(await writing, 'DOCUMENT_OR_VERSION_NOT_FOUND');
     await revoked(doc); assert.equal((await keys(doc)).length, 0);
     checks.push(`delete_wins_${timing}_writer_cannot_resurrect_document_and_cleans_candidate`);
   }

@@ -54,7 +54,7 @@ try {
   await assert.rejects(() => createVersionStore(db, failingBucket).remove(retryArgs), code('DELETE_INCOMPLETE_RETRY_SAME_REQUEST'));
   await assert.rejects(() => store.read({ owner, document_id: retryDoc.document_id }), code('DOCUMENT_OR_VERSION_NOT_FOUND'));
   await assert.rejects(() => store.replace({ owner, document_id: retryDoc.document_id, expected_version: retryDoc.version_id,
-    request_id: crypto.randomUUID(), bytes }), code('VERSION_CONFLICT_OR_HISTORY_LIMIT'));
+    request_id: crypto.randomUUID(), bytes }), code('DOCUMENT_OR_VERSION_NOT_FOUND'));
   assert.equal((await store.remove(retryArgs)).deleted, true);
   await intact(); checks.push('failed_r2_delete_blocks_new_access_and_writes_then_resumes_exact_request');
 

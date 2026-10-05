@@ -15,7 +15,7 @@ export async function storedSyntheticResponse(request, owner, service, HwpDocume
 <p>버튼을 누르면 개인정보 없는 고정 시험 HWP 한 개를 내 문서 저장소에 보관합니다. 이후 같은 버전의 미리보기와 다운로드를 확인할 수 있습니다.</p>
 <form method="post" action="${route}"><input type="hidden" name="request_id" value="${requestId}">
 <button type="submit" name="confirmation" value="create_fixed_synthetic">합성 시험 문서 저장하기</button></form>
-<p class="notice">이 화면을 여는 것만으로 파일을 만들거나 수정하지 않습니다. 생성한 시험 문서는 직접 삭제할 때까지 보관합니다. 개인 파일 업로드는 닫혀 있습니다.</p></header>`);
+<p class="notice">이 화면을 여는 것만으로 파일을 만들거나 수정하지 않습니다. 생성한 시험 문서는 직접 삭제할 때까지 보관합니다. 이 시험은 개인 파일을 업로드하지 않습니다.</p></header>`);
     // no-referrer turns a native form POST's Origin into null. Keep a real
     // same-site Origin for the strict CSRF check, without cross-site referrers.
     // Read-only document viewers retain their stricter no-referrer policy.

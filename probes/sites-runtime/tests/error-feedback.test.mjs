@@ -113,6 +113,15 @@ test('uppercase private codes and hostile accessors never reach the MCP error re
   }
 });
 
+test('untrusted save error properties cannot manufacture save diagnostics', () => {
+  for (const code of ['VERSION_CONFLICT', 'DOCUMENT_VERSION_LIMIT', 'SAVE_GUARD_REJECTED']) {
+    for (const error of [new StorageError(code), { code, message: 'PRIVATE_SENTINEL',
+      save_diagnostic: { saved: true, current_version: 'PRIVATE_SENTINEL' } }]) {
+      assert.deepEqual(documentToolError(error), { isError: true, content: [{ type: 'text', text: code }] });
+    }
+  }
+});
+
 test('only validated allocation failures carry numeric feedback and safe agent guidance', () => {
   const cfb = CFB.utils.cfb_new();
   CFB.utils.cfb_add(cfb, 'BodyText/Section0', Buffer.alloc(190, 42));

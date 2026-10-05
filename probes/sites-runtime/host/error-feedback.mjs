@@ -1,4 +1,4 @@
-import { StorageError } from '../storage/store.mjs';
+import { StorageError, saveRejectionDiagnostic } from '../storage/store.mjs';
 import { fileDescriptorOrigin, fileOriginRejectionDiagnostic } from './transfer.mjs';
 import { publicErrorCode } from './public-errors.mjs';
 import { bodyRepairAllocationDiagnostic } from '../guard/container.mjs';
@@ -18,6 +18,34 @@ export function uploadDisabledError(file) {
 export function documentToolError(error) {
   const code = publicErrorCode(error);
   const result = { isError: true, content: [{ type: 'text', text: code }] };
+  const save = saveRejectionDiagnostic(error);
+  if (save) {
+    const guidance = {
+      VERSION_CONFLICT: {
+        status: 'current_version_changed',
+        message_ko: '지정한 저장본이 현재 저장본과 달라 이번 요청은 저장하지 않았습니다. 최신 버전 목록과 현재 저장본을 끝까지 읽고, 요청한 수정 내용과 대상을 다시 확인한 뒤 새 요청으로 저장하세요.',
+        suggested_action: 'read_current_version_and_replan',
+      },
+      DOCUMENT_VERSION_LIMIT: {
+        status: 'document_version_limit_reached',
+        message_ko: '문서별 저장 버전 한도(128개)에 도달해 수정이나 복구를 추가 저장하지 않았습니다. 기존 문서와 버전은 보존됩니다. 한도는 재시도로 해결되지 않으며, 자동 삭제나 요청하지 않은 다른 문서 저장을 하지 마세요.',
+        suggested_action: 'report_version_limit_and_ask_user_for_next_action',
+        max_versions_per_document: save.max_versions_per_document,
+      },
+      SAVE_GUARD_REJECTED: {
+        status: 'save_guard_rejected_reason_unconfirmed',
+        message_ko: '저장 조건을 충족하지 않아 이번 요청은 저장하지 않았습니다. 이후 상태가 바뀌어 충돌이나 한도 초과 중 어느 원인인지 확정할 수 없습니다. 버전 목록과 현재 저장본을 다시 확인하세요.',
+        suggested_action: 'inspect_current_version_before_retry',
+      },
+    }[save.reason];
+    const feedback = { stage: 'private-development', layout_verified: false,
+      data: { error: code, save_diagnostic: { ...guidance, saved: false,
+        retry_same_request_recommended: false, automatic_overwrite_allowed: false,
+        automatic_version_deletion_allowed: false, unrequested_save_as_allowed: false } } };
+    result.content.push({ type: 'text', text: JSON.stringify(feedback) });
+    result.structuredContent = feedback;
+    return result;
+  }
   const rejectedOrigin = code === 'FILE_URL_NOT_ALLOWED' ? fileOriginRejectionDiagnostic(error) : undefined;
   if (rejectedOrigin) {
     const feedback = { stage: 'private-development', layout_verified: false,

@@ -10,6 +10,16 @@ const fail = (code) => { throw new StorageError(code); };
 const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
 const hashPattern = /^[0-9a-f]{64}$/;
 const MAX_BYTES = 4 * 1024 * 1024, MAX_VERSIONS = 128;
+const saveRejections = new WeakMap();
+const rejectSave = (code) => {
+  const error = new StorageError(code);
+  saveRejections.set(error, code);
+  throw error;
+};
+export function saveRejectionDiagnostic(error) {
+  const code = saveRejections.get(error);
+  return code && error.code === code ? { reason: code, max_versions_per_document: MAX_VERSIONS } : undefined;
+}
 const uuid = () => crypto.randomUUID();
 const ownerKey = (owner) => {
   if (typeof owner !== 'string' || !/^[a-zA-Z0-9:_-]{1,160}$/.test(owner)) fail('INVALID_OWNER');
@@ -68,7 +78,21 @@ export function createVersionStore(db, bucket) {
     }
     if (!result) fail('BLOB_KEY_CONFLICT'); // Never delete an existing key.
   }
-  async function settle(owner, requestId, expectedFingerprint, statements, c) {
+  async function checkReplacement(owner, documentId, expectedVersion) {
+    // One owner-scoped snapshot explains a rejected save, without revealing a
+    // different owner's document or treating this check as a distributed lock.
+    const state = await first(`SELECT d.current_version,
+      (SELECT count(*) FROM hwp_versions v WHERE v.owner = d.owner AND v.document_id = d.id) AS version_count
+      FROM hwp_documents d WHERE d.owner = ? AND d.id = ?
+      AND NOT EXISTS (SELECT 1 FROM hwp_deletions x WHERE x.owner = d.owner AND x.document_id = d.id)`,
+      [owner, documentId]);
+    if (!state) fail('DOCUMENT_OR_VERSION_NOT_FOUND');
+    if (!uuidPattern.test(state.current_version) || !Number.isSafeInteger(state.version_count)
+      || state.version_count < 1) fail('BLOB_MISSING_OR_CORRUPT');
+    if (state.current_version !== expectedVersion) rejectSave('VERSION_CONFLICT');
+    if (state.version_count >= MAX_VERSIONS) rejectSave('DOCUMENT_VERSION_LIMIT');
+  }
+  async function settle(owner, requestId, expectedFingerprint, statements, c, replacement) {
     try { await db.batch(statements); }
     catch {
       // The transaction may have committed but its acknowledgement was lost.
@@ -106,6 +130,11 @@ export function createVersionStore(db, bucket) {
     }
     // A fully acknowledged transaction without our receipt did not publish.
     if (c) try { await bucket.delete(c.key); } catch {}
+    if (replacement) {
+      await checkReplacement(owner, replacement.documentId, replacement.expectedVersion);
+      // State may change again after rejection. Do not guess the past reason.
+      rejectSave('SAVE_GUARD_REJECTED');
+    }
     fail('VERSION_CONFLICT_OR_HISTORY_LIMIT');
   }
   async function prepareCreate({ owner, request_id, bytes }) {
@@ -178,12 +207,7 @@ export function createVersionStore(db, bucket) {
     // Avoid creating another private blob when deletion/staleness/history limits
     // are already known. The final batch still enforces the same guards, because
     // this preflight is NOT a distributed lock. Exact replays returned above.
-    const writable = await first(`SELECT 1 AS allowed FROM hwp_documents d WHERE d.owner = ? AND d.id = ?
-      AND d.current_version = ?
-      AND NOT EXISTS (SELECT 1 FROM hwp_deletions x WHERE x.owner = d.owner AND x.document_id = d.id)
-      AND (SELECT count(*) FROM hwp_versions v WHERE v.owner = d.owner AND v.document_id = d.id) < ?`,
-      [owner, document_id, expected_version, MAX_VERSIONS]);
-    if (writable?.allowed !== 1) fail('VERSION_CONFLICT_OR_HISTORY_LIMIT');
+    await checkReplacement(owner, document_id, expected_version);
     await writeBlob(c);
     const fresh = `NOT EXISTS (SELECT 1 FROM hwp_requests WHERE owner = ? AND id = ?)
       AND NOT EXISTS (SELECT 1 FROM hwp_deletions WHERE owner = ? AND (document_id = ? OR request_id = ?))`;
@@ -199,7 +223,7 @@ export function createVersionStore(db, bucket) {
       statement(`INSERT INTO hwp_requests (owner,id,fingerprint,document_id,version_id,created_at)
         SELECT ?,?,?,?,?,? WHERE EXISTS (SELECT 1 FROM hwp_documents WHERE owner = ? AND id = ? AND current_version = ?)
         ON CONFLICT(owner,id) DO NOTHING`, [owner, request_id, fp, document_id, c.version, c.now, owner, document_id, c.version]),
-    ], c);
+    ], c, { documentId: document_id, expectedVersion: expected_version });
   }
   async function history({ owner, document_id }) {
     ownerKey(owner); id(document_id);

@@ -13,6 +13,7 @@ import { createDocumentEngine } from '../engine/document.mjs';
 import { createVersionStore, StorageError } from '../storage/store.mjs';
 import { createDocumentService } from '../storage/service.mjs';
 import { applyTestMigrations } from './migrations.mjs';
+import { documentToolError } from '../host/error-feedback.mjs';
 const require = createRequire(import.meta.url);
 initSync({ module: fs.readFileSync(new URL('./rhwp_bg.wasm', pathToFileURL(require.resolve('@rhwp/core')))) });
 const engine = createDocumentEngine(HwpDocument), api = createEngineApi(HwpDocument);
@@ -116,16 +117,70 @@ try {
   checks.push('injected_put_ack_loss_cleans_only_unpublished_random_key');
 
   const limited = await store.create({ owner, request_id: crypto.randomUUID(), bytes });
-  let current = limited.version_id;
-  for (let i = 1; i < store.limits.max_versions_per_document; i++) {
-    current = (await store.replace({ owner, document_id: limited.document_id,
-      expected_version: current, request_id: crypto.randomUUID(), bytes })).version_id;
+  let current = limited.version_id, lastWrite;
+  for (let i = 1; i < store.limits.max_versions_per_document - 1; i++) {
+    lastWrite = { owner, document_id: limited.document_id,
+      expected_version: current, request_id: crypto.randomUUID(), bytes };
+    current = (await store.replace(lastWrite)).version_id;
   }
+  // Inject a competing save after the losing writer's early check/R2 PUT,
+  // filling the final slot. The D1 batch must still reject and clean its key.
+  lastWrite = { owner, document_id: limited.document_id, expected_version: current,
+    request_id: crypto.randomUUID(), bytes };
+  const lateQuotaBucket = { get: (...args) => bucket.get(...args), delete: (...args) => bucket.delete(...args),
+    async put(...args) {
+      const result = await bucket.put(...args);
+      current = (await store.replace(lastWrite)).version_id;
+      return result;
+    } };
+  await assert.rejects(() => createVersionStore(db, lateQuotaBucket).replace({ ...lastWrite,
+    request_id: crypto.randomUUID() }), isCode('VERSION_CONFLICT'));
+  // The competing version takes precedence over the now-full quota for the
+  // stale writer; a fresh request bound to the winner reports the quota.
+  assert.equal((await bucket.list({ prefix: `hwp-easy/v1/${owner}/${limited.document_id}/` })).objects.length, 128);
+  checks.push('late_competing_final_slot_reports_conflict_and_cleans_only_losing_candidate');
   await assert.rejects(() => store.replace({ owner, document_id: limited.document_id,
-    expected_version: current, request_id: crypto.randomUUID(), bytes }), isCode('VERSION_CONFLICT_OR_HISTORY_LIMIT'));
+    expected_version: current, request_id: crypto.randomUUID(), bytes }), (error) => {
+      assert(isCode('DOCUMENT_VERSION_LIMIT')(error));
+      error.message = 'PRIVATE_DOCUMENT_TEXT'; error.details = { secret: 'PRIVATE_SENTINEL' };
+      const feedback = documentToolError(error);
+      assert.equal(feedback.content[0].text, 'DOCUMENT_VERSION_LIMIT');
+      const diagnostic = feedback.structuredContent.data.save_diagnostic;
+      assert.equal(diagnostic.status, 'document_version_limit_reached');
+      assert.equal(diagnostic.max_versions_per_document, 128);
+      assert.equal(diagnostic.saved, false);
+      assert.equal(diagnostic.retry_same_request_recommended, false);
+      assert.equal(diagnostic.automatic_version_deletion_allowed, false);
+      assert.equal(diagnostic.unrequested_save_as_allowed, false);
+      assert(!JSON.stringify(feedback).includes('PRIVATE_'));
+      assert.deepEqual(JSON.parse(feedback.content[1].text), feedback.structuredContent);
+      return true;
+    });
+  assert.equal((await store.replace(lastWrite)).replayed, true);
+  await assert.rejects(() => store.replace({ ...lastWrite, request_id: crypto.randomUUID() }), isCode('VERSION_CONFLICT'));
   assert.equal((await store.read({ owner, document_id: limited.document_id })).version_id, current);
   assert.equal((await store.history({ owner, document_id: limited.document_id })).length, 128);
   checks.push('real_128_version_limit_rejects_without_deleting_history');
+  checks.push('exact_replay_at_quota_and_stale_version_precedence_over_quota');
+
+  // Acknowledged rejection with a still-writable observation does not justify
+  // inventing a version conflict/quota cause. This batch no-op is injected.
+  const guardDoc = await store.create({ owner, request_id: crypto.randomUUID(), bytes });
+  const guardKeys = (await bucket.list()).objects.map((o) => o.key).sort();
+  const rejectedDb = { prepare: (...args) => db.prepare(...args), batch: async () => [] };
+  await assert.rejects(() => createVersionStore(rejectedDb, bucket).replace({ owner,
+    document_id: guardDoc.document_id, expected_version: guardDoc.version_id,
+    request_id: crypto.randomUUID(), bytes }), (error) => {
+      assert(isCode('SAVE_GUARD_REJECTED')(error));
+      assert.equal(documentToolError(error).structuredContent.data.save_diagnostic.status,
+        'save_guard_rejected_reason_unconfirmed');
+      return true;
+    });
+  assert.deepEqual((await bucket.list()).objects.map((o) => o.key).sort(), guardKeys);
+  assert.equal((await store.history({ owner, document_id: guardDoc.document_id })).length, 1);
+  await assert.rejects(() => store.replace({ owner: 'different-owner', document_id: guardDoc.document_id,
+    expected_version: guardDoc.version_id, request_id: crypto.randomUUID(), bytes }), isCode('DOCUMENT_OR_VERSION_NOT_FOUND'));
+  checks.push('injected_acknowledged_noop_preserves_state_and_does_not_guess_cause', 'owner_scoped_rejection_hides_document');
 
   // Corrupt cross-owner metadata is rejected BEFORE a blob lookup.
   let blobRead = false;

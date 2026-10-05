@@ -209,7 +209,15 @@ try {
     await denied(name, value, 'DOCUMENT_OR_VERSION_NOT_FOUND', other);
   }
   await denied('hwp_read', { ...current, owner: firstOwner }, 'INVALID_TOOL_ARGUMENTS');
-  await denied('hwp_edit', { ...editArgs, request_id: crypto.randomUUID() }, 'VERSION_CONFLICT_OR_HISTORY_LIMIT');
+  const staleHistory = await call('hwp_versions', { document_id: created.document_id }), staleBlobs = await blobState();
+  const stale = await denied('hwp_edit', { ...editArgs, request_id: crypto.randomUUID() }, 'VERSION_CONFLICT');
+  assert.equal(stale.structuredContent.data.save_diagnostic.status, 'current_version_changed');
+  assert.equal(stale.structuredContent.data.save_diagnostic.suggested_action, 'read_current_version_and_replan');
+  assert.equal(stale.structuredContent.data.save_diagnostic.saved, false);
+  assert.equal(stale.structuredContent.data.save_diagnostic.automatic_overwrite_allowed, false);
+  assert.deepEqual(await call('hwp_versions', { document_id: created.document_id }), staleHistory);
+  assert.deepEqual(await blobState(), staleBlobs);
+  checks.push('stale_save_feedback_requires_reread_without_new_versions_or_blobs');
   const old = await call('hwp_read', args);
   assert.equal(old.blocks.find((b) => b.id === body.id).text, body.text);
   checks.push('mock_two_user_read_edit_restore_download_isolation', 'client_owner_argument_rejected', 'stale_save_keeps_current');

@@ -50,12 +50,12 @@ export async function runStorageProbe(db, bucket, engine, HwpDocument) {
       source_version: created.version_id, request_id: restoreId });
     check(restoreReplay.replayed && restoreReplay.version_id === restored.version_id);
     await rejects(() => service.edit({ owner, document_id, expected_version: created.version_id,
-      request_id: crypto.randomUUID(), request }), 'VERSION_CONFLICT_OR_HISTORY_LIMIT');
+      request_id: crypto.randomUUID(), request }), 'VERSION_CONFLICT');
     // Run TWO different requests concurrently against the same current version.
     const race = await Promise.allSettled([1, 2].map(() => service.edit({ owner, document_id,
       expected_version: restored.version_id, request_id: crypto.randomUUID(), request })));
     check(race.filter((r) => r.status === 'fulfilled').length === 1
-      && race.filter((r) => r.status === 'rejected' && r.reason.code === 'VERSION_CONFLICT_OR_HISTORY_LIMIT').length === 1);
+      && race.filter((r) => r.status === 'rejected' && r.reason.code === 'VERSION_CONFLICT').length === 1);
     check((await service.history({ owner, document_id })).length === 4);
     report = { passed: true, scope: 'fixed_synthetic_documents_only', persistence: 'd1-r2',
       create_read_edit_reopen: true, original_version_retained: true, immutable_restore_revision: true,
