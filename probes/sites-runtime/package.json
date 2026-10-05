@@ -12,6 +12,7 @@
     "test:storage": "node scripts/check-storage.mjs",
     "test:limits": "node scripts/build.mjs && node scripts/check-performance-limits.mjs",
     "benchmark:synthetic": "node scripts/build.mjs && node scripts/benchmark-synthetic.mjs",
+    "profile:large": "node scripts/profile-large-synthetic.mjs",
     "test:host": "node scripts/check-host.mjs && node scripts/check-isolation.mjs && node scripts/check-host-failures.mjs && node scripts/check-deletion.mjs && node scripts/check-deletion-races.mjs && node scripts/check-synthetic-transfer.mjs && node scripts/check-synthetic-download.mjs && node scripts/check-document-viewer.mjs && node scripts/check-browser-upload.mjs && node scripts/check-document-list.mjs",
     "db:generate": "drizzle-kit generate"
   },

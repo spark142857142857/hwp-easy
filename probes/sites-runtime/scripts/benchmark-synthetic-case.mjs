@@ -12,7 +12,8 @@ import { createDocumentEngine } from '../engine/document.mjs';
 import { makePerformanceFixture, performanceCases } from './performance-fixtures.mjs';
 
 const name = process.argv[2];
-if (process.argv.length !== 3 || !performanceCases.includes(name)) throw Error('INVALID_ARGUMENTS');
+const singleLarge = process.argv.length === 4 && name === 'entropy1200k' && process.argv[3] === '--single-large';
+if ((!singleLarge && process.argv.length !== 3) || !performanceCases.includes(name)) throw Error('INVALID_ARGUMENTS');
 const require = createRequire(import.meta.url), runtime = pathToFileURL(require.resolve('@rhwp/core'));
 assert.equal(JSON.parse(fs.readFileSync(new URL('./package.json', runtime))).version, '0.8.6');
 const started = performance.now();
@@ -107,7 +108,7 @@ async function cycle() {
     preview_measured: ['small', 'form45'].includes(name), layout_verified: false };
 }
 
-const iterations = name === 'content_limit2000k' ? 1 : ['small', 'form45'].includes(name) ? 5 : 3;
+const iterations = singleLarge || name === 'content_limit2000k' ? 1 : ['small', 'form45'].includes(name) ? 5 : 3;
 for (let iteration = 0; iteration < iterations; iteration++) {
   const sample = await cycle();
   global.gc();

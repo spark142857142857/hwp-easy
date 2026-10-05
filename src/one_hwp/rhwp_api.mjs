@@ -150,7 +150,7 @@ export function createEngineApi(HwpDocument) {
   // Default remains conservative for the local bridge. A host may enable the
   // one preservation-only exception AFTER independent raw shape/anchor checks;
   // it must also independently compare every output control byte before saving.
-  function editDocument(bytes, operations, { preservePageNumbers = false, clearCellTargets = new Set() } = {}) {
+  function editDocumentChecked(bytes, operations, { preservePageNumbers = false, clearCellTargets = new Set() } = {}) {
     // Remote host opt-in ONLY after independent plain-cell raw profiling. The
     // local default remains unchanged; full model/raw verification is required.
     if (!(clearCellTargets instanceof Set) || clearCellTargets.size > 100) throw new Error('Invalid clear-cell profile');
@@ -208,9 +208,16 @@ export function createEngineApi(HwpDocument) {
           || JSON.stringify(before.unsupported) !== JSON.stringify(after.unsupported)) {
           throw new Error('Saved content or structure did not pass preservation checks');
         }
+        // The exact exported bytes have been reopened and model-checked here.
+        // Hosts may reuse this inspection ONLY while those bytes are unchanged.
+        return { bytes: output, inspection: after };
       } finally { reopened.free(); }
-      return output;
     } finally { document.free(); }
+  }
+
+  // Preserve the local bridge's byte-only contract and conservative defaults.
+  function editDocument(bytes, operations, options) {
+    return editDocumentChecked(bytes, operations, options).bytes;
   }
 
   function previewDocument(document, page) {
@@ -229,5 +236,5 @@ export function createEngineApi(HwpDocument) {
       layout_verified: false };
   }
 
-  return { openDocument, inspectDocument, exportChecked, editDocument, previewDocument };
+  return { openDocument, inspectDocument, exportChecked, editDocument, editDocumentChecked, previewDocument };
 }

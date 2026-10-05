@@ -12,6 +12,7 @@ import { rawTargetRestrictions } from './raw-target-restrictions.mjs';
 import { emptyCellFillProfiles, projectVerifiedCellTextTransitions } from '../guard/empty-cell-fill.mjs';
 import { cellTextClearProfiles } from '../guard/empty-cell-clear.mjs';
 import { enforceRawTextBudget } from '../guard/text-budget.mjs';
+import { indexUnicodeText } from './unicode-text.mjs';
 
 const fail = (code) => { throw new GuardError(code); };
 const copy = (value) => JSON.parse(JSON.stringify(value));
@@ -130,6 +131,11 @@ export function createDocumentEngine(HwpDocument) {
     const clearCellProfiles = mappingVerified ? cellTextClearProfiles(raw, inspection.blocks, mapping) : new Map();
     const restrictions = mappingVerified ? rawTargetRestrictions(raw, inspection.blocks, mapping, emptyCellProfiles) : new Map();
     const targets = new Map(inspection.blocks.map((block) => [targetId(version, block.id), block]));
+    const textIndexes = new WeakMap();
+    const textIndex = (block) => {
+      if (!textIndexes.has(block)) textIndexes.set(block, indexUnicodeText(block.text));
+      return textIndexes.get(block);
+    };
     const allContentSupported = mappingVerified && unsupported.length === 0;
     const editableProfile = mappingVerified && unsupported.every((item) =>
       preservedControls.length && item.kind === 'control' && item.control_id === 'pgnp');
@@ -160,18 +166,20 @@ export function createDocumentEngine(HwpDocument) {
         index = cursor.block_index; offset = cursor.offset;
         const block = inspection.blocks[index];
         if (!Number.isSafeInteger(index) || !block || !Number.isSafeInteger(offset)
-          || offset < 0 || offset > [...block.text].length) fail('INVALID_CURSOR');
+          || offset < 0 || offset > textIndex(block).length) fail('INVALID_CURSOR');
       }
       const start = { block_index: index, offset }, fragments = [];
       while (index < inspection.blocks.length && fragments.length < maximum) {
-        const block = inspection.blocks[index], text = [...block.text];
+        const block = inspection.blocks[index], text = textIndex(block);
         if (text.length && budget === 0) break;
         const end = Math.min(text.length, offset + budget);
-        fragments.push({ ...copy(block), target_id: targetId(version, block.id),
+        // Preserve the response shape and deep-copy metadata without cloning
+        // the entire source paragraph text merely to return a bounded fragment.
+        fragments.push({ ...copy({ ...block, text: '' }), target_id: targetId(version, block.id),
           editable: editableProfile && block.editable && !restrictions.has(block.id),
           empty_cell_fill_supported: editableProfile && emptyCellProfiles.has(block.id) && !restrictions.has(block.id),
           cell_text_clear_supported: editableProfile && clearCellProfiles.has(block.id) && !restrictions.has(block.id),
-          edit_restrictions: copy(restrictions.get(block.id) ?? []), text: text.slice(offset, end).join(''),
+          edit_restrictions: copy(restrictions.get(block.id) ?? []), text: text.slice(offset, end),
           start_offset: offset, end_offset: end, total_chars: text.length, fragment_complete: end === text.length });
         budget -= end - offset;
         if (end < text.length) { offset = end; break; }
@@ -221,15 +229,16 @@ export function createDocumentEngine(HwpDocument) {
     }
     async function edit(options) {
       const operations = plans(options);
-      const candidate = quietEngine(() => api.editDocument(bytes, operations,
+      const checked = quietEngine(() => api.editDocumentChecked(bytes, operations,
         { preservePageNumbers: preservedControls.length > 0,
           clearCellTargets: new Set(operations.filter((o) => o.new_text === '' && clearCellProfiles.has(o.target_id)).map((o) => o.target_id)) }));
+      const candidate = checked.bytes;
       const projection = projectVerifiedCellTextTransitions(raw, readHwp(candidate), operations, emptyCellProfiles, clearCellProfiles);
       const proofSource = { ...raw, streams: projection.streams };
       const repaired = preserveZeroCellListWords(proofSource, candidate, inspection), output = repaired.bytes;
-      const reopened = inspect(output);
+      const reopened = output === candidate ? checked.inspection : inspect(output);
       // The adapter may restore an opaque word, never change the engine model.
-      if (repaired.restored_cell_list_words && JSON.stringify(reopened) !== JSON.stringify(inspect(candidate))) fail('PRESERVATION_MISMATCH');
+      if (output !== candidate && JSON.stringify(reopened) !== JSON.stringify(checked.inspection)) fail('PRESERVATION_MISMATCH');
       const after = readHwp(output);
       // api.editDocument already reopens and compares exact text/style/table model.
       // Independently match raw AFTER text and nesting to that reopened model.

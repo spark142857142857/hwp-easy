@@ -10,6 +10,7 @@ import { createDocumentEngine, mapRawTargets } from '../engine/document.mjs';
 import { readHwp } from '../guard/container.mjs';
 import { GuardError } from '../guard/records.mjs';
 import { withCheckedDeflateTrailers } from './trailer-fixtures.mjs';
+import { miniGrowthFixture } from './cell-list-fixtures.mjs';
 const require = createRequire(import.meta.url);
 initSync({ module: fs.readFileSync(new URL('./rhwp_bg.wasm', pathToFileURL(require.resolve('@rhwp/core')))) });
 const api = createEngineApi(HwpDocument), engine = createDocumentEngine(HwpDocument);
@@ -154,8 +155,33 @@ test('copied snapshot cannot be changed by caller mutation during hashing or by 
   const pending = engine.open(bytes); bytes.fill(0);
   const snapshot = await pending;
   const read = snapshot.read(options(snapshot));
+  const originalStyle = structuredClone(read.blocks[0].style);
   read.blocks[0].text = '침범'; read.blocks[0].style.char_shape_ids[0] = 123;
   assert.equal(snapshot.read(options(snapshot)).blocks[0].text, '첫 합성 문단');
+  assert.deepEqual(snapshot.read(options(snapshot)).blocks[0].style, originalStyle);
+});
+
+test('unchanged edit bytes reuse their checked inspection; repaired bytes are freshly reopened', async () => {
+  for (const repair of [false, true]) {
+    let opens = 0;
+    const counted = new Proxy(HwpDocument, { construct(Type, args) {
+      opens++; return Reflect.construct(Type, args, Type);
+    } });
+    const localEngine = createDocumentEngine(counted);
+    const bytes = repair ? miniGrowthFixture(HwpDocument, api).bytes : fixture({ table: false });
+    const snapshot = await localEngine.open(bytes), before = readAll(snapshot).blocks;
+    const target = before.find((block) => block.editable && block.text && block.kind === (repair ? 'cell' : 'paragraph'));
+    assert.ok(target);
+    const changed = await snapshot.edit(options(snapshot, { operations: [{ target_id: target.target_id,
+      expected_old: target.text, new_text: '검증된 수정 😀' }] }));
+    assert.equal(changed.raw_preservation_verified, true);
+    assert.equal(changed.content_verified, true);
+    assert.equal(changed.restored_cell_list_words > 0, repair);
+    // Initial open, editing source, serialized candidate; a repair needs one more.
+    assert.equal(opens, repair ? 4 : 3);
+    const after = readAll(await engine.open(changed.bytes)).blocks;
+    assert.deepEqual(after.map((block) => block.text), before.map((block) => block.id === target.id ? '검증된 수정 😀' : block.text));
+  }
 });
 test('version, cursor, whole old value, duplicates and unknown arguments reject before output', async () => {
   const snapshot = await engine.open(fixture());
