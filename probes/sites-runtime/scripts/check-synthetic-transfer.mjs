@@ -144,9 +144,12 @@ try {
   assert.equal(fetches, count); await intact();
   checks.push('unapproved_hosts_and_caller_hash_identity_overrides_rejected_before_fetch');
   let opens = 0;
-  const brokenEngine = { async open(...args) {
+  const brokenEngine = { ...engine, async open(...args) {
     if (++opens === 2) throw new StorageError('DOCUMENT_OPERATION_FAILED');
     return engine.open(...args);
+  }, async openRead(...args) {
+    if (++opens === 2) throw new StorageError('DOCUMENT_OPERATION_FAILED');
+    return engine.openRead(...args);
   } };
   const broken = createHostApp({ DB: db, BUCKET: bucket, HWP_EASY_ORIGIN: origin,
     HWP_EASY_SYNTHETIC_FILE_ORIGINS: JSON.stringify([fileOrigin]) }, brokenEngine, HwpDocument, async () => new Response(bytes));

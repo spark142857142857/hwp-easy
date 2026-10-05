@@ -126,7 +126,7 @@ try {
   for (const error of [{ code: 'PRIVATE_DOCUMENT_TITLE', message: 'PRIVATE_SIGNED_URL' },
     Object.defineProperty({}, 'code', { get() { throw new Error('PRIVATE_GETTER'); } })]) {
     const host = createHostApp({ DB: db, BUCKET: bucket, HWP_EASY_ORIGIN: origin },
-      { async open() { throw error; } }, HwpDocument);
+      { async open() { throw error; }, async openRead() { throw error; } }, HwpDocument);
     const before = await snapshot();
     await assert.rejects(() => host.call('hwp_read', versionArgs(first), new Request(`${origin}/mcp`, { headers: a })), (caught) => {
       assert.equal(caught, error);

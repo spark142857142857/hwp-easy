@@ -21,8 +21,18 @@ export function createDocumentService(engine, store) {
     return { metadata, snapshot };
   }
   async function read({ owner, document_id, version_id, options = {} }) {
-    const { metadata, snapshot } = await open({ owner, document_id, version_id });
-    return { ...snapshot.read(options), storage: metadata };
+    const { bytes, ...metadata } = await store.read({ owner, document_id, version_id });
+    const snapshot = await engine.openRead(bytes, { owner, document_id, version_id: metadata.version_id }, metadata.sha256);
+    const result = snapshot.read({ expected_sha256: metadata.sha256, ...options });
+    // Hashing, source inspection and cache access can overlap deletion. Recheck
+    // this immutable stored version before returning materialized document text.
+    try {
+      const history = await store.history({ owner, document_id });
+      if (!history.some((v) => v.version_id === metadata.version_id && v.sha256 === metadata.sha256)) {
+        throw new StorageError('DOCUMENT_OR_VERSION_NOT_FOUND');
+      }
+    } catch (error) { engine.forgetReads({ owner, document_id }); throw error; }
+    return { ...result, storage: metadata };
   }
   async function edit({ owner, document_id, expected_version, request_id, request }) {
     try { request = structuredClone(request); } catch { throw new StorageError('INVALID_REQUEST'); }
@@ -51,5 +61,10 @@ export function createDocumentService(engine, store) {
     await open({ owner: args.owner, document_id: args.document_id, version_id: args.source_version });
     return store.restore(args);
   }
-  return Object.freeze({ create, prepareCreate, open, read, edit, preflight, restore, remove: store.remove, history: store.history });
+  async function remove(args) {
+    engine.forgetReads(args);
+    try { return await store.remove(args); }
+    finally { engine.forgetReads(args); }
+  }
+  return Object.freeze({ create, prepareCreate, open, read, edit, preflight, restore, remove, history: store.history });
 }

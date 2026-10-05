@@ -6,6 +6,7 @@ import { readHwp } from '../guard/container.mjs';
 import { GuardError, parseRecords, profileSections } from '../guard/records.mjs';
 import { verifyPreservation } from '../guard/preservation.mjs';
 import { createDocumentEngine } from '../engine/document.mjs';
+import { createReadInspectionCache } from '../engine/read-inspection-cache.mjs';
 import { runStorageProbe } from '../storage/probe.mjs';
 import { createHostApp } from '../host/app.mjs';
 import { documentTools } from '../host/tools.mjs';
@@ -19,6 +20,8 @@ const checked = (value) => { if (json(value).ok !== true) throw new Error('opera
 const invariant = (condition) => { if (!condition) throw new Error('verification'); };
 const memoryBytes = () => wasm.memory.buffer.byteLength;
 const initialMemoryBytes = memoryBytes();
+const readInspectionCache = createReadInspectionCache();
+const hostEngine = () => createDocumentEngine(HwpDocument, { readInspectionCache });
 const isHwp = (data) => [...data.slice(0, 8)].join(',') === '208,207,17,224,161,177,26,225';
 const rawProbeScope = 'fixed_synthetic_fixtures_only';
 const rawTargetMappingScope = 'unique_old_visible_text_to_section0_tag66_ordinal';
@@ -257,7 +260,7 @@ export default {
       return syntheticDownloadResponse(request, () => syntheticDownloadBytes(HwpDocument));
     }
     if (path === '/documents' || path.startsWith('/documents/') || path === '/diagnostics/stored-document') {
-      try { return await createHostApp(env, createDocumentEngine(HwpDocument), HwpDocument).http(request); }
+      try { return await createHostApp(env, hostEngine(), HwpDocument).http(request); }
       catch { return response({ error: 'DOCUMENT_SERVICE_UNAVAILABLE' }, 503); }
     }
     if (path === '/storage-probe') {
@@ -306,7 +309,7 @@ export default {
     if (rpc.method !== 'tools/call') return error(-32601, 'Method not found');
     if (!request.headers.get('oai-authenticated-user-id')) return response({ error: 'Authentication required' }, 401);
     if (rpc.params?.name !== 'hwp_runtime_probe') {
-      try { return reply(await createHostApp(env, createDocumentEngine(HwpDocument), HwpDocument)
+      try { return reply(await createHostApp(env, hostEngine(), HwpDocument)
         .call(rpc.params?.name, rpc.params?.arguments, request)); }
       catch (err) {
         if (publicErrorCode(err) === 'AUTHENTICATION_REQUIRED') return response({ error: 'Authentication required' }, 401);

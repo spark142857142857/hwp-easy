@@ -85,9 +85,12 @@ try {
   await intact(); checks.push('unpublished_blob_cleaned_after_lost_put_ack_and_failed_first_cleanup');
 
   let opens = 0;
-  const failedRead = { async open(...a) {
+  const failedRead = { ...engine, async open(...a) {
     if (++opens === 2) throw new StorageError('DOCUMENT_OPERATION_FAILED');
     return engine.open(...a);
+  }, async openRead(...a) {
+    if (++opens === 2) throw new StorageError('DOCUMENT_OPERATION_FAILED');
+    return engine.openRead(...a);
   } };
   await assert.rejects(() => invoke(app(db, bucket, failedRead)), code('DOCUMENT_OPERATION_FAILED'));
   await intact(); checks.push('read_failure_cleans_generated_document_not_existing_document');

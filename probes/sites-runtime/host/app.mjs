@@ -78,6 +78,9 @@ export function createHostApp(env, engine, HwpDocument, fetcher = fetch) {
       request: { expected_sha256: args.expected_sha256, operations: args.operations } });
     if (name === 'hwp_plan') return service.preflight({ owner, ...args,
       request: { expected_sha256: args.expected_sha256, operations: args.operations } });
+    if (name === 'hwp_read') return service.read({ owner, document_id: args.document_id, version_id: args.version_id,
+      options: { ...(args.cursor ? { cursor: args.cursor } : {}), ...(args.max_chars ? { max_chars: args.max_chars } : {}),
+        ...(args.max_blocks ? { max_blocks: args.max_blocks } : {}) } });
     if (name === 'hwp_restore') return service.restore({ owner, ...args });
     if (name === 'hwp_delete') return service.remove({ owner, document_id: args.document_id,
       expected_version: args.expected_version, request_id: args.request_id });
@@ -112,9 +115,6 @@ export function createHostApp(env, engine, HwpDocument, fetcher = fetch) {
         _document_output: resource };
     }
     const { snapshot, metadata } = await service.open({ owner, document_id: args.document_id, version_id: args.version_id });
-    if (name === 'hwp_read') return { ...snapshot.read({ expected_sha256: metadata.sha256,
-      ...(args.cursor ? { cursor: args.cursor } : {}), ...(args.max_chars ? { max_chars: args.max_chars } : {}),
-      ...(args.max_blocks ? { max_blocks: args.max_blocks } : {}) }), storage: metadata };
     const base = `${origin()}/documents/${args.document_id}/versions/${args.version_id}`;
     snapshot.preview({ expected_sha256: metadata.sha256, page: args.page });
     return { ...metadata, preview_url: `${base}/pages/${args.page}.svg`, viewer_url: `${base}/view?page=${args.page}`, requires_same_user_sign_in: true, layout_verified: false };

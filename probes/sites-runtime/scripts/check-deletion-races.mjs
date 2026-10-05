@@ -11,6 +11,8 @@ import { createEngineApi } from '../../../src/one_hwp/rhwp_api.mjs';
 import { syntheticFixture } from '../../../src/one_hwp/synthetic_fixtures.mjs';
 import { createVersionStore } from '../storage/store.mjs';
 import { createHostApp } from '../host/app.mjs';
+import { createDocumentEngine } from '../engine/document.mjs';
+import { createReadInspectionCache } from '../engine/read-inspection-cache.mjs';
 import { authenticatedOwner } from '../host/transfer.mjs';
 import { applyTestMigrations } from './migrations.mjs';
 
@@ -116,6 +118,38 @@ try {
     rejected(await reading, 'DOCUMENT_OR_VERSION_NOT_FOUND');
     if (phase === 'pending') await store.remove(request);
     await revoked(doc); checks.push(`${delivery}_output_rechecks_${phase}_deletion_after_engine_open`);
+  }
+  // Even an already materialized read from a warm inspection cache must
+  // recheck real D1 deletion state before releasing text to the caller.
+  for (const warm of [false, true]) for (const phase of ['pending', 'complete']) {
+    const doc = await create(), request = deletion(doc), gate = barrier();
+    const cache = createReadInspectionCache();
+    const engine = createDocumentEngine(HwpDocument, { readInspectionCache: cache });
+    const scope = { owner, document_id: doc.document_id, version_id: doc.version_id };
+    if (warm) await engine.openRead(bytes, scope, doc.sha256);
+    const host = createHostApp({ DB: db, BUCKET: bucket, HWP_EASY_ORIGIN: origin }, {
+      ...engine, async openRead(...args) {
+        const result = await engine.openRead(...args); await gate.pause(); return result;
+      },
+    }, HwpDocument);
+    const reading = outcome(host.call('hwp_read', { document_id: doc.document_id,
+      version_id: doc.version_id, max_chars: 17 }, new Request(`${origin}/mcp`, { headers: identity })));
+    try {
+      await reached(gate);
+      assert.equal(cache.stats().entries, 1);
+      assert.equal(cache.stats().hits, warm ? 1 : 0);
+      if (phase === 'complete') await store.remove(request);
+      else {
+        const broken = { get: (...args) => bucket.get(...args), put: (...args) => bucket.put(...args),
+          async delete() { throw new Error('PRIVATE_INJECTED_DELETE_FAILURE'); } };
+        await assert.rejects(() => createVersionStore(db, broken).remove(request), code('DELETE_INCOMPLETE_RETRY_SAME_REQUEST'));
+      }
+    } finally { gate.release(); }
+    rejected(await reading, 'DOCUMENT_OR_VERSION_NOT_FOUND');
+    assert.equal(cache.stats().entries, 0);
+    if (phase === 'pending') await store.remove(request);
+    await revoked(doc); assert.equal((await keys(doc)).length, 0);
+    checks.push(`${warm ? 'warm' : 'cold'}_cached_read_rechecks_${phase}_deletion_after_materialization_and_evicts`);
   }
   // The new guard must not confuse a normal edit with deletion. Old versions
   // remain readable, and a receipt already confirmed before staleness replays.

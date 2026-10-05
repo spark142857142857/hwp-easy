@@ -102,7 +102,7 @@ export function mapRawTargets(decoded, blocks) {
   return mapping;
 }
 
-export function createDocumentEngine(HwpDocument) {
+export function createDocumentEngine(HwpDocument, { readInspectionCache } = {}) {
   const api = createEngineApi(HwpDocument);
   function inspect(bytes) {
     return quietEngine(() => {
@@ -125,6 +125,21 @@ export function createDocumentEngine(HwpDocument) {
     const inspection = inspect(bytes);
     return createSnapshot(bytes, raw, inspection, await sha256(bytes)).snapshot;
   }
+  async function openRead(input, scope, expectedSourceHash) {
+    const { bytes, raw } = source(input), version = await sha256(bytes);
+    if (version !== expectedSourceHash) fail('BLOB_MISSING_OR_CORRUPT');
+    let inspection = readInspectionCache?.get(HwpDocument, scope, version);
+    if (!inspection) {
+      inspection = inspect(bytes);
+      readInspectionCache?.put(HwpDocument, scope, version, inspection);
+    }
+    // Raw admission, full raw/model mapping and target restrictions are rebuilt
+    // from these freshly fetched and hashed bytes even on an inspection hit.
+    const snapshot = createSnapshot(bytes, raw, inspection, version).snapshot;
+    // Only a read handle escapes this method; mutation/preview uses fresh WASM.
+    return Object.freeze({ source_sha256: version, read: snapshot.read });
+  }
+  function forgetReads(scope) { readInspectionCache?.invalidate(scope); }
   function createSnapshot(bytes, raw, inspection, version) {
     let mapping, mappingVerified = false;
     try { mapping = mapRawTargets(raw, inspection.blocks); mappingVerified = true; }
@@ -333,5 +348,5 @@ export function createDocumentEngine(HwpDocument) {
     const result = await context.finishEdit(prepared.operations, checked);
     return context.preflightResult(context.snapshot.plan(copied), result);
   }
-  return Object.freeze({ open, edit, preflight, limits });
+  return Object.freeze({ open, openRead, forgetReads, edit, preflight, limits });
 }
