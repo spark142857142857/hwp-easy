@@ -2,6 +2,7 @@ import { StorageError, saveRejectionDiagnostic } from '../storage/store.mjs';
 import { fileDescriptorOrigin, fileOriginRejectionDiagnostic } from './transfer.mjs';
 import { publicErrorCode } from './public-errors.mjs';
 import { bodyRepairAllocationDiagnostic } from '../guard/container.mjs';
+import { MAX_HOSTED_BODY_TEXT_CODE_UNITS } from '../guard/hosted-workload.mjs';
 
 // Only errors made here carry diagnostics. Never serialize arbitrary error
 // properties: they can contain private document data or signed download URLs.
@@ -18,6 +19,20 @@ export function uploadDisabledError(file) {
 export function documentToolError(error) {
   const code = publicErrorCode(error);
   const result = { isError: true, content: [{ type: 'text', text: code }] };
+  if (code === 'HOSTED_WORKLOAD_LIMIT_EXCEEDED') {
+    const feedback = { stage: 'private-development', layout_verified: false,
+      data: { error: code, workload_diagnostic: {
+        status: 'hosted_body_text_limit_exceeded',
+        max_body_text_utf16_code_units: MAX_HOSTED_BODY_TEXT_CODE_UNITS,
+        message_ko: '본문과 표 셀의 합산 길이가 현재 서버의 처리 한도(40만 UTF-16 단위)를 넘어 이번 요청을 저장하지 않았습니다. 예를 들어 😀는 2단위, 👩‍💻는 5단위로 계산합니다. 재인증이나 같은 요청의 재시도로 해결되지 않으며, 문서를 임의로 자르거나 일부만 저장하지 마세요.',
+        saved: false, retry_same_request_recommended: false,
+        suggested_action: 'report_hosted_limit_without_altering_document',
+        automatic_partial_save_allowed: false, unrequested_edits_allowed: false,
+      } } };
+    result.content.push({ type: 'text', text: JSON.stringify(feedback) });
+    result.structuredContent = feedback;
+    return result;
+  }
   const save = saveRejectionDiagnostic(error);
   if (save) {
     const guidance = {

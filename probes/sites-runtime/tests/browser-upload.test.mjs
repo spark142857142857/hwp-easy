@@ -11,6 +11,7 @@ test('upload page has an explicit file action and scoped script policy; disabled
   const enabled = browserUploadResponse(page, true), html = await enabled.text();
   assert(html.includes('type="file"')); assert(html.includes('type="submit" disabled'));
   assert(html.includes('직접 삭제할 때까지 보관')); assert(html.includes('PC 원본은 변경하지 않습니다'));
+  assert(html.includes('40만 단위'));
   assert.equal(enabled.headers.get('Referrer-Policy'), 'same-origin');
   assert(enabled.headers.get('Content-Security-Policy').includes("script-src 'self'; connect-src 'self'"));
   const disabled = await browserUploadResponse(page, false).text();
@@ -62,4 +63,15 @@ test('served standalone script works without module imports and refuses automati
   const source = await browserUploadResponse(new Request(origin + '/documents/upload-client.js'), true).text();
   vm.runInNewContext(source, h.context); h.select(file); await h.submit(); await h.submit();
   assert.equal(requests, 1); assert.equal(h.elements.get('upload-button').disabled, true);
+});
+
+test('hosted workload rejection explains the limit and prevents a repeated upload', async () => {
+  let requests = 0;
+  const h = uploadClientHarness(() => {
+    requests++; return Response.json({ error: 'HOSTED_WORKLOAD_LIMIT_EXCEEDED', message: 'PRIVATE_SENTINEL' }, { status: 400 });
+  });
+  installUploadForm(h.context); h.select(file); await h.submit(); await h.submit();
+  assert.equal(requests, 1); assert.equal(h.elements.get('upload-button').disabled, true);
+  assert(h.elements.get('upload-status').textContent.includes('40만'));
+  assert(!h.elements.get('upload-status').textContent.includes('PRIVATE_SENTINEL'));
 });

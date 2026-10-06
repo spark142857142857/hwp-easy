@@ -21,7 +21,7 @@ const invariant = (condition) => { if (!condition) throw new Error('verification
 const memoryBytes = () => wasm.memory.buffer.byteLength;
 const initialMemoryBytes = memoryBytes();
 const readInspectionCache = createReadInspectionCache();
-const hostEngine = () => createDocumentEngine(HwpDocument, { readInspectionCache });
+const hostEngine = () => createDocumentEngine(HwpDocument, { readInspectionCache, hostedWorkloadBudget: true });
 const isHwp = (data) => [...data.slice(0, 8)].join(',') === '208,207,17,224,161,177,26,225';
 const rawProbeScope = 'fixed_synthetic_fixtures_only';
 const rawTargetMappingScope = 'unique_old_visible_text_to_section0_tag66_ordinal';

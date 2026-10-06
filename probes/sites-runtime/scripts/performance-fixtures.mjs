@@ -30,24 +30,7 @@ export function makePerformanceFixture(name, HwpDocument, api) {
     // Negative READ workload only. Avoid constructing two million characters
     // through the upstream editor before testing our model inspection limit.
     // This external CFB rewrite is NOT an engine-writer preservation fixture.
-    const base = syntheticFixture(HwpDocument, api.exportChecked,
-      { table: false, paragraphs: ['가'] });
-    const streams = readCfb(base), body = 'BodyText/Section0';
-    const records = [...parseRecords(inflateRawSync(streams.get(body)))];
-    const header = records.find((record) => record.tag === 66 && record.level === 0);
-    const text = records.find((record) => record.tag === 67 && record.level === 1);
-    const extra = Buffer.from('가'.repeat(2000000), 'utf16le');
-    const payload = new Uint8Array(text.payload.length + extra.length);
-    payload.set(text.payload.subarray(0, -2));
-    payload.set(extra, text.payload.length - 2);
-    payload.set(text.payload.subarray(-2), payload.length - 2);
-    text.payload = payload;
-    const view = new DataView(header.payload.buffer, header.payload.byteOffset, header.payload.byteLength);
-    view.setUint32(0, view.getUint32(0, true) + 2000000, true);
-    streams.set(body, deflateRawSync(encodeRecords(records)));
-    const container = CFB.utils.cfb_new();
-    for (const [stream, bytes] of streams) CFB.utils.cfb_add(container, stream, Buffer.from(bytes));
-    return new Uint8Array(CFB.write(container, { type: 'buffer', fileType: 'cfb' }));
+    return makeRawTextLimitFixture(2000001, HwpDocument, api);
   }
   let options = {};
   if (name === 'form45') options.cells = Array.from({ length: 45 }, (_, index) =>
@@ -59,4 +42,28 @@ export function makePerformanceFixture(name, HwpDocument, api) {
       paragraphs: [name === 'repeated200k' ? '가'.repeat(length) : deterministicText(length), '합성 마지막 문단'] };
   }
   return syntheticFixture(HwpDocument, api.exportChecked, options);
+}
+
+// Negative admission fixture only: externally extend one text record. This is
+// not a valid-edit/layout corpus and must never count as a successful save.
+export function makeRawTextLimitFixture(units, HwpDocument, api) {
+  if (!Number.isSafeInteger(units) || units < 1 || units > 2000001) throw new Error('INVALID_SYNTHETIC_CASE');
+  const base = syntheticFixture(HwpDocument, api.exportChecked,
+    { table: false, paragraphs: ['가'] });
+  const streams = readCfb(base), body = 'BodyText/Section0';
+  const records = [...parseRecords(inflateRawSync(streams.get(body)))];
+  const header = records.find((record) => record.tag === 66 && record.level === 0);
+  const text = records.find((record) => record.tag === 67 && record.level === 1);
+  const extra = Buffer.from('가'.repeat(units - 1), 'utf16le');
+  const payload = new Uint8Array(text.payload.length + extra.length);
+  payload.set(text.payload.subarray(0, -2));
+  payload.set(extra, text.payload.length - 2);
+  payload.set(text.payload.subarray(-2), payload.length - 2);
+  text.payload = payload;
+  const view = new DataView(header.payload.buffer, header.payload.byteOffset, header.payload.byteLength);
+  view.setUint32(0, view.getUint32(0, true) + units - 1, true);
+  streams.set(body, deflateRawSync(encodeRecords(records)));
+  const container = CFB.utils.cfb_new();
+  for (const [stream, bytes] of streams) CFB.utils.cfb_add(container, stream, Buffer.from(bytes));
+  return new Uint8Array(CFB.write(container, { type: 'buffer', fileType: 'cfb' }));
 }

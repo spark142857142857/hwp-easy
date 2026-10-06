@@ -11,6 +11,7 @@ export function installUploadForm({ document, fetch, crypto, location, AbortCont
     TRANSFER_LIMIT_EXCEEDED: '4 MiB 이하의 HWP 파일을 선택해주세요.',
     INPUT_LIMIT_EXCEEDED: '이 파일은 현재 처리 한도를 넘습니다. 다른 HWP 파일을 선택해주세요.',
     RAW_TEXT_LIMIT_EXCEEDED: '파일 크기는 작아도 본문 길이가 현재 처리 한도를 넘습니다. 다른 HWP 파일을 선택해주세요.',
+    HOSTED_WORKLOAD_LIMIT_EXCEEDED: '본문과 표 셀의 합산 길이가 현재 서버의 처리 한도(40만 단위, 예: 😀는 2단위, 👩‍💻는 5단위)를 넘어서 업로드하지 않았습니다. 같은 파일을 다시 시도해도 해결되지 않습니다.',
   };
   input.addEventListener('change', () => {
     if (busy) return;

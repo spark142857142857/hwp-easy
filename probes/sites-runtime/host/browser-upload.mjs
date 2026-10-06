@@ -13,7 +13,7 @@ export function browserUploadResponse(request, enabled) {
   const response = browserPage('HWP 업로드', `<header><small>HWP Easy · 비공개 개발 단계</small><h1>HWP 업로드</h1><p><a href="/documents">내 문서</a></p>
 ${enabled ? `<form id="upload-form">
 <label for="hwp-file">HWP 파일</label><input id="hwp-file" type="file" accept=".hwp,application/x-hwp" aria-describedby="upload-limit">
-<p id="upload-limit"><small>.hwp 파일 · 최대 4 MiB</small></p>
+<p id="upload-limit"><small>.hwp 파일 · 최대 4 MiB · 본문·표 셀 합계 최대 40만 단위(예: 😀는 2단위, 👩‍💻는 5단위)</small></p>
 <button id="upload-button" type="submit" disabled>업로드</button>
 <p id="upload-status" role="status" aria-live="polite"></p></form>
 <noscript><p>파일 업로드에는 브라우저의 JavaScript가 필요합니다.</p></noscript>

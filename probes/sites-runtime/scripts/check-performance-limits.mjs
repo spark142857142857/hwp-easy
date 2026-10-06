@@ -13,7 +13,7 @@ import { createEngineApi } from '../../../src/one_hwp/rhwp_api.mjs';
 import { createDocumentEngine } from '../engine/document.mjs';
 import { boundedBytes } from '../host/transfer.mjs';
 import { applyTestMigrations } from './migrations.mjs';
-import { makePerformanceFixture } from './performance-fixtures.mjs';
+import { makePerformanceFixture, makeRawTextLimitFixture } from './performance-fixtures.mjs';
 
 if (process.argv.length !== 2) throw Error('Synthetic limit check accepts no arguments');
 const maximum = 4 * 1024 * 1024, require = createRequire(import.meta.url);
@@ -73,6 +73,8 @@ try {
   const capabilities = await call('hwp_capabilities', {});
   assert.equal(capabilities.max_body_text_utf16_code_units, 2000000);
   assert.equal(capabilities.raw_body_text_limit_checked_before_wasm, true);
+  assert.equal(capabilities.max_hosted_body_text_utf16_code_units, 400000);
+  assert.equal(capabilities.hosted_body_text_limit_checked_before_wasm, true);
   // must pass transfer and then fail the container without publishing data.
   for (const length of [maximum - 1, maximum, maximum + 1]) {
     const bytes = new Uint8Array(length);
@@ -125,6 +127,22 @@ try {
   assert.equal(engineTouched, false);
   boundaries.push({ layer: 'engine_adapter', bytes: maximum + 1,
     error: 'INPUT_LIMIT_EXCEEDED', wasm_called: false });
+  // Negative admission only; this compressed external CFB rewrite is never
+  // passed off as an editable/layout-preserved large document.
+  const hostedOversized = makeRawTextLimitFixture(1200000, HwpDocument, api);
+  const hostedHash = digest(hostedOversized), hostedStart = performance.now();
+  const hostedRejected = await upload(hostedOversized);
+  assert.equal(hostedRejected.status, 400);
+  assert.equal((await hostedRejected.json()).error, 'HOSTED_WORKLOAD_LIMIT_EXCEEDED');
+  assert.equal(digest(hostedOversized), hostedHash);
+  assert.equal(await count(), 0); assert.equal((await bucket.list()).objects.length, 0);
+  for (const table of ['hwp_versions', 'hwp_requests']) {
+    assert.equal((await db.prepare(`SELECT count(*) AS n FROM ${table}`).first()).n, 0);
+  }
+  boundaries.push({ layer: 'compiled_worker_hosted_workload_budget', input_bytes: hostedOversized.length,
+    visible_utf16_units: 1200000, error: 'HOSTED_WORKLOAD_LIMIT_EXCEEDED',
+    elapsed_ms: performance.now() - hostedStart, published: false, source_unchanged: true,
+    fixture_scope: 'negative_admission_external_cfb_rewrite' });
   const compressed = makePerformanceFixture('content_limit2000k', HwpDocument, api);
   const limitStart = performance.now(), compressedHash = digest(compressed);
   const rejectedText = await upload(compressed);

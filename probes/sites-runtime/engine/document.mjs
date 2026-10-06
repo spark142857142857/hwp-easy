@@ -12,6 +12,7 @@ import { rawTargetRestrictions } from './raw-target-restrictions.mjs';
 import { emptyCellFillProfiles, projectVerifiedCellTextTransitions } from '../guard/empty-cell-fill.mjs';
 import { cellTextClearProfiles } from '../guard/empty-cell-clear.mjs';
 import { enforceRawTextBudget } from '../guard/text-budget.mjs';
+import { enforceHostedTextBudget } from '../guard/hosted-workload.mjs';
 import { indexUnicodeText } from './unicode-text.mjs';
 
 const fail = (code) => { throw new GuardError(code); };
@@ -102,7 +103,8 @@ export function mapRawTargets(decoded, blocks) {
   return mapping;
 }
 
-export function createDocumentEngine(HwpDocument, { readInspectionCache } = {}) {
+export function createDocumentEngine(HwpDocument, { readInspectionCache, hostedWorkloadBudget = false } = {}) {
+  if (typeof hostedWorkloadBudget !== 'boolean') fail('INVALID_ARGUMENTS');
   const api = createEngineApi(HwpDocument);
   function inspect(bytes) {
     return quietEngine(() => {
@@ -117,16 +119,17 @@ export function createDocumentEngine(HwpDocument, { readInspectionCache } = {}) 
     if (input.length > 4 * 1024 * 1024) fail('INPUT_LIMIT_EXCEEDED');
     const bytes = new Uint8Array(input);
     const raw = readHwp(bytes);
-    enforceRawTextBudget(raw);
-    return { bytes, raw };
+    const textUnits = enforceRawTextBudget(raw);
+    if (hostedWorkloadBudget) enforceHostedTextBudget(textUnits);
+    return { bytes, raw, textUnits };
   }
   async function open(input) {
-    const { bytes, raw } = source(input);
+    const { bytes, raw, textUnits } = source(input);
     const inspection = inspect(bytes);
-    return createSnapshot(bytes, raw, inspection, await sha256(bytes)).snapshot;
+    return createSnapshot(bytes, raw, inspection, await sha256(bytes), textUnits).snapshot;
   }
   async function openRead(input, scope, expectedSourceHash) {
-    const { bytes, raw } = source(input), version = await sha256(bytes);
+    const { bytes, raw, textUnits } = source(input), version = await sha256(bytes);
     if (version !== expectedSourceHash) fail('BLOB_MISSING_OR_CORRUPT');
     let inspection = readInspectionCache?.get(HwpDocument, scope, version);
     if (!inspection) {
@@ -135,12 +138,12 @@ export function createDocumentEngine(HwpDocument, { readInspectionCache } = {}) 
     }
     // Raw admission, full raw/model mapping and target restrictions are rebuilt
     // from these freshly fetched and hashed bytes even on an inspection hit.
-    const snapshot = createSnapshot(bytes, raw, inspection, version).snapshot;
+    const snapshot = createSnapshot(bytes, raw, inspection, version, textUnits).snapshot;
     // Only a read handle escapes this method; mutation/preview uses fresh WASM.
     return Object.freeze({ source_sha256: version, read: snapshot.read });
   }
   function forgetReads(scope) { readInspectionCache?.invalidate(scope); }
-  function createSnapshot(bytes, raw, inspection, version) {
+  function createSnapshot(bytes, raw, inspection, version, textUnits) {
     let mapping, mappingVerified = false;
     try { mapping = mapRawTargets(raw, inspection.blocks); mappingVerified = true; }
     catch (error) {
@@ -224,7 +227,7 @@ export function createDocumentEngine(HwpDocument, { readInspectionCache } = {}) 
       const operations = options.operations;
       if (!Array.isArray(operations) || !operations.length || operations.length > limits.max_operations) fail('INVALID_OPERATIONS');
       const seen = new Set(); let count = 0;
-      return operations.map((operation) => {
+      const planned = operations.map((operation) => {
         object(operation, ['target_id', 'expected_old', 'new_text']);
         if (Object.keys(operation).length !== 3 || typeof operation.target_id !== 'string'
           || typeof operation.expected_old !== 'string' || typeof operation.new_text !== 'string'
@@ -243,6 +246,12 @@ export function createDocumentEngine(HwpDocument, { readInspectionCache } = {}) 
         if (block.text !== operation.expected_old) fail('EXPECTED_OLD_MISMATCH');
         return { target_id: block.id, expected_old: operation.expected_old, new_text: operation.new_text };
       });
+      // Every old value above has been matched to the source. Use UTF-16 units,
+      // including surrogate pairs, and check the entire atomic result before
+      // any mutation/layout. Never split the user's requested operations.
+      if (hostedWorkloadBudget) enforceHostedTextBudget(textUnits + planned.reduce((sum, operation) =>
+        sum + operation.new_text.length - operation.expected_old.length, 0));
+      return planned;
     }
     function plan(options) {
       const operations = plans(options);
@@ -329,11 +338,11 @@ export function createDocumentEngine(HwpDocument, { readInspectionCache } = {}) 
   // snapshot. No live WASM document survives this call or crosses users.
   async function prepareChecked(input, options, expectedSourceHash) {
     try { options = structuredClone(options); } catch { fail('INVALID_ARGUMENTS'); }
-    const { bytes, raw } = source(input), version = await sha256(bytes);
+    const { bytes, raw, textUnits } = source(input), version = await sha256(bytes);
     if (expectedSourceHash !== undefined && version !== expectedSourceHash) fail('BLOB_MISSING_OR_CORRUPT');
     let context, prepared;
     const checked = quietEngine(() => api.editDocumentPrepared(bytes, (inspection) => {
-      context = createSnapshot(bytes, raw, inspection, version);
+      context = createSnapshot(bytes, raw, inspection, version, textUnits);
       prepared = context.prepareEdit(options);
       return prepared;
     }));

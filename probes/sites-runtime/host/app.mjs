@@ -10,6 +10,7 @@ import { documentViewerResponse, viewerMatch } from './document-viewer.mjs';
 import { storedSyntheticResponse } from './stored-synthetic.mjs';
 import { browserUploadResponse, UPLOAD_PAGE, UPLOAD_SCRIPT } from './browser-upload.mjs';
 import { MAX_RAW_BODY_TEXT_CODE_UNITS } from '../guard/text-budget.mjs';
+import { MAX_HOSTED_BODY_TEXT_CODE_UNITS } from '../guard/hosted-workload.mjs';
 import { documentListResponse } from './document-list.mjs';
 import { documentNameResponse, nameMatch } from './document-name.mjs';
 import { HANDOFF_SCRIPT, handoffScriptResponse } from './handoff.mjs';
@@ -46,6 +47,7 @@ export function createHostApp(env, engine, HwpDocument, fetcher = fetch) {
       transfer_body_timeout_ms: TRANSFER_BODY_TIMEOUT_MS,
       max_input_bytes: store.limits.max_bytes, max_versions_per_document: store.limits.max_versions_per_document,
       max_body_text_utf16_code_units: MAX_RAW_BODY_TEXT_CODE_UNITS, raw_body_text_limit_checked_before_wasm: true,
+      max_hosted_body_text_utf16_code_units: MAX_HOSTED_BODY_TEXT_CODE_UNITS, hosted_body_text_limit_checked_before_wasm: true,
       default_save: 'same_remote_document', pc_original_updated: false, layout_verified: false,
       native_file_attachment_verified: false, codex_cloud_client_verified: false, dots_client_verified: false,
       retention: 'until_explicit_delete', automatic_expiry: false,

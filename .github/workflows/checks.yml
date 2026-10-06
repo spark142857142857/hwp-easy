@@ -108,3 +108,5 @@ jobs:
         run: node scripts/check-document-list.mjs
       - name: Verify full-size upload boundaries and synthetic measured workflows
         run: node scripts/check-performance-limits.mjs
+      - name: Verify hosted workload refusals preserve documents and versions
+        run: node scripts/check-hosted-workload.mjs

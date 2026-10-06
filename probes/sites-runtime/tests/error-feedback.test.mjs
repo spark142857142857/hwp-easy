@@ -11,6 +11,19 @@ const file = { download_url: 'https://files.example.invalid/private-path?token=s
   file_id: 'private-id', file_name: 'private-name.hwp', mime_type: 'private-mime' };
 const plain = { isError: true, content: [{ type: 'text', text: 'DOCUMENT_UPLOADS_NOT_ENABLED' }] };
 
+test('hosted workload errors give fixed safe guidance without private properties or retry advice', () => {
+  const error = new GuardError('HOSTED_WORKLOAD_LIMIT_EXCEEDED');
+  error.message = 'PRIVATE_SENTINEL'; error.details = file;
+  const result = documentToolError(error), data = result.structuredContent.data;
+  assert.equal(result.isError, true); assert.equal(result.content[0].text, error.code);
+  assert.equal(data.workload_diagnostic.max_body_text_utf16_code_units, 400000);
+  assert.equal(data.workload_diagnostic.saved, false);
+  assert.equal(data.workload_diagnostic.retry_same_request_recommended, false);
+  assert.equal(data.workload_diagnostic.automatic_partial_save_allowed, false);
+  assert(!JSON.stringify(result).includes('PRIVATE_SENTINEL'));
+  assert(!JSON.stringify(result).includes('secret'));
+});
+
 test('disabled import retains failure and adds only safe origin with no authority', () => {
   const error = uploadDisabledError(file);
   assert.equal(error.code, 'DOCUMENT_UPLOADS_NOT_ENABLED');
