@@ -15,6 +15,7 @@ import { createDocumentEngine } from '../engine/document.mjs';
 import { createReadInspectionCache } from '../engine/read-inspection-cache.mjs';
 import { authenticatedOwner } from '../host/transfer.mjs';
 import { applyTestMigrations } from './migrations.mjs';
+import { makeRawTextLimitFixture } from './performance-fixtures.mjs';
 
 const require = createRequire(import.meta.url);
 initSync({ module: fs.readFileSync(new URL('./rhwp_bg.wasm', pathToFileURL(require.resolve('@rhwp/core')))) });
@@ -95,6 +96,39 @@ try {
     if (phase === 'pending') await store.remove(request);
     await revoked(doc); assert.equal((await keys(doc)).length, 0);
     checks.push(`${channel}_read_rechecks_${phase}_deletion_before_returning_already_fetched_bytes`);
+  }
+  // A legacy oversized viewer reads once before admission and once for its
+  // metadata fallback. Deletion during either buffered R2 read must block HTML.
+  const oversized = makeRawTextLimitFixture(400001, HwpDocument, createEngineApi(HwpDocument));
+  const hostedEngine = createDocumentEngine(HwpDocument, { hostedWorkloadBudget: true });
+  for (const heldRead of [1, 2]) for (const phase of ['pending', 'complete']) {
+    const doc = await store.create({ owner, request_id: crypto.randomUUID(), bytes: oversized });
+    const request = deletion(doc), gate = barrier(); let reads = 0;
+    const heldBucket = { put: (...args) => bucket.put(...args), delete: (...args) => bucket.delete(...args),
+      async get(key) {
+        const object = await bucket.get(key);
+        if (++reads !== heldRead) return object;
+        const held = await object.arrayBuffer(); await gate.pause();
+        return { size: object.size, arrayBuffer: async () => held };
+      } };
+    const host = createHostApp({ DB: db, BUCKET: heldBucket, HWP_EASY_ORIGIN: origin }, hostedEngine, HwpDocument);
+    const viewing = outcome(host.http(new Request(`${origin}/documents/${doc.document_id}/versions/${doc.version_id}/view`, { headers: identity })));
+    try {
+      await reached(gate);
+      if (phase === 'complete') await store.remove(request);
+      else {
+        const broken = { put: (...args) => bucket.put(...args), get: (...args) => bucket.get(...args),
+          async delete() { throw new Error('PRIVATE_INJECTED_DELETE_FAILURE'); } };
+        await assert.rejects(() => createVersionStore(db, broken).remove(request), code('DELETE_INCOMPLETE_RETRY_SAME_REQUEST'));
+      }
+    } finally { gate.release(); }
+    const result = await viewing;
+    assert.equal(result.ok, true); assert.equal(result.value.status, 404);
+    assert.deepEqual(await result.value.json(), { error: 'DOCUMENT_OR_VERSION_NOT_FOUND' });
+    assert.equal(reads, heldRead);
+    if (phase === 'pending') await store.remove(request);
+    await revoked(doc); assert.equal((await keys(doc)).length, 0);
+    checks.push(`oversized_view_${heldRead === 1 ? 'initial' : 'fallback'}_read_rechecks_${phase}_deletion_before_html`);
   }
   // Embedded delivery has additional engine/encoding work after store.read.
   // A deletion during that work must not release the buffered binary resource.

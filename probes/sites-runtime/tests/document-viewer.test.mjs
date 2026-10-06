@@ -1,6 +1,8 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { documentViewerResponse, escapeHtml, viewerMatch, viewerPageNumber } from '../host/document-viewer.mjs';
+import { GuardError } from '../guard/records.mjs';
+import { StorageError } from '../storage/store.mjs';
 const document_id = crypto.randomUUID(), version_id = crypto.randomUUID(), other = crypto.randomUUID();
 const sha256 = 'a'.repeat(64), url = new URL(`https://viewer.invalid/documents/${document_id}/versions/${version_id}/view`);
 function service(preview = () => ({ page_count: 3, svg: '<svg><script>never inline</script></svg>' })) {
@@ -83,4 +85,70 @@ test('HTML escapes metacharacters and inconsistent selected version metadata is 
   assert.equal(escapeHtml('<"a&\'b>'), '&lt;&quot;a&amp;&#39;b&gt;');
   const s = service(); s.history = async () => [{ version_id, sha256: 'b'.repeat(64) }];
   await assert.rejects(() => documentViewerResponse(url, 'user:mock', s), (e) => e.code === 'BLOB_MISSING_OR_CORRUPT');
+});
+
+function blockedService(error = new GuardError('HOSTED_WORKLOAD_LIMIT_EXCEEDED')) {
+  const s = service();
+  s.open = async (args) => { s.calls.push(['open', args]); throw error; };
+  const storeCalls = [], store = {
+    async read(args) {
+      storeCalls.push(['read', args]);
+      return { bytes: new Uint8Array([0xde, 0xad]), document_id, version_id, sha256 };
+    },
+    async documentName(args) { storeCalls.push(['documentName', args]); return { display_name: '<script>private title</script>' }; },
+  };
+  return { s, store, storeCalls };
+}
+test('admission-blocked viewer retains verified download/history without engine retry or read handoff', async () => {
+  for (const selected of [version_id, other]) {
+    const { s, store, storeCalls } = blockedService();
+    const selectedUrl = new URL(url.toString().replace(version_id, selected));
+    const response = await documentViewerResponse(selectedUrl, 'user:mock', s, url.origin, store);
+    const html = await response.text();
+    assert.equal(response.status, 200);
+    assert.deepEqual(s.calls, [['open', { owner: 'user:mock', document_id, version_id: selected }],
+      ['history', { owner: 'user:mock', document_id }]]);
+    assert.deepEqual(storeCalls, [['read', { owner: 'user:mock', document_id, version_id: selected }],
+      ['documentName', { owner: 'user:mock', document_id }]]);
+    assert(html.includes(`href="/documents/${document_id}/versions/${selected}.hwp" download`));
+    assert(html.includes('저장 버전 (2개)')); assert(html.includes('400,000단위'));
+    assert(html.includes('기존 문서와 버전은 유지됩니다'));
+    assert(html.includes('같은 요청을 반복하거나 재인증해도 이 제한은 해결되지 않습니다'));
+    assert(html.includes('&lt;script&gt;private title&lt;/script&gt;'));
+    assert.equal(html.includes('현재 저장본 보기'), selected !== other);
+    for (const absent of ['<script', '<img', '<svg', '<textarea', 'handoff-copy', '에이전트에게 전달', '편집 후보:']) assert(!html.includes(absent));
+    assert(!response.headers.get('Content-Security-Policy').includes('script-src'));
+    assert.equal(response.headers.get('Cache-Control'), 'private, no-store');
+  }
+});
+test('fallback is specific to genuine hosted workload refusal, never authorization/corruption or forged codes', async () => {
+  for (const error of [new StorageError('DOCUMENT_OR_VERSION_NOT_FOUND'), new StorageError('BLOB_MISSING_OR_CORRUPT'),
+    new GuardError('UNSUPPORTED_DOCUMENT_FEATURE'), Object.assign(new Error('private error'), { code: 'HOSTED_WORKLOAD_LIMIT_EXCEEDED' })]) {
+    const { s, store, storeCalls } = blockedService(error);
+    await assert.rejects(() => documentViewerResponse(url, 'user:mock', s, url.origin, store), (caught) => caught === error);
+    assert.deepEqual(storeCalls, []); assert.equal(s.calls.length, 1);
+  }
+  const { s } = blockedService();
+  await assert.rejects(() => documentViewerResponse(url, 'user:mock', s), (e) => e.code === 'HOSTED_WORKLOAD_LIMIT_EXCEEDED');
+});
+test('fallback rechecks store authorization/hash and late revocation before returning HTML', async () => {
+  for (const phase of ['read', 'history', 'documentName']) {
+    for (const code of ['DOCUMENT_OR_VERSION_NOT_FOUND', 'BLOB_MISSING_OR_CORRUPT']) {
+      const { s, store } = blockedService(), error = new StorageError(code);
+      (phase === 'history' ? s : store)[phase] = async () => { throw error; };
+      await assert.rejects(() => documentViewerResponse(url, 'user:mock', s, url.origin, store), (caught) => caught === error);
+    }
+  }
+  for (const history of [[], [{ version_id, sha256: 'b'.repeat(64) }]]) {
+    const { s, store } = blockedService(); s.history = async () => history;
+    await assert.rejects(() => documentViewerResponse(url, 'user:mock', s, url.origin, store), (e) => e.code === 'BLOB_MISSING_OR_CORRUPT');
+  }
+});
+test('blocked viewer accepts page zero but never silently substitutes for a requested preview page', async () => {
+  for (const page of [0, 1, 9999]) {
+    const { s, store } = blockedService();
+    const result = () => documentViewerResponse(new URL(url + `?page=${page}`), 'user:mock', s, url.origin, store);
+    if (page === 0) assert.equal((await result()).status, 200);
+    else await assert.rejects(result, (e) => e.code === 'INVALID_PREVIEW_PAGE');
+  }
 });

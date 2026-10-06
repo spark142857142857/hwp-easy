@@ -124,6 +124,52 @@ try {
   assert.equal((await success('hwp_versions', { document_id: current.document_id })).versions.length, 2);
   await intact(); checks.push('legacy_oversized_and_current_raw_downloads_and_history_remain_available');
 
+  const viewUrl = saved => `${origin}/documents/${saved.document_id}/versions/${saved.version_id}/view`;
+  const view = (saved, suffix = '', headers = identity) => mf.dispatchFetch(viewUrl(saved) + suffix, { headers });
+  const blockedView = async saved => {
+    const response = await view(saved), html = await response.text();
+    assert.equal(response.status, 200); assert.equal(response.headers.get('Cache-Control'), 'private, no-store');
+    assert(!response.headers.get('Content-Security-Policy').includes('script-src'));
+    assert(html.includes('이 저장본은 처리 제한을 넘었습니다')); assert(html.includes('400,000단위'));
+    assert(html.includes(`href="/documents/${saved.document_id}/versions/${saved.version_id}.hwp" download`));
+    assert(html.includes('저장 버전 (')); assert(html.includes('기존 문서와 버전은 유지됩니다'));
+    for (const absent of ['<script', '<img', '<textarea', 'handoff-copy', '편집 후보:']) assert(!html.includes(absent));
+    return html;
+  };
+  for (let attempt = 0; attempt < 2; attempt++) {
+    const html = await blockedView(legacy); assert(html.includes('현재 저장본 보기'));
+    assert(html.includes(`href="/documents/${current.document_id}/versions/${current.version_id}/view"`));
+    await intact();
+  }
+  assert.equal((await view(legacy, '?page=0')).status, 200);
+  for (const suffix of ['?page=1', '?page=9999', '?page=0&page=0', '?owner=other']) {
+    const response = await view(legacy, suffix); assert.equal(response.status, 400);
+    assert((await response.json()).error.startsWith('INVALID_')); await intact();
+  }
+  const normalResponse = await view(current), normalHtml = await normalResponse.text();
+  assert.equal(normalResponse.status, 200); assert(normalHtml.includes('이 저장본의 편집 가능 범위'));
+  assert(normalHtml.includes('handoff-copy')); assert(normalHtml.includes('<img')); await intact();
+  checks.push('oversized_old_view_is_metadata_only_with_download_history_and_no_read_handoff_or_retry');
+
+  assert.equal((await view(legacy, '', {})).status, 401);
+  assert.equal((await view(legacy, '', { ...identity, 'oai-authenticated-user-id': 'synthetic-other-owner' })).status, 404);
+  assert.equal((await view({ ...legacy, document_id: crypto.randomUUID() })).status, 404);
+  assert.equal((await view({ ...legacy, version_id: crypto.randomUUID() })).status, 404);
+  await intact();
+  // Inject corruption into the synthetic legacy blob, then restore test setup.
+  // Neither a hash mismatch nor missing bytes may produce the fallback page.
+  const legacyKey = baseline.blobs.find(blob => blob.sha256 === legacy.sha256).key;
+  try {
+    const corrupt = oversized.slice(); corrupt[corrupt.length - 1] ^= 1;
+    await bucket.put(legacyKey, corrupt);
+    let response = await view(legacy); assert.equal(response.status, 400);
+    assert.deepEqual(await response.json(), { error: 'BLOB_MISSING_OR_CORRUPT' });
+    await bucket.delete(legacyKey);
+    response = await view(legacy); assert.equal(response.status, 400);
+    assert.deepEqual(await response.json(), { error: 'BLOB_MISSING_OR_CORRUPT' });
+  } finally { await bucket.put(legacyKey, oversized); }
+  await intact(); checks.push('blocked_view_still_refuses_anonymous_cross_owner_mismatched_missing_or_corrupt_storage');
+
   const served = await mf.dispatchFetch(origin + '/documents/upload-client.js', { headers: identity });
   let submissions = 0;
   const client = uploadClientHarness(async (_url, init) => {
@@ -140,12 +186,29 @@ try {
   // oversized: users can explicitly recover to a supported earlier version.
   const oversizedCurrent = await store.replace({ owner, document_id: current.document_id, expected_version: current.version_id,
     request_id: crypto.randomUUID(), bytes: oversized, intent_sha256: digest(oversized) });
+  const oversizedState = await state(), oversizedHtml = await blockedView(oversizedCurrent);
+  assert(oversizedHtml.includes('<p class="version-state">현재 저장본</p>'));
+  assert(!oversizedHtml.includes('현재 저장본 보기'));
+  assert(oversizedHtml.includes(`href="/documents/${current.document_id}/versions/${current.version_id}/view"`));
+  assert.deepEqual(await state(), oversizedState);
+  checks.push('oversized_current_view_retains_prior_supported_version_link_without_mutating_storage');
   const restored = await success('hwp_restore', { document_id: current.document_id, expected_version: oversizedCurrent.version_id,
     source_version: current.version_id, request_id: crypto.randomUUID() });
   assert.equal(restored.sha256, current.sha256); assert.notEqual(restored.version_id, current.version_id);
   assert.equal((await success('hwp_versions', { document_id: current.document_id })).versions.length, 4);
   assert.deepEqual((await store.read({ owner, document_id: current.document_id })).bytes, small);
   checks.push('explicit_restore_of_allowed_source_from_oversized_current_succeeds_and_retains_history');
+  // Synthetic-only deletion: the new metadata fallback must respect revocation
+  // for every immutable version, just like the protected binary route.
+  await store.remove({ owner, document_id: current.document_id, expected_version: restored.version_id,
+    request_id: crypto.randomUUID() });
+  for (const saved of [legacy, current, oversizedCurrent, restored]) {
+    for (const suffix of ['/view', '.hwp']) {
+      const response = await mf.dispatchFetch(`${origin}/documents/${saved.document_id}/versions/${saved.version_id}${suffix}`, { headers: identity });
+      assert.equal(response.status, 404); assert.deepEqual(await response.json(), { error: 'DOCUMENT_OR_VERSION_NOT_FOUND' });
+    }
+  }
+  checks.push('deleted_oversized_and_supported_version_viewers_and_downloads_all_remain_revoked');
   console.log(JSON.stringify({ hosted_workload_contract: 'passed', checks, mocked_file_fetches: mockedFetches,
     actual_compiled_workerd_d1_r2_wasm: true, synthetic_only: true, actual_oauth_verified: false,
     successful_400000_unit_layout_or_serialization_verified: false, layout_verified: false }));

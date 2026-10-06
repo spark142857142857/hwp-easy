@@ -1,6 +1,8 @@
 // Read-only, version-bound HTML viewer. All content uses owner-scoped service
 // reads; SVG stays a separate passive image request, never inline document HTML.
 import { StorageError } from '../storage/store.mjs';
+import { GuardError } from '../guard/records.mjs';
+import { MAX_HOSTED_BODY_TEXT_CODE_UNITS } from '../guard/hosted-workload.mjs';
 import { HANDOFF_SCRIPT, handoffRequest } from './handoff.mjs';
 export const UUID_SOURCE = '[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}';
 export const viewerMatch = (pathname) => pathname.match(new RegExp(`^/documents/(${UUID_SOURCE})/versions/(${UUID_SOURCE})/view$`));
@@ -55,21 +57,35 @@ export async function documentViewerResponse(url, owner, service, canonicalOrigi
   const match = viewerMatch(url.pathname);
   if (!match) fail('INVALID_VIEWER_REQUEST');
   const page = viewerPageNumber(url), document_id = match[1], version_id = match[2];
-  const { metadata, snapshot } = await service.open({ owner, document_id, version_id });
+  let metadata, snapshot, workloadBlocked = false;
+  try { ({ metadata, snapshot } = await service.open({ owner, document_id, version_id })); }
+  catch (error) {
+    // Only a genuine admission refusal has this fallback. Re-read through the
+    // owner/hash/deletion-checked store, never trust buffered error metadata or
+    // retry the engine. Corruption and authorization errors still fail closed.
+    if (!(error instanceof GuardError) || error.code !== 'HOSTED_WORKLOAD_LIMIT_EXCEEDED' || !store) throw error;
+    const { bytes, ...saved } = await store.read({ owner, document_id, version_id });
+    metadata = saved;
+    workloadBlocked = true;
+  }
   const versions = await service.history({ owner, document_id });
   const selected = versions.find((v) => v.version_id === version_id);
   if (!selected || selected.sha256 !== metadata.sha256) fail('BLOB_MISSING_OR_CORRUPT');
   // Reuse the already opened snapshot. A bounded first fragment supplies the
   // full-document aggregate without a second WASM open or full-text read.
-  const editability = snapshot.read({ expected_sha256: metadata.sha256, max_chars: 1, max_blocks: 1 }).editability_summary;
+  const editability = workloadBlocked ? undefined
+    : snapshot.read({ expected_sha256: metadata.sha256, max_chars: 1, max_blocks: 1 }).editability_summary;
   const base = `/documents/${document_id}/versions/${version_id}`;
   let preview;
-  try {
-    const candidate = snapshot.preview({ expected_sha256: metadata.sha256, page });
-    if (candidate.svg.length > 4 * 1024 * 1024) throw new Error('PREVIEW_LIMIT_EXCEEDED');
-    preview = candidate;
+  if (workloadBlocked && page !== 0) fail('INVALID_PREVIEW_PAGE');
+  if (!workloadBlocked) {
+    try {
+      const candidate = snapshot.preview({ expected_sha256: metadata.sha256, page });
+      if (candidate.svg.length > 4 * 1024 * 1024) throw new Error('PREVIEW_LIMIT_EXCEEDED');
+      preview = candidate;
+    }
+    catch { if (page !== 0) fail('INVALID_PREVIEW_PAGE'); }
   }
-  catch { if (page !== 0) fail('INVALID_PREVIEW_PAGE'); }
   const current = versions[0].current_version;
   // Current is explicit storage metadata, never inferred from timestamp order.
   const ordered = [...versions].sort((a, b) => Number(b.version_id === current) - Number(a.version_id === current)
@@ -81,7 +97,7 @@ export async function documentViewerResponse(url, owner, service, canonicalOrigi
   const navigation = preview ? `<nav aria-label="미리보기 페이지"><span>${page + 1} / ${preview.page_count} 페이지</span>
 ${page > 0 ? `<a href="${base}/view?page=${page - 1}">이전 페이지</a>` : ''}
 ${page + 1 < preview.page_count && page < 9999 ? `<a href="${base}/view?page=${page + 1}">다음 페이지</a>` : ''}</nav>` : '';
-  const requestText = handoffRequest(canonicalOrigin, document_id, version_id);
+  const requestText = workloadBlocked ? '' : handoffRequest(canonicalOrigin, document_id, version_id);
   const name = store ? (await store.documentName({owner, document_id})).display_name : '';
   const response = browserPage('저장된 HWP 확인', `<header><small>HWP Easy · 비공개 개발 단계</small><h1>저장된 HWP 확인</h1>
 <p>${escapeHtml(name || `HWP 문서 · ${document_id.slice(0, 8)}`)}</p>
@@ -96,7 +112,10 @@ ${version_id !== current ? `<p><a href="/documents/${document_id}/versions/${cur
 <dt>파일 크기</dt><dd>${selected.byte_size} 바이트</dd><dt>SHA-256</dt><dd><code>${escapeHtml(metadata.sha256)}</code></dd></dl>
 </details>
 <p class="notice">보기와 다운로드는 문서를 수정하지 않습니다. 이전 버전을 열어도 현재 저장본은 바뀌지 않습니다.</p></header>
-${editabilitySection(editability)}
+${workloadBlocked ? `<section aria-labelledby="workload-heading"><h2 id="workload-heading">이 저장본은 처리 제한을 넘었습니다</h2>
+<p>현재 서버의 처리 제한은 본문·표 셀을 합쳐 UTF-16 ${MAX_HOSTED_BODY_TEXT_CODE_UNITS.toLocaleString('ko-KR')}단위입니다. 일반 한글 1자는 1단위이며 이모지 등은 여러 단위를 사용할 수 있습니다.</p>
+<p class="notice">이 저장본의 내용 조회·편집·미리보기는 제공하지 않습니다. 같은 요청을 반복하거나 재인증해도 이 제한은 해결되지 않습니다.</p>
+<p>기존 문서와 버전은 유지됩니다. 위에서 이 버전 HWP를 다운로드하거나 저장 버전 목록에서 다른 저장본을 선택하세요. 내려받은 HWP는 외부 HWP 프로그램에서 확인할 수 있습니다.</p></section>` : `${editabilitySection(editability)}
 <section aria-labelledby="handoff-heading"><h2 id="handoff-heading">에이전트에게 전달</h2>
 <p>HWP Easy가 연결된 대화에 붙여넣고 원하는 작업을 이어서 적으세요. 같은 계정의 접근 권한이 필요합니다.</p>
 <button type="button" class="secondary" id="handoff-copy" aria-describedby="handoff-hint" disabled>링크와 읽기 요청 복사</button>
@@ -110,8 +129,8 @@ ${editabilitySection(editability)}
 ${navigation}
 ${preview ? `<p><a href="${base}/pages/${page}.svg">미리보기 이미지 직접 열기</a></p><img src="${base}/pages/${page}.svg" alt="${page + 1}페이지 HWP 기본 미리보기">`
   : '<p role="status">미리보기를 만들 수 없습니다. HWP 다운로드는 계속 사용할 수 있습니다.</p>'}
-</section><script src="${HANDOFF_SCRIPT}" defer></script>`);
+</section><script src="${HANDOFF_SCRIPT}" defer></script>`}`);
   // Only this fixed host client is active. Document SVG remains a passive image.
-  response.headers.set('Content-Security-Policy', "default-src 'none'; script-src 'self'; connect-src 'none'; img-src 'self'; style-src 'unsafe-inline'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'");
+  if (!workloadBlocked) response.headers.set('Content-Security-Policy', "default-src 'none'; script-src 'self'; connect-src 'none'; img-src 'self'; style-src 'unsafe-inline'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'");
   return response;
 }
