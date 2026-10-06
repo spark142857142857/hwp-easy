@@ -10,6 +10,9 @@
 
 - Use Conventional Commit-style subjects: `feat:`, `fix:`, `docs:`, `test:`, `build:`, `chore:`.
 - Keep code, documentation, tests, and build changes in meaningful scoped commits.
+- By the owner's current instruction, push verified changes directly to `main` without creating a PR unless the user requests one. This applies to both Cloud and local sessions.
+- Fetch `origin/main` before starting changes and again before pushing. Preserve concurrent work; report divergence or conflicts instead of force-pushing or resetting.
+- A source push does not authorize production Sites deployment. Deploy only when requested.
 
 ## Product and safety
 

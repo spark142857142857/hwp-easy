@@ -16,6 +16,16 @@
 
 ## 제공하는 도구
 
+### 편집 가능 범위 안내 — 배포 전
+
+`hwp_read`는 기존 편집 제한을 설명하는 `editability_summary`와 각 블록의 `read_only_reasons`를 추가로 반환한다. 요약은 이번 응답 조각이 아니라 **선택한 버전 전체의 지원 본문·최상위 표 셀 문단**을 집계한다. 이어 읽기에서 같은 문단의 조각을 별도 대상으로 더하지 않으며, 이 요약만으로 내용 전체를 읽었다고 판단하지 않는다. 각 응답의 `complete`·`content_complete`와 `next_cursor` 계약은 그대로다.
+
+`replacement_candidates`, `body_replacement_candidates`, `cell_replacement_candidates`는 기존 검사에서 편집 가능한 문단 수다. `empty_cell_fill_candidates`와 `cell_text_clear_candidates`는 그 후보에 포함된 기능이며 따로 더하지 않는다. 셀 하나에 여러 문단이 있으면 각 문단을 별도 대상 하나로 센다. `read_only_reason_counts`는 문단별 이유 수로, 하나의 문단에 여러 이유가 있을 수 있어 전체 읽기 전용 문단 수와 합산하지 않는다.
+
+읽기 전용 이유는 원문 대응 미확인, 문서의 미지원 구조, 표·페이지 번호를 포함한 본문 문단, 혼합 글자 서식, 대상 길이·서식 검사 범위, 기존 줄바꿈 및 원본 텍스트·서식 보존 제한을 구분한다. 설명은 고정 코드와 한국어 문구이며 upstream 오류나 임의 메시지를 복사하지 않는다. 기존 `edit_restrictions`도 유지한다. 안내로 편집 허용 범위를 넓히지 않으며 모든 후보는 실제 요청의 대상·기존 값·전체 길이·직렬화·재열기·독립 보존 검사를 통과해야 저장할 수 있다.
+
+보기 화면도 같은 선택 버전의 집계를 표시한다. 이미 연 스냅샷에서 길이 1의 제한된 조각과 집계를 가져오므로 이를 위해 WASM을 다시 열거나 전체 본문을 HTML에 표시하지 않는다. capabilities의 `editability_summary_available`와 `target_read_only_reasons_available`가 이 안내를 명시한다. 새 소스의 합성 검사는 완료했으며 운영 반영과 실제 로그인 브라우저 검증은 아직 남아 있다.
+
 브라우저의 **문서 이름 설정**은 에이전트 도구 추가와 별개인 메타데이터 기능이다. 직접 입력한 이름을 최대 80개 Unicode 코드 포인트로 보관하며 원래 파일 이름과 본문에서 자동 생성하지 않는다. 이름을 비우면 문서 번호를 표시한다. 소유자별 이름 변경 번호와 조건부 SQL로 오래된 화면·동시 변경을 거부하고, 정확한 응답 유실 재시도는 중복 변경하지 않는다. 같은 origin의 POST만 받으며 입력을 HTML로 실행하지 않는다. HWP 바이트·현재 버전·버전 이력·편집 요청 기록을 바꾸지 않고, 이름은 문서 메타데이터의 일부로 같은 보관·삭제 계약을 따른다. 실제 두 OAuth 계정의 격리 인증으로 확대 해석하지 않는다.
 
 `hwp_import`에서 형식이 검증된 공개 HTTPS origin이 실행 서버의 허용 목록에 없으면 `FILE_URL_NOT_ALLOWED`를 유지하면서 `data.transfer_diagnostic`을 추가한다. `file_origin_not_allowlisted`, 해당 요청의 `candidate_file_origin`, 실행 설정의 origin 개수만 알려주고 URL 경로·query·파일 ID·이름과 전체 허용 목록은 반환하지 않는다. 이 거부는 네트워크 요청·바이트 수신·저장 전이다. 잘못된 descriptor나 URL, 설정 오류와 임의 upstream 오류에는 origin 진단을 붙이지 않는다. 별도 probe 호출은 다른 전달 주소를 받을 수 있으므로 가져오기 자체의 진단을 기준으로 한다. 후보 주소는 권한이 아니며 자동으로 호스트를 추가하지 않는다.
