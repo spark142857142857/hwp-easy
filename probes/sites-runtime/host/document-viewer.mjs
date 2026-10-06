@@ -41,6 +41,16 @@ export function savedTime(value) {
   if (!Number.isSafeInteger(value) || value < 0 || value > 8640000000000000) return '저장 시각 확인 불가';
   return `<time datetime="${new Date(value).toISOString()}">${escapeHtml(savedTimeFormat.format(value))} (한국 시간)</time>`;
 }
+function editabilitySection(summary) {
+  if (!summary) return '';
+  const reasons = summary.read_only_reason_counts.map(item =>
+    `<li>${escapeHtml(item.message_ko)} (${item.blocks}곳)</li>`).join('');
+  return `<section aria-labelledby="editability-heading"><h2 id="editability-heading">이 저장본의 편집 가능 범위</h2>
+<p>편집 후보: 본문 문단 ${summary.body_replacement_candidates}곳 · 표 셀 문단 ${summary.cell_replacement_candidates}곳</p>
+<p>읽기 전용: ${summary.read_only_blocks}곳 · 빈 셀 문단 채우기 후보: ${summary.empty_cell_fill_candidates}곳 · 셀 문단 비우기 후보: ${summary.cell_text_clear_candidates}곳</p>
+<p class="notice">본문·최상위 표 셀의 지원 범위를 기준으로 확인했습니다. 셀 문단의 채우기·비우기는 편집 후보에 포함된 기능이며 합산하지 않습니다. 편집 후보도 요청한 변경의 저장 전 검사를 통과해야 저장할 수 있습니다. 이 안내는 문서를 수정하지 않습니다.</p>
+${reasons ? `<details><summary>읽기 전용인 이유</summary><p>한 문단에 여러 이유가 있을 수 있어 아래 수를 합산하지 않습니다.</p><ul>${reasons}</ul></details>` : ''}</section>`;
+}
 export async function documentViewerResponse(url, owner, service, canonicalOrigin = url.origin, store) {
   const match = viewerMatch(url.pathname);
   if (!match) fail('INVALID_VIEWER_REQUEST');
@@ -49,6 +59,9 @@ export async function documentViewerResponse(url, owner, service, canonicalOrigi
   const versions = await service.history({ owner, document_id });
   const selected = versions.find((v) => v.version_id === version_id);
   if (!selected || selected.sha256 !== metadata.sha256) fail('BLOB_MISSING_OR_CORRUPT');
+  // Reuse the already opened snapshot. A bounded first fragment supplies the
+  // full-document aggregate without a second WASM open or full-text read.
+  const editability = snapshot.read({ expected_sha256: metadata.sha256, max_chars: 1, max_blocks: 1 }).editability_summary;
   const base = `/documents/${document_id}/versions/${version_id}`;
   let preview;
   try {
@@ -83,6 +96,7 @@ ${version_id !== current ? `<p><a href="/documents/${document_id}/versions/${cur
 <dt>파일 크기</dt><dd>${selected.byte_size} 바이트</dd><dt>SHA-256</dt><dd><code>${escapeHtml(metadata.sha256)}</code></dd></dl>
 </details>
 <p class="notice">보기와 다운로드는 문서를 수정하지 않습니다. 이전 버전을 열어도 현재 저장본은 바뀌지 않습니다.</p></header>
+${editabilitySection(editability)}
 <section aria-labelledby="handoff-heading"><h2 id="handoff-heading">에이전트에게 전달</h2>
 <p>HWP Easy가 연결된 대화에 붙여넣고 원하는 작업을 이어서 적으세요. 같은 계정의 접근 권한이 필요합니다.</p>
 <button type="button" class="secondary" id="handoff-copy" aria-describedby="handoff-hint" disabled>링크와 읽기 요청 복사</button>

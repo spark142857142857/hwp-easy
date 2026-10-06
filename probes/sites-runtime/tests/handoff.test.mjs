@@ -32,7 +32,8 @@ test('handoff points to exact selected version with no page, token, text or writ
 test('older viewer requests retain selected ID after current pointer changes, with canonical host', async () => {
   const calls = [], nextCurrent = crypto.randomUUID(); let pointer = current;
   const service = {
-    open(args) { calls.push(args); return { metadata: { sha256 }, snapshot: { preview() { throw Error('PRIVATE_MARKER'); } } }; },
+    open(args) { calls.push(args); return { metadata: { sha256 }, snapshot: {
+      read() { return {}; }, preview() { throw Error('PRIVATE_MARKER'); } } }; },
     history() { return [{ version_id, sha256, byte_size: 1, created_at: 1, current_version: pointer },
       { version_id: pointer, sha256, byte_size: 1, created_at: 2, current_version: pointer }]; },
   };

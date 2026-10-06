@@ -6,7 +6,12 @@ const sha256 = 'a'.repeat(64), url = new URL(`https://viewer.invalid/documents/$
 function service(preview = () => ({ page_count: 3, svg: '<svg><script>never inline</script></svg>' })) {
   const calls = [];
   return { calls,
-    async open(args) { calls.push(['open', args]); return { metadata: { sha256 }, snapshot: { preview } }; },
+    async open(args) { calls.push(['open', args]); return { metadata: { sha256 }, snapshot: { preview,
+      read(options) { assert.deepEqual(options, { expected_sha256: sha256, max_chars: 1, max_blocks: 1 });
+        return { editability_summary: { body_replacement_candidates: 2, cell_replacement_candidates: 4,
+          read_only_blocks: 1, empty_cell_fill_candidates: 1, cell_text_clear_candidates: 3,
+          read_only_reason_counts: [{ message_ko: '표가 들어 있는 문단은 읽기 전용입니다.', blocks: 1 }] } }; },
+    } }; },
     async history(args) { calls.push(['history', args]); return [
       { version_id, sha256, byte_size: 13312, current_version: other, created_at: Date.UTC(2026, 9, 4, 1, 2, 3) },
       { version_id: other, sha256, byte_size: 13312, current_version: other, created_at: Date.UTC(2026, 9, 4, 2, 3, 4) },
@@ -31,6 +36,9 @@ test('viewer reads selected owner/version, keeps previews passive and labels old
   assert(html.includes(`href="/documents/${document_id}/versions/${version_id}.hwp"`));
   assert(html.includes(`src="/documents/${document_id}/versions/${version_id}/pages/0.svg"`));
   assert(html.includes('이전 저장본')); assert(html.includes('현재 저장본')); assert(html.includes('다음 페이지'));
+  assert(html.includes('이 저장본의 편집 가능 범위')); assert(html.includes('본문 문단 2곳 · 표 셀 문단 4곳'));
+  assert(html.includes('읽기 전용: 1곳')); assert(html.includes('표가 들어 있는 문단은 읽기 전용입니다.'));
+  assert(html.includes('저장 전 검사를 통과해야 저장할 수 있습니다'));
   assert.equal((html.match(/<script/g) ?? []).length, 1);
   assert(html.includes('<script src="/documents/handoff-client.js" defer></script>'));
   assert(!html.includes('<svg')); assert(!html.includes('<iframe')); assert(!html.includes('<object'));

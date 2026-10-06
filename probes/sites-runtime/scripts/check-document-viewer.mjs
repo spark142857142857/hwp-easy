@@ -61,6 +61,14 @@ try {
   const capture = async () => ({ keys: (await bucket.list()).objects.map((o) => o.key).sort(),
     versions: (await db.prepare('SELECT count(*) AS n FROM hwp_versions').first()).n });
   const before = await capture();
+  const inspected = (await invoke('hwp_read', { document_id, version_id })).structuredContent.data;
+  const editability = inspected.editability_summary;
+  assert.equal(editability.scope, 'whole_document_supported_blocks');
+  assert.equal(editability.total_blocks, inspected.supported_blocks);
+  assert.equal(editability.replacement_candidates + editability.read_only_blocks, inspected.supported_blocks);
+  assert.equal(editability.serialization_checked, false);
+  const capability = (await invoke('hwp_capabilities', {})).structuredContent.data;
+  assert.equal(capability.editability_summary_available, true); assert.equal(capability.target_read_only_reasons_available, true);
   for (const suffix of ['/view', '.hwp', '/pages/0.svg']) {
     const address = `/documents/${document_id}/versions/${version_id}${suffix}`;
     assert.equal((await mf.dispatchFetch(origin + address)).status, 401);
@@ -69,7 +77,13 @@ try {
     assert.equal(response.status, 200);
     if (suffix === '.hwp') await verifySyntheticDownload(new Uint8Array(await response.arrayBuffer()));
     if (suffix === '/pages/0.svg') { assert.equal(response.headers.get('Content-Type'), 'image/svg+xml; charset=utf-8'); assert((await response.text()).includes('<svg')); assert(response.headers.get('Content-Security-Policy').includes('sandbox')); assert(!response.headers.get('Content-Security-Policy').includes('script-src')); }
-    if (suffix === '/view') { assert.equal(response.headers.get('Referrer-Policy'), 'no-referrer'); const text = await response.text(); assert(text.includes('현재 저장본')); assert(text.includes('세부 배치는 미검증')); }
+    if (suffix === '/view') {
+      assert.equal(response.headers.get('Referrer-Policy'), 'no-referrer'); const text = await response.text();
+      assert(text.includes('현재 저장본')); assert(text.includes('세부 배치는 미검증'));
+      assert(text.includes(`본문 문단 ${editability.body_replacement_candidates}곳 · 표 셀 문단 ${editability.cell_replacement_candidates}곳`));
+      assert(text.includes(`읽기 전용: ${editability.read_only_blocks}곳`));
+      assert(text.includes('저장 전 검사를 통과해야 저장할 수 있습니다'));
+    }
   }
   assert.equal((await mf.dispatchFetch(origin + '/documents/handoff-client.js')).status, 401);
   const handoffScript = await mf.dispatchFetch(origin + '/documents/handoff-client.js', { headers: a });
@@ -82,6 +96,7 @@ try {
       { ...init, headers: { ...a, ...init.headers } })).status, status);
   }
   assert.deepEqual(await capture(), before);
+  checks.push('full_version_editability_notice_matches_mcp_and_preserves_storage');
   checks.push('exact_seed_retry_one_document_one_version_owner_scoped_view_hwp_svg_reads_without_mutation');
 
   const read = (await invoke('hwp_read', { document_id, version_id })).structuredContent.data;

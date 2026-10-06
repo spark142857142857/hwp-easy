@@ -14,6 +14,7 @@ import { cellTextClearProfiles } from '../guard/empty-cell-clear.mjs';
 import { enforceRawTextBudget } from '../guard/text-budget.mjs';
 import { enforceHostedTextBudget } from '../guard/hosted-workload.mjs';
 import { indexUnicodeText } from './unicode-text.mjs';
+import { describeEditability } from './editability.mjs';
 
 const fail = (code) => { throw new GuardError(code); };
 const copy = (value) => JSON.parse(JSON.stringify(value));
@@ -164,13 +165,18 @@ export function createDocumentEngine(HwpDocument, { readInspectionCache, hostedW
       return textIndexes.get(block);
     };
     const allContentSupported = mappingVerified && unsupported.length === 0;
-    const editableProfile = mappingVerified && unsupported.every((item) =>
+    const documentProfileSupported = unsupported.every((item) =>
       preservedControls.length && item.kind === 'control' && item.control_id === 'pgnp');
+    const editableProfile = mappingVerified && documentProfileSupported;
+    const editability = describeEditability({ blocks: inspection.blocks, tables: inspection.tables,
+      preservedControls, mappingVerified, editableProfile, documentProfileSupported,
+      restrictions, emptyCellProfiles, clearCellProfiles });
     const base = () => ({ source_sha256: version, scope: 'supported_paragraph_and_cell_blocks',
       supported_blocks: inspection.blocks.length, table_count: inspection.tables.length,
       all_content_supported: allContentSupported, edit_profile_supported: editableProfile,
       preserved_controls: copy(preservedControls),
       unsupported: copy(unsupported), target_mapping_verified: mappingVerified,
+      editability_summary: copy(editability.summary),
       warnings: [...inspection.warnings,
         ...(preservedControls.length ? ['Page-number controls are preserved as opaque bytes only; their host paragraphs are read-only.'] : []),
         ...(restrictions.size ? ['Some targets have unverified raw text/style layouts and are read-only; other targets still require serialization preflight.'] : []),
@@ -203,9 +209,7 @@ export function createDocumentEngine(HwpDocument, { readInspectionCache, hostedW
         // Preserve the response shape and deep-copy metadata without cloning
         // the entire source paragraph text merely to return a bounded fragment.
         fragments.push({ ...copy({ ...block, text: '' }), target_id: targetId(version, block.id),
-          editable: editableProfile && block.editable && !restrictions.has(block.id),
-          empty_cell_fill_supported: editableProfile && emptyCellProfiles.has(block.id) && !restrictions.has(block.id),
-          cell_text_clear_supported: editableProfile && clearCellProfiles.has(block.id) && !restrictions.has(block.id),
+          ...copy(editability.targets.get(block.id)),
           edit_restrictions: copy(restrictions.get(block.id) ?? []), text: text.slice(offset, end),
           start_offset: offset, end_offset: end, total_chars: text.length, fragment_complete: end === text.length });
         budget -= end - offset;

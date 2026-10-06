@@ -48,6 +48,7 @@ export function createHostApp(env, engine, HwpDocument, fetcher = fetch) {
       max_input_bytes: store.limits.max_bytes, max_versions_per_document: store.limits.max_versions_per_document,
       max_body_text_utf16_code_units: MAX_RAW_BODY_TEXT_CODE_UNITS, raw_body_text_limit_checked_before_wasm: true,
       max_hosted_body_text_utf16_code_units: MAX_HOSTED_BODY_TEXT_CODE_UNITS, hosted_body_text_limit_checked_before_wasm: true,
+      editability_summary_available: true, target_read_only_reasons_available: true,
       default_save: 'same_remote_document', pc_original_updated: false, layout_verified: false,
       native_file_attachment_verified: false, codex_cloud_client_verified: false, dots_client_verified: false,
       retention: 'until_explicit_delete', automatic_expiry: false,

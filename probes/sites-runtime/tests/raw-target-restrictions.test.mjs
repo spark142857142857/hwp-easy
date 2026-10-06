@@ -67,6 +67,7 @@ test('nonvisible tail style remains readable, is explicitly readonly and cannot 
   assert.deepEqual(target.style.char_shape_ids, [0]);
   assert.equal(target.editable, false);
   assert.equal(target.edit_restrictions[0].code, 'RAW_CHAR_SHAPE_REFS_UNCOVERED');
+  assert(target.read_only_reasons.some(item => item.code === 'RAW_CHAR_SHAPE_REFS_UNCOVERED'));
   const request = { expected_sha256: snapshot.source_sha256,
     operations: [{ target_id: target.target_id, expected_old: target.text, new_text: '요청 문구' }] };
   assert.throws(() => snapshot.plan(request), (e) => e.code === 'TARGET_NOT_EDITABLE');
@@ -108,6 +109,7 @@ test('an empty cell with unverified range metadata remains readonly', async () =
   assert.equal(target.text, '');
   assert.equal(target.editable, false);
   assert.equal(target.edit_restrictions[0].code, 'RAW_TEXT_RECORD_LAYOUT_UNVERIFIED');
+  assert(target.read_only_reasons.some(item => item.code === 'RAW_TEXT_RECORD_LAYOUT_UNVERIFIED'));
   const request = { expected_sha256: snapshot.source_sha256,
     operations: [{ target_id: target.target_id, expected_old: '', new_text: '합성 추가' }] };
   assert.throws(() => snapshot.plan(request), (e) => e.code === 'TARGET_NOT_EDITABLE');
