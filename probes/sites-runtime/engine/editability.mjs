@@ -19,14 +19,14 @@ const profiles = Object.freeze({ edit_limit_exceeded: 'TARGET_EDIT_LIMIT_EXCEEDE
   style_scan_limit_exceeded: 'STYLE_SCAN_LIMIT_EXCEEDED' });
 
 export function describeEditability({ blocks, tables, preservedControls, mappingVerified,
-  editableProfile, documentProfileSupported, restrictions, emptyCellProfiles, clearCellProfiles }) {
+  editableProfile, documentProfileSupported, restrictions, emptyCellProfiles, clearCellProfiles, mixedProfiles = new Map() }) {
   const tableHosts = new Set(tables.map(t => `s${t.section}:p${t.paragraph}`));
   const pageHosts = new Set(preservedControls.map(c => `s${c.section}:p${c.paragraph}`));
   const targets = new Map(), reasons = new Map();
   const summary = { scope: 'whole_document_supported_blocks', total_blocks: blocks.length,
     body_paragraphs: 0, cell_paragraphs: 0, replacement_candidates: 0,
     body_replacement_candidates: 0, cell_replacement_candidates: 0,
-    empty_cell_fill_candidates: 0, cell_text_clear_candidates: 0, read_only_blocks: 0,
+    empty_cell_fill_candidates: 0, cell_text_clear_candidates: 0, mixed_style_same_length_candidates: 0, read_only_blocks: 0,
     candidate_requires_serialization_preflight: true, serialization_checked: false,
     storage_checked: false, layout_verified: false };
   for (const block of blocks) {
@@ -46,7 +46,8 @@ export function describeEditability({ blocks, tables, preservedControls, mapping
       if (!codes.size) codes.add('TARGET_READ_ONLY');
     }
     targets.set(block.id, { editable: Boolean(editable), empty_cell_fill_supported: Boolean(fill),
-      cell_text_clear_supported: Boolean(clear), read_only_reasons: [...codes].map(code => ({ code, message_ko: messages[code] })) });
+      cell_text_clear_supported: Boolean(clear), mixed_style_same_length_supported: Boolean(editable && mixedProfiles.has(block.id)),
+      read_only_reasons: [...codes].map(code => ({ code, message_ko: messages[code] })) });
     summary[block.kind === 'cell' ? 'cell_paragraphs' : 'body_paragraphs']++;
     if (editable) {
       summary.replacement_candidates++;
@@ -54,6 +55,7 @@ export function describeEditability({ blocks, tables, preservedControls, mapping
     } else summary.read_only_blocks++;
     if (fill) summary.empty_cell_fill_candidates++;
     if (clear) summary.cell_text_clear_candidates++;
+    if (editable && mixedProfiles.has(block.id)) summary.mixed_style_same_length_candidates++;
     for (const code of codes) reasons.set(code, (reasons.get(code) ?? 0) + 1);
   }
   summary.read_only_reason_counts = [...reasons].map(([code, count]) => ({ code, message_ko: messages[code], blocks: count }));

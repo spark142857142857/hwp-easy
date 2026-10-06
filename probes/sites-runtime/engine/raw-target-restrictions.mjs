@@ -1,15 +1,15 @@
 /** Target-only limits: existing text records and visible/raw style coverage. */
 import { parseRecords } from '../guard/records.mjs';
 
-export function rawTargetRestrictions(decoded, blocks, mapping, emptyCellProfiles = new Map()) {
+export function rawTargetRestrictions(decoded, blocks, mapping, emptyCellProfiles = new Map(), mixedProfiles = new Map()) {
   const references = new Map();
   for (const section of decoded.profile.sections) {
     let paragraph = -1;
     for (const r of parseRecords(decoded.streams.get(`BodyText/Section${section.section}`))) {
       if (r.tag === 66) paragraph++;
       if (r.tag !== 67 && r.tag !== 68) continue;
-      // Editable blocks have exactly one visible style ID. Track one raw ID
-      // and a mismatch flag rather than allocating a Set per raw entry.
+      // Uniform targets require one visible/raw ID. Mixed targets need the
+      // separate exact-anchor profile; collect only a uniform mismatch here.
       const key = `${section.section}:${paragraph}`, refs = references.get(key) ?? {
         records: 0, text_records: 0, first_id: undefined, mixed_ids: false, malformed: false,
       };
@@ -39,7 +39,7 @@ export function rawTargetRestrictions(decoded, blocks, mapping, emptyCellProfile
       code: 'RAW_CHAR_SHAPE_LAYOUT_UNVERIFIED',
       message_ko: '글자 서식의 원본 구조를 확인하지 못해 이 문단은 읽기만 지원합니다.',
     };
-    else if (!Array.isArray(visible) || visible.length !== 1 || refs.mixed_ids || visible[0] !== refs.first_id) restriction = {
+    else if (!mixedProfiles.has(block.id) && (!Array.isArray(visible) || visible.length !== 1 || refs.mixed_ids || visible[0] !== refs.first_id)) restriction = {
       code: 'RAW_CHAR_SHAPE_REFS_UNCOVERED',
       message_ko: '텍스트 검사에 포함되지 않는 별도 글자 서식이 있어 이 문단은 읽기만 지원합니다.',
     };

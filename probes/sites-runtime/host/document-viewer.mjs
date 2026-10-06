@@ -50,7 +50,8 @@ function editabilitySection(summary) {
   return `<section aria-labelledby="editability-heading"><h2 id="editability-heading">이 저장본의 편집 가능 범위</h2>
 <p>편집 후보: 본문 문단 ${summary.body_replacement_candidates}곳 · 표 셀 문단 ${summary.cell_replacement_candidates}곳</p>
 <p>읽기 전용: ${summary.read_only_blocks}곳 · 빈 셀 문단 채우기 후보: ${summary.empty_cell_fill_candidates}곳 · 셀 문단 비우기 후보: ${summary.cell_text_clear_candidates}곳</p>
-<p class="notice">본문·최상위 표 셀의 지원 범위를 기준으로 확인했습니다. 셀 문단의 채우기·비우기는 편집 후보에 포함된 기능이며 합산하지 않습니다. 편집 후보도 요청한 변경의 저장 전 검사를 통과해야 저장할 수 있습니다. 이 안내는 문서를 수정하지 않습니다.</p>
+${summary.mixed_style_same_length_candidates ? `<p>혼합 글자 서식의 제한된 치환 후보: ${summary.mixed_style_same_length_candidates}곳. 글자 수와 각 글자의 UTF-16 길이를 유지하고, 한 서식 구간 안의 내용만 바꿀 수 있습니다. 기존 서식은 그대로 보존합니다.</p>` : ''}
+<p class="notice">본문·최상위 표 셀의 지원 범위를 기준으로 확인했습니다. 셀 문단의 채우기·비우기와 혼합 서식의 제한된 치환은 편집 후보에 포함된 기능이며 합산하지 않습니다. 편집 후보도 요청한 변경의 저장 전 검사를 통과해야 저장할 수 있습니다. 이 안내는 문서를 수정하지 않습니다.</p>
 ${reasons ? `<details><summary>읽기 전용인 이유</summary><p>한 문단에 여러 이유가 있을 수 있어 아래 수를 합산하지 않습니다.</p><ul>${reasons}</ul></details>` : ''}</section>`;
 }
 export async function documentViewerResponse(url, owner, service, canonicalOrigin = url.origin, store) {

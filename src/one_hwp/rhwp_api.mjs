@@ -1,5 +1,9 @@
 /** Host-free pinned-engine operations shared by Node and browser ESM adapters. */
-export function createEngineApi(HwpDocument) {
+import { MAX_MIXED_STYLE_RUNS, mixedStyleEdit } from './mixed_style.mjs';
+export function createEngineApi(HwpDocument, { mixedStyleSameLength = false } = {}) {
+  // Internal host opt-in: callers must independently prove exact raw style
+  // anchors before/after saving. The local adapter retains its default profile.
+  if (typeof mixedStyleSameLength !== 'boolean') throw new Error('Invalid mixed style profile');
   const EDIT_LIMIT = 100_000;
   const json = (value) => JSON.parse(value);
   const checked = (value) => {
@@ -27,7 +31,7 @@ export function createEngineApi(HwpDocument) {
         block.cell, block.cell_paragraph, offset));
   }
 
-  function needsCharShapeRestore(document, block, count, shapeId) {
+  function needsCharShapeRestore(document, block, count, shapeId, start = 0) {
     // Insert/replace can already retain the requested shape. Check the entire
     // inserted code-point range before skipping a setter that repaginates the
     // whole document. Final reopened model/raw checks remain authoritative.
@@ -36,7 +40,7 @@ export function createEngineApi(HwpDocument) {
     // unconditional restore path. This is an optimization bound, not an edit limit.
     if (count > 1024) return true;
     for (let offset = 0; offset < count; offset++) {
-      if (charProperties(document, block, offset).charShapeId !== shapeId) return true;
+      if (charProperties(document, block, start + offset).charShapeId !== shapeId) return true;
     }
     return false;
   }
@@ -55,10 +59,20 @@ export function createEngineApi(HwpDocument) {
     const ids = new Set();
     const first = charProperties(document, block, 0);
     ids.add(first.charShapeId);
+    const runs = [{ start: 0, end: count, char_shape_id: first.charShapeId }];
+    let runsOverflow = false;
     for (let index = 1; index < count; index++) {
-      ids.add(charProperties(document, block, index).charShapeId);
+      const id = charProperties(document, block, index).charShapeId;
+      ids.add(id);
+      if (!runsOverflow && id !== runs.at(-1).char_shape_id) {
+        runs.at(-1).end = index;
+        if (runs.length === MAX_MIXED_STYLE_RUNS) runsOverflow = true;
+        else runs.push({ start: index, end: count, char_shape_id: id });
+      }
     }
     return { paragraph, char_shape_ids: [...ids].sort((a, b) => a - b),
+      ...(mixedStyleSameLength && ids.size > 1 && !runsOverflow
+        && block.text.isWellFormed() && !/[\u0000-\u001f]/.test(block.text) ? { char_runs: runs } : {}),
       ...(ids.size === 1 ? { char: first } : {}) };
   }
 
@@ -113,7 +127,7 @@ export function createEngineApi(HwpDocument) {
           column_span: metadata.colSpan,
           text: document.getTextInCell(section, paragraph, control, cell.cellIndex, index, 0, length) };
         block.style = style(block);
-        block.editable = !block.style.profile && block.style.char_shape_ids.length === 1;
+        block.editable = !block.style.profile && (block.style.char_shape_ids.length === 1 || Boolean(block.style.char_runs));
         block.edit_limit = EDIT_LIMIT;
         list.push(block);
         paragraphIds.push(block.id);
@@ -136,7 +150,7 @@ export function createEngineApi(HwpDocument) {
         block.editable = !cellBlocks.has(id)
           && !controls.some((control) => control.ctrlId === 'pgnp' && control.list === 0 && control.para === paragraph)
           && !block.style.profile
-          && block.style.char_shape_ids.length === 1;
+          && (block.style.char_shape_ids.length === 1 || Boolean(block.style.char_runs));
         block.edit_limit = EDIT_LIMIT;
         blocks.push(block, ...(cellBlocks.get(id) || []));
       }
@@ -206,9 +220,32 @@ export function createEngineApi(HwpDocument) {
             && !(block.kind === 'cell' && block.text && clearCellTargets.has(block.id)))) {
           throw new Error('Target is stale or has unsupported formatting');
         }
-        return { block, operation };
+        const mixed = block.style.char_runs ? mixedStyleEdit(block.text, operation.new_text, block.style.char_runs) : undefined;
+        if (mixed === null) throw new Error('Mixed style replacement is outside the supported profile');
+        return { block, operation, mixed };
       });
-      for (const { block, operation } of plans) {
+      for (const { block, operation, mixed } of plans) {
+        if (mixed) {
+          if (mixed.unchanged) continue;
+          // Keep unchanged text/styles, including the paragraph terminator.
+          // Replacing the whole mixed paragraph can rewrite its invisible tail.
+          if (block.kind === 'paragraph') {
+            checked(document.replaceText(block.section, block.paragraph, mixed.start, mixed.count, mixed.new_text));
+            if (needsCharShapeRestore(document, block, mixed.count, mixed.char_shape_id, mixed.start)) {
+              checked(document.setCharShapeId(block.section, block.paragraph, mixed.start, mixed.start + mixed.count, mixed.char_shape_id));
+            }
+          } else {
+            checked(document.deleteTextInCell(block.section, block.paragraph, block.control,
+              block.cell, block.cell_paragraph, mixed.start, mixed.count));
+            checked(document.insertTextInCell(block.section, block.paragraph, block.control,
+              block.cell, block.cell_paragraph, mixed.start, mixed.new_text));
+            if (needsCharShapeRestore(document, block, mixed.count, mixed.char_shape_id, mixed.start)) {
+              checked(document.setCharShapeIdInCell(block.section, block.paragraph, block.control,
+                block.cell, block.cell_paragraph, mixed.start, mixed.start + mixed.count, mixed.char_shape_id));
+            }
+          }
+          continue;
+        }
         const oldCount = [...block.text].length;
         const newCount = [...operation.new_text].length;
         const shapeId = block.style.char_shape_ids[0];

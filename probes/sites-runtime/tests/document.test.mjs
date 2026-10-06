@@ -255,9 +255,13 @@ test('unsupported header is not whole-document coverage and cannot be edited', a
   assert.ok(read.blocks.every((block) => !block.editable));
   assert.throws(() => snapshot.plan(options(snapshot, { operations: [] })), code('UNSUPPORTED_EDIT_PROFILE'));
 });
-test('mixed styles remain readable with a read-only target', async () => {
+test('verified mixed styles advertise only the positional replacement profile', async () => {
   const snapshot = await engine.open(fixture({ table: false, mixed: true }));
-  assert.equal(snapshot.read(options(snapshot)).blocks[0].editable, false);
+  const block = snapshot.read(options(snapshot)).blocks[0];
+  assert.equal(block.editable, true);
+  assert.equal(block.mixed_style_same_length_supported, true);
+  assert.throws(() => snapshot.plan(options(snapshot, { operations: [{ target_id: block.target_id,
+    expected_old: block.text, new_text: block.text + '추가' }] })), code('MIXED_STYLE_EDIT_UNSUPPORTED'));
 });
 test('ordered raw mapping detects text/order/level mismatch even when paragraph counts match', () => {
   const bytes = fixture(), raw = readHwp(bytes), doc = api.openDocument(bytes);

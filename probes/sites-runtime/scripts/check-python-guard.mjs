@@ -8,6 +8,12 @@
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
+import fs from 'node:fs';
+import { createRequire } from 'node:module';
+import { pathToFileURL } from 'node:url';
+import { HwpDocument, initSync } from '@rhwp/core';
+import { mixedFixture, MIXED_TEXT, MIXED_REPLACEMENT } from '../tests/mixed-style-fixtures.mjs';
+import { createDocumentEngine } from '../engine/document.mjs';
 import { readHwp } from '../guard/container.mjs';
 import { parseRecords } from '../guard/records.mjs';
 import { canonicalRecord } from '../guard/preservation.mjs';
@@ -113,10 +119,47 @@ try {
     assert.equal(Buffer.from(docinfo).equals(Buffer.from(py.docinfo_canonical, 'base64')), true);
     docinfoComparisons += 1;
   }
+  phase = 'mixed_style_real_edits';
+  const require = createRequire(import.meta.url);
+  initSync({ module: fs.readFileSync(new URL('./rhwp_bg.wasm', pathToFileURL(require.resolve('@rhwp/core')))) });
+  const mixedBytes = [], engine = createDocumentEngine(HwpDocument);
+  for (const [kind, merged] of [['paragraph', false], ['cell', false], ['cell', true]]) {
+    const original = mixedFixture(HwpDocument, kind, { merged });
+    const snapshot = await engine.open(original);
+    const target = snapshot.read({ expected_sha256: snapshot.source_sha256 }).blocks.find(b => b.text === MIXED_TEXT);
+    const edited = await snapshot.edit({ expected_sha256: snapshot.source_sha256,
+      operations: [{ target_id: target.target_id, expected_old: target.text, new_text: MIXED_REPLACEMENT }] });
+    mixedBytes.push(original, edited.bytes);
+  }
+  phase = 'mixed_style_independent_olefile_roundtrip';
+  const mixedOracle = await pythonOracle({ protocol: PROTOCOL,
+    cases: mixedBytes.map(bytes => ({ data: Buffer.from(bytes).toString('base64') })) });
+  assert.equal(mixedOracle.cases.length, 6);
+  let mixedStreamComparisons = 0, mixedShapeComparisons = 0;
+  for (let i = 0; i < mixedBytes.length; i++) {
+    const js = readHwp(mixedBytes[i]), py = mixedOracle.cases[i];
+    assert.equal(py.streams.length, js.streams.size);
+    for (const stream of py.streams) {
+      assert(Buffer.from(js.streams.get(stream.name)).equals(Buffer.from(stream.bytes, 'base64')));
+      mixedStreamComparisons++;
+    }
+    if (i % 2 === 1) {
+      const before = mixedOracle.cases[i - 1];
+      assert.equal(py.sections.length, before.sections.length);
+      for (let s = 0; s < py.sections.length; s++) {
+        // Untargeted canonical records expose every original tag-68 byte.
+        const originals = before.sections[s].canonical.none.filter(r => r[0] === 68);
+        const saved = py.sections[s].canonical.none.filter(r => r[0] === 68);
+        assert.deepEqual(saved, originals); mixedShapeComparisons += saved.length;
+      }
+    }
+  }
   output(JSON.stringify({ differential_guard: 'passed', synthetic_cases: cases.length,
-    python_oracle_roundtrips: 1, decoded_stream_comparisons: streamComparisons,
+    python_oracle_roundtrips: 2, decoded_stream_comparisons: streamComparisons,
     profile_comparisons: profileComparisons, canonical_body_comparisons: canonicalComparisons,
-    canonical_record_comparisons: canonicalRecordComparisons, canonical_docinfo_comparisons: docinfoComparisons }));
+    canonical_record_comparisons: canonicalRecordComparisons, canonical_docinfo_comparisons: docinfoComparisons,
+    mixed_original_and_saved_cases: mixedBytes.length, mixed_olefile_stream_comparisons: mixedStreamComparisons,
+    mixed_exact_style_record_comparisons: mixedShapeComparisons }));
 } catch {
   output(JSON.stringify({ differential_guard: 'failed', phase }));
   process.exitCode = 1;

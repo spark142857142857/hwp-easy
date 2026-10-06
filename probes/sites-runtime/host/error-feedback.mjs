@@ -19,6 +19,19 @@ export function uploadDisabledError(file) {
 export function documentToolError(error) {
   const code = publicErrorCode(error);
   const result = { isError: true, content: [{ type: 'text', text: code }] };
+  if (code === 'MIXED_STYLE_EDIT_UNSUPPORTED') {
+    const feedback = { stage: 'private-development', layout_verified: false,
+      data: { error: code, edit_diagnostic: {
+        status: 'mixed_style_replacement_outside_supported_span',
+        message_ko: '여러 글자 서식이 섞인 문단은 한 서식 구간 안에서 글자 수와 각 글자의 UTF-16 길이를 유지하는 치환만 지원합니다. 이번 요청은 저장하지 않았으며 기존 문서와 버전은 유지됩니다. 같은 요청을 반복하거나 문구를 임의로 줄여 저장하지 마세요.',
+        saved: false, retry_same_request_recommended: false,
+        suggested_action: 'report_mixed_style_limit_without_altering_request',
+        automatic_partial_save_allowed: false, unrequested_edits_allowed: false,
+      } } };
+    result.content.push({ type: 'text', text: JSON.stringify(feedback) });
+    result.structuredContent = feedback;
+    return result;
+  }
   if (code === 'HOSTED_WORKLOAD_LIMIT_EXCEEDED') {
     const feedback = { stage: 'private-development', layout_verified: false,
       data: { error: code, workload_diagnostic: {

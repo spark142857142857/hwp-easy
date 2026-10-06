@@ -45,16 +45,17 @@ test('full-document counts stay stable across fragments and distinguish cell fil
   assert.equal(seen.size, 11); assert(fragments > seen.size); assert.deepEqual(bytes, original);
 });
 
-test('mixed styles are explained and stay blocked while a supported adjacent paragraph still saves', async () => {
+test('mixed candidates reject unsupported changes while a supported adjacent paragraph still saves', async () => {
   const bytes = fixture({ table: false, mixed: true, paragraphs: ['혼합 글자 서식', '보존 문단'] }), original = bytes.slice();
   const snapshot = await engine.open(bytes), before = read(snapshot);
-  assert.equal(before.editability_summary.replacement_candidates, 1);
-  assert.equal(before.editability_summary.read_only_blocks, 1);
-  assert.equal(before.blocks[0].editable, false);
-  assert(before.blocks[0].read_only_reasons.some(item => item.code === 'MIXED_CHAR_STYLES'));
+  assert.equal(before.editability_summary.replacement_candidates, 2);
+  assert.equal(before.editability_summary.mixed_style_same_length_candidates, 1);
+  assert.equal(before.editability_summary.read_only_blocks, 0);
+  assert.equal(before.blocks[0].editable, true);
+  assert.equal(before.blocks[0].mixed_style_same_length_supported, true);
   const request = block => ({ expected_sha256: snapshot.source_sha256,
     operations: [{ target_id: block.target_id, expected_old: block.text, new_text: '요청한 수정 😀' }] });
-  await assert.rejects(() => snapshot.edit(request(before.blocks[0])), error => error.code === 'TARGET_NOT_EDITABLE');
+  await assert.rejects(() => snapshot.edit(request(before.blocks[0])), error => error.code === 'MIXED_STYLE_EDIT_UNSUPPORTED');
   const saved = await snapshot.edit(request(before.blocks[1])), after = read(await engine.open(saved.bytes));
   assert.equal(after.blocks[0].text, before.blocks[0].text); assert.deepEqual(after.blocks[0].style, before.blocks[0].style);
   assert.equal(after.blocks[1].text, '요청한 수정 😀'); assert.equal(saved.raw_preservation_verified, true);

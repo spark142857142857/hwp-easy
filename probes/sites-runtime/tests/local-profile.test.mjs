@@ -42,10 +42,12 @@ test('classification exhausts fragmented read chain without retaining private fi
   assert.equal(JSON.stringify(result).includes(snapshot.source_sha256), false);
 });
 
-test('mixed styles and unsupported headers do not become candidate edits', async () => {
+test('mixed classification reflects the narrow host candidate while unsupported headers stay readonly', async () => {
   const mixed = classifySnapshot(await engine.open(fixture({ table: false, mixed: true })));
   assert.equal(mixed.style_counts.mixed_visible_styles, 1);
-  assert.equal(mixed.counts.read_only_blocks, 1);
+  assert.equal(mixed.counts.read_only_blocks, 0);
+  assert.equal(mixed.counts.replacement_candidates, mixed.counts.blocks);
+  assert.equal(mixed.serialization_checked, false);
   const header = classifySnapshot(await engine.open(fixture({ header: true })));
   assert.equal(header.read_coverage, 'partial_profile');
   assert.equal(header.edit_profile_supported, false);

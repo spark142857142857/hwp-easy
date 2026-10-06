@@ -15,6 +15,8 @@ import { enforceRawTextBudget } from '../guard/text-budget.mjs';
 import { enforceHostedTextBudget } from '../guard/hosted-workload.mjs';
 import { indexUnicodeText } from './unicode-text.mjs';
 import { describeEditability } from './editability.mjs';
+import { mixedStyleEdit } from '../../../src/one_hwp/mixed_style.mjs';
+import { mixedStyleProfiles, verifyMixedStylePreservation } from './mixed-style.mjs';
 
 const fail = (code) => { throw new GuardError(code); };
 const copy = (value) => JSON.parse(JSON.stringify(value));
@@ -106,7 +108,7 @@ export function mapRawTargets(decoded, blocks) {
 
 export function createDocumentEngine(HwpDocument, { readInspectionCache, hostedWorkloadBudget = false } = {}) {
   if (typeof hostedWorkloadBudget !== 'boolean') fail('INVALID_ARGUMENTS');
-  const api = createEngineApi(HwpDocument);
+  const api = createEngineApi(HwpDocument, { mixedStyleSameLength: true });
   function inspect(bytes) {
     return quietEngine(() => {
       const document = api.openDocument(bytes);
@@ -157,7 +159,8 @@ export function createDocumentEngine(HwpDocument, { readInspectionCache, hostedW
     const preservedControls = pageNumberProfile ?? [];
     const emptyCellProfiles = mappingVerified ? emptyCellFillProfiles(raw, inspection.blocks, mapping) : new Map();
     const clearCellProfiles = mappingVerified ? cellTextClearProfiles(raw, inspection.blocks, mapping) : new Map();
-    const restrictions = mappingVerified ? rawTargetRestrictions(raw, inspection.blocks, mapping, emptyCellProfiles) : new Map();
+    const mixedProfiles = mappingVerified ? mixedStyleProfiles(raw, inspection.blocks, mapping) : new Map();
+    const restrictions = mappingVerified ? rawTargetRestrictions(raw, inspection.blocks, mapping, emptyCellProfiles, mixedProfiles) : new Map();
     const targets = new Map(inspection.blocks.map((block) => [targetId(version, block.id), block]));
     const textIndexes = new WeakMap();
     const textIndex = (block) => {
@@ -170,7 +173,7 @@ export function createDocumentEngine(HwpDocument, { readInspectionCache, hostedW
     const editableProfile = mappingVerified && documentProfileSupported;
     const editability = describeEditability({ blocks: inspection.blocks, tables: inspection.tables,
       preservedControls, mappingVerified, editableProfile, documentProfileSupported,
-      restrictions, emptyCellProfiles, clearCellProfiles });
+      restrictions, emptyCellProfiles, clearCellProfiles, mixedProfiles });
     const base = () => ({ source_sha256: version, scope: 'supported_paragraph_and_cell_blocks',
       supported_blocks: inspection.blocks.length, table_count: inspection.tables.length,
       all_content_supported: allContentSupported, edit_profile_supported: editableProfile,
@@ -244,10 +247,13 @@ export function createDocumentEngine(HwpDocument, { readInspectionCache, hostedW
         const block = targets.get(operation.target_id);
         if (!block) fail('TARGET_VERSION_OR_ID_INVALID');
         if (!block.editable || restrictions.has(block.id)
-          || (!length && (block.kind === 'cell' && block.text ? !clearCellProfiles.has(block.id)
+          || (!mixedProfiles.has(block.id) && !length && (block.kind === 'cell' && block.text ? !clearCellProfiles.has(block.id)
             : block.style.char_shape_ids[0] !== 0))) fail('TARGET_NOT_EDITABLE');
         if (emptyCellProfiles.has(block.id) && operation.new_text.includes('\t')) fail('INVALID_OPERATION');
         if (block.text !== operation.expected_old) fail('EXPECTED_OLD_MISMATCH');
+        if (mixedProfiles.has(block.id) && !mixedStyleEdit(block.text, operation.new_text, block.style.char_runs)) {
+          fail('MIXED_STYLE_EDIT_UNSUPPORTED');
+        }
         return { target_id: block.id, expected_old: operation.expected_old, new_text: operation.new_text };
       });
       // Every old value above has been matched to the source. Use UTF-16 units,
@@ -283,6 +289,7 @@ export function createDocumentEngine(HwpDocument, { readInspectionCache, hostedW
       // The adapter may restore an opaque word, never change the engine model.
       if (output !== candidate && JSON.stringify(reopened) !== JSON.stringify(checked.inspection)) fail('PRESERVATION_MISMATCH');
       const after = readHwp(output);
+      verifyMixedStylePreservation(after, operations, mixedProfiles);
       // api.editDocument already reopens and compares exact text/style/table model.
       // Independently match raw AFTER text and nesting to that reopened model.
       // The raw preservation canonicalizer intentionally does not prove text.
