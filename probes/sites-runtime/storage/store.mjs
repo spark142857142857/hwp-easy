@@ -241,8 +241,9 @@ export function createVersionStore(db, bucket) {
       || !rows.some((row) => row.version_id === rows[0].current_version)) fail('BLOB_MISSING_OR_CORRUPT');
     return rows;
   }
-  async function listDocuments({ owner, before }) {
+  async function listDocuments({ owner, before, query }) {
     ownerKey(owner);
+    if (query !== undefined && !validDocumentName(query)) fail('INVALID_DOCUMENT_LIST_REQUEST');
     if (before !== undefined && (!before || typeof before !== 'object'
       || Object.keys(before).sort().join(',') !== 'document_id,saved_at'
       || typeof before.document_id !== 'string' || !uuidPattern.test(before.document_id) || !Number.isSafeInteger(before.saved_at)
@@ -255,9 +256,10 @@ export function createVersionStore(db, bucket) {
       ON v.owner = d.owner AND v.document_id = d.id AND v.id = d.current_version
       WHERE d.owner = ?
       AND NOT EXISTS (SELECT 1 FROM hwp_deletions x WHERE x.owner = d.owner AND x.document_id = d.id)
+      ${query ? 'AND (instr(lower(d.display_name), lower(?)) > 0 OR instr(d.id, lower(?)) > 0)' : ''}
       ${before ? 'AND (v.created_at < ? OR (v.created_at = ? AND d.id < ?))' : ''}
       ORDER BY v.created_at DESC, d.id DESC LIMIT 21`,
-      [owner, ...(before ? [before.saved_at, before.saved_at, before.document_id] : [])]);
+      [owner, ...(query ? [query, query] : []), ...(before ? [before.saved_at, before.saved_at, before.document_id] : [])]);
     if (!Array.isArray(rows) || rows.length > 21 || rows.some((row) =>
       !uuidPattern.test(row.document_id) || !uuidPattern.test(row.version_id)
       || !Number.isSafeInteger(row.saved_at) || row.saved_at < 0 || row.saved_at > 8640000000000000

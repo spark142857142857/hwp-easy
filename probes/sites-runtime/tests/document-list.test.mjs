@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { documentListBefore, documentListResponse } from '../host/document-list.mjs';
+import { documentListBefore, documentListQuery, documentListResponse } from '../host/document-list.mjs';
 const origin = 'https://list.invalid';
 const document_id = crypto.randomUUID(), version_id = crypto.randomUUID();
 test('document list refuses extra identity input, duplicate or noncanonical cursors, body and ranges', () => {
@@ -24,9 +24,33 @@ test('list forwards trusted owner and cursor, never opens document bytes or adds
   const html = await response.text(); assert.equal(calls,1);
   assert(html.includes(`/documents/${document_id}/versions/${version_id}/view`));
   assert(html.includes(`?before=0.${document_id}`)); assert(html.includes('저장 3회'));
-  assert(!/<script|<iframe|<svg|<img|<form/.test(html));
+  assert(!/<script|<iframe|<svg|<img/.test(html));
   assert.equal(response.headers.get('Cache-Control'), 'private, no-store');
   assert(response.headers.get('Content-Security-Policy').includes("default-src 'none'"));
+});
+
+test('search is bounded passive metadata input and retains its cursor without guessing a total', async () => {
+  for (const q of ['?q=a&q=b', '?q='+ '가'.repeat(81), '?q=bad%0Aquery', '?q=bad%E2%80%8Bquery']) {
+    assert.throws(() => documentListQuery(new Request(origin+'/documents'+q)), e => e.code==='INVALID_DOCUMENT_LIST_REQUEST');
+  }
+  assert.deepEqual(documentListQuery(new Request(origin+'/documents?q=%20%20')), {query:undefined});
+  const query='<script> & " %_';
+  const response=await documentListResponse(new Request(origin+'/documents?q='+encodeURIComponent(query)), 'owner', {
+    listDocuments(args){assert.deepEqual(args,{owner:'owner',query}); return {documents:[{document_id,version_id,saved_at:0,byte_size:13312,revision:1}],next:{saved_at:0,document_id}};},
+    read(){throw Error('Search must not read HWP');}
+  });
+  const html=await response.text();assert(html.includes('role="search"'));assert(html.includes('method="get"'));
+  assert(html.includes('value="&lt;script&gt; &amp; &quot; %_"'));assert(!html.includes('<script>'));
+  assert(html.includes(`?before=0.${document_id}&amp;q=${encodeURIComponent(query)}`));
+  assert(html.includes('검색 지우기'));assert(!html.includes('총 '));
+});
+
+test('an empty search distinguishes no match from an empty account and restarting search drops old cursor', async () => {
+  const html=await (await documentListResponse(new Request(origin+'/documents?q=없는문서'), 'owner', {
+    listDocuments(){return {documents:[],next:null};}
+  })).text();
+  assert(html.includes('일치하는 문서가 없습니다'));assert(!html.includes('아직 저장된 문서가 없습니다'));
+  assert(!/<input[^>]*name="before"/.test(html));
 });
 test('empty lists offer upload and non-GET requests never query storage', async () => {
   let queries = 0; const store = { listDocuments() {queries++;return {documents:[],next:null};} };

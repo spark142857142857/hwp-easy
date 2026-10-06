@@ -21,7 +21,7 @@ const invoke = async (name,args,headers=a) => {
   assert.equal(response.status,200);const result=(await response.json()).result;assert(!result.isError);return result.structuredContent.data;
 };
 const links = html => [...html.matchAll(/href="(\/documents\/([0-9a-f-]+)\/versions\/([0-9a-f-]+)\/view)"/g)].map(m=>({path:m[1],doc:m[2],version:m[3]}));
-const next = html => html.match(/href="(\/documents\?before=[^"]+)"/)?.[1];
+const next = html => html.match(/href="(\/documents\?before=[^"]+)"/)?.[1].replaceAll('&amp;','&');
 try {
   let db=await mf.getD1Database('DB'), bucket=await mf.getR2Bucket('BUCKET');await applyTestMigrations(db);
   // Upgrade an existing old-schema metadata row, not only a fresh database.
@@ -50,6 +50,26 @@ try {
     versions:(await db.prepare('SELECT * FROM hwp_versions ORDER BY owner,document_id,id').all()).results,
     requests:(await db.prepare('SELECT * FROM hwp_requests ORDER BY owner,id').all()).results,
     blobs:(await bucket.list()).objects.map(o=>({key:o.key,etag:o.etag})).sort((x,y)=>x.key.localeCompare(y.key))});
+  // Search all matching metadata before paginating, including Korean names and
+  // timestamp ties. Percent/underscore are literal characters, not wildcards.
+  await db.prepare("UPDATE hwp_documents SET display_name='합성 검색 공통'").run();
+  await db.prepare('UPDATE hwp_documents SET display_name=? WHERE id=?').bind('합성 검색 공통 100%_HWP',documents[0].document_id).run();
+  const searchCapture=await capture();
+  const find=async (query,headers=a)=>get('/documents?q='+encodeURIComponent(query),headers);
+  let searched=[],searchRoute='/documents?q='+encodeURIComponent('공통');
+  do {const page=await get(searchRoute);assert.equal(page.status,200);const pageHtml=await page.text();searched.push(...links(pageHtml));searchRoute=next(pageHtml);
+    if(searchRoute)assert.equal(new URL(origin+searchRoute).searchParams.get('q'),'공통');
+  } while(searchRoute);
+  assert.deepEqual(searched.map(l=>l.doc),documents.map(d=>d.document_id).sort().reverse());
+  assert.deepEqual(links(await (await find('%_hwp')).text()).map(l=>l.doc),[documents[0].document_id]);
+  assert.deepEqual(links(await (await find(documents[0].document_id.toUpperCase())).text()).map(l=>l.doc),[documents[0].document_id]);
+  assert.deepEqual(links(await (await find(other.document_id)).text()),[]);
+  assert.deepEqual(links(await (await find('공통',b)).text()).map(l=>l.doc),[other.document_id]);
+  assert.deepEqual(links(await (await find("%' OR 1=1 --")).text()),[]);
+  assert((await (await find('일치하지않는합성문서')).text()).includes('일치하는 문서가 없습니다'));
+  for(const query of ['?q=a&q=b','?q=bad%0Ainput','?q='+encodeURIComponent('가'.repeat(81))])assert.equal((await get('/documents'+query)).status,400);
+  assert.deepEqual(await capture(),searchCapture);
+  await db.prepare("UPDATE hwp_documents SET display_name=''").run();
   const before=await capture();
   let response=await get();assert.equal(response.status,200);let html=await response.text();const firstPage=links(html);
   assert.equal(firstPage.length,20);assert(!html.includes(other.document_id));
@@ -122,6 +142,7 @@ try {
   await db.prepare("INSERT INTO hwp_deletions (owner,document_id,request_id,expected_version,phase,version_count,created_at) VALUES (?,?,?,?,'pending',1,1)")
     .bind(owner,hidden.document_id,crypto.randomUUID(),hidden.version_id).run();
   html=await (await get()).text();assert(!html.includes(hidden.document_id));
+  assert.deepEqual(links(await (await find(hidden.document_id)).text()),[]);
   const hiddenRoute=`/documents/${hidden.document_id}/name`;
   assert.equal((await get(hiddenRoute)).status,404);
   const hiddenRename=await mf.dispatchFetch(origin+hiddenRoute,{method:'POST',headers:{...a,Origin:origin,'Content-Type':'application/x-www-form-urlencoded'},
@@ -139,5 +160,6 @@ try {
   console.log(JSON.stringify({document_list_contract:'passed',actual_workerd_d1_r2_wasm:true,identity_is_mock_not_oauth:true,
     owner_scope:true,tied_timestamp_pagination_no_gaps:true,explicit_current_version:true,pending_deletion_excluded:true,
     metadata_corruption_refused:true,read_only_capture_unchanged:true,restart_verified:true,layout_verified:false,
-    names_owner_scoped:true,names_content_versions_requests_blobs_unchanged:true,names_exact_retry:true,names_conflicts_and_aba_refused:true,names_same_origin:true,names_escape_markup:true,names_restart_verified:true,names_existing_schema_upgrade_verified:true}));
+    names_owner_scoped:true,names_content_versions_requests_blobs_unchanged:true,names_exact_retry:true,names_conflicts_and_aba_refused:true,names_same_origin:true,names_escape_markup:true,names_restart_verified:true,names_existing_schema_upgrade_verified:true,
+    search_korean_names_and_ascii_case:true,search_literal_not_wildcard:true,search_owner_and_deletion_scoped:true,search_pagination_no_gaps:true,search_read_only_capture_unchanged:true}));
 }finally{await mf.dispose();}
