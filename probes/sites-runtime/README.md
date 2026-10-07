@@ -10,7 +10,7 @@
 - 확인된 단일 구역의 `pgnp`를 보존 전용으로 허용한다. 해당 문단은 읽기 전용이고 다른 지원 대상만 편집한다. 합성 네 형태·잘못된 구조/연결·저장 시 제어 변조 거부와 actual workerd/D1/R2의 편집·다운로드·재열기·이전 버전 불변을 시험했다. 읽기 완료와 편집 계약을 분리하며 로컬 stdio 차단·다중 구역·시각 배치의 미검증은 유지한다. [계약](../../docs/remote-documents.md#쪽-번호-보존-전용-편집)
 - actual workerd/D1/R2에서 저장·재시작·현재/이전 버전 조회·조건부 저장·재시도·복구·기록된 버전 삭제를 시험한다. 실패는 명시적으로 주입하며 신원 헤더·파일 네트워크는 모의다. 실제 OAuth 격리·운영 장애/삭제 인증으로 집계하지 않는다.
 - 소유자 전용 Sites의 고정 엔진/저장 진단과 실제 Desktop·ChatGPT Work Cloud 사용자 연결의 합성 도구 왕복을 확인했다. 익명·임의 신원·서비스 자격의 사용자 문서/MCP 접근은 거부한다. 서비스 자격 진단은 사용자 MCP 연결 검증이 아니다.
-- 새 로컬 대화의 13개 native 도구와 실제 고정 합성 파일 인수의 바이트 전달·embedded HWP 회수를 확인했다. 별도 로그인 Chrome에서도 고정 편집 결과를 다운로드해 native 결과와 바이트 전체 일치를 확인했다. 저장된 사용자 문서의 다운로드·두 OAuth 사용자·저장소 Codex Cloud·Dots·시각 배치는 미검증이다. 개별 배포·인증 이력은 ignored 로컬 기록에 보관한다.
+- 실제 native 도구의 고정 합성 파일 전달·embedded HWP 회수와 별도 로그인 Chrome의 합성 저장 버전 다운로드를 확인했다. 저장소 Codex Cloud에서도 고정 합성 입력·편집·바이트 회수·복구를 확인했다. 운영 버전 46의 혼합 서식 치환은 본문·일반 셀·병합 셀의 실제 저장·회수·복구와 독립 바이트 검사까지 통과했다. 일반 사용자 문서·두 OAuth 사용자·Cloud 결과 첨부 UI·시각 배치는 미검증이며 Dots는 MVP에서 제외한다. 개별 배포·인증 이력은 ignored 로컬 기록에 보관한다.
 
 컨테이너 검사의 보수적 한도는 입력 4 MiB, 본문 해제 합계 8 MiB, DocInfo 해제 2 MiB, 본문 레코드 100,000개, directory slot 2,048개와 경로 문자 누적 65,536개다. 이것은 전체 isolate 메모리·CPU 적합성 인증이 아니다. 초기 진단의 WASM linear memory는 2,949,120 bytes에서 두 사례 후 27,394,048 bytes였으나 JS heap·동시 요청·peak 측정은 아니다. [Workers 제한](https://developers.cloudflare.com/workers/platform/limits/)
 
@@ -38,6 +38,18 @@ npm test
 `npm test`는 Node 회귀 → 빌드 → actual workerd 엔진 → D1/R2 저장 → 인증 헤더/바이너리 계약 → 타인 접근·요청 ID 격리·비공개 오류 노출 차단 → 실패 정리 → 명시적 삭제와 읽기·저장 겹침 → 고정 합성 전송 → 고정 다운로드와 저장 버전 보기 계약 검사를 실행한다. 격리 검사의 신원과 삭제 겹침 시점은 모의이며 실제 OAuth 인증·철회가 아니다. 루트에서 `node probes/sites-runtime/scripts/check-python-guard.mjs`를 실행하면 합성 HWP를 Python `olefile` reader와 대조한다. 루트 런타임과 native Python 의존성이 필요하며 `PYTHON`으로 venv 실행 파일을 지정할 수 있다. 입력은 생성한 합성 문서이며 `testdocs/`를 읽지 않는다.
 
 `build.mjs`는 ESM·WASM·검증된 라이선스 고지를 `dist/server`에, migration을 `dist/.openai/drizzle`에 작성한다. pako 3.0.2는 bounded raw-DEFLATE runtime이다. cfb는 합성 fixture writer, Drizzle은 스키마/migration 생성, Miniflare·esbuild는 시험/빌드에만 사용한다. 이들은 배포 Worker의 별도 runtime 의존성이 아니다. [외부 구성요소 고지](../../THIRD_PARTY_NOTICES.md)
+
+### 개발용 Sites 배포 파일 포장
+
+기존 Sites 소스를 확인하고 빌드한 checkout에서 [package-site.mjs](scripts/package-site.mjs)를 실행한다. 아래 두 경로는 실제 helper와 새 출력 파일의 절대 경로로 바꾼다. Node.js 22 이상과 `tar`가 필요하다.
+
+```sh
+node /absolute/path/to/package-site.mjs /absolute/path/to/new-release.tar
+```
+
+archive 루트에는 `.openai/hosting.json`·`.openai/drizzle/**`와 `dist/server/**`를 둔다. `dist` 내부만 그대로 압축해 `server/index.js`를 루트에 두면 Sites가 Worker 진입점을 찾지 못한다. helper는 manifest와 migration의 빌드 전후 일치, 고정 런타임 파일·라이선스 고지를 검사하고 해당 파일만 포장한다. 임의 dotfile·인증 파일·추가 산출물은 수집하지 않으며 입력 symlink와 기존 출력 덮어쓰기를 거부한다. helper의 단위 검사는 `node --test tests/package-site.test.mjs`로 실행한다.
+
+이 도구는 로컬 archive만 만들며 소스 push·배포·접근 권한 변경을 하지 않는다. 최신 소스와 compiled JS의 일치, Sites 소스 push와 요청받은 비공개 배포는 별도로 확인한다. 출력의 `source_push_checked: false`와 `deployed: false`를 배포 성공으로 해석하지 않는다.
 
 ## 고정 합성 파일 전달
 
