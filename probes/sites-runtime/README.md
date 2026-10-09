@@ -37,7 +37,7 @@ npm test
 
 `npm test`는 Node 회귀 → 빌드 → actual workerd 엔진 → D1/R2 저장 → 별도 합성 저장소 복구 → 인증 헤더/바이너리 계약 → 타인 접근·요청 ID 격리·비공개 오류 노출 차단 → 실패 정리 → 명시적 삭제와 읽기·저장 겹침 → 고정 합성 전송 → 고정 다운로드와 저장 버전 보기 계약 검사를 실행한다. 격리 검사의 신원과 삭제 겹침 시점은 모의이며 실제 OAuth 인증·철회가 아니다. 루트에서 `node probes/sites-runtime/scripts/check-python-guard.mjs`를 실행하면 합성 HWP를 Python `olefile` reader와 대조한다. 루트 런타임과 native Python 의존성이 필요하며 `PYTHON`으로 venv 실행 파일을 지정할 수 있다. 입력은 생성한 합성 문서이며 `testdocs/`를 읽지 않는다.
 
-`npm run test:recovery`는 복구 자료의 읽기 전용 사전 검사와 별도 로컬 D1/R2 복구 시험을 실행한다. 모의 두 소유자·문서 2개·버전 4개·완료된 삭제 1건을 사용하며, 원래 runtime을 닫고 새 저장 위치로 복사한 뒤 다시 시작해 HWP·이력·이름·재시도·삭제 차단을 확인한다. 사용자 파일 경로나 인수를 받지 않고 네트워크 호출·운영 백업/복원을 하지 않는다. 사전 검사 helper는 배포 Worker나 MCP 도구에 연결하지 않는다. [복구 범위와 운영 조건](../../docs/durable-storage.md#독립-로컬-저장소의-합성-복구-시험)
+`npm run test:recovery`는 복구 자료의 읽기 전용 사전 검사와 별도 로컬 D1/R2 복구 시험을 실행한다. 모의 두 소유자·문서 2개·버전 4개·완료된 삭제 1건을 사용하며, 원래 runtime을 닫고 새 저장 위치로 복사한 뒤 다시 시작해 HWP·이력·이름·재시도·삭제 차단을 확인한다. 선택적인 객체 목록 점검은 R2 목록을 세 페이지로 읽어 기록된 파일 4개와 미게시 파일 1개를 구분하고, 모든 DB 기록과 파일 5개의 크기·해시가 그대로임을 확인한다. 목록 누락·중복·크기 불일치·잘못된 페이지 이동은 거부하며 이름·소유자·객체 키·본문은 보고하지 않는다. 사용자 파일 경로나 인수를 받지 않고 네트워크 호출·운영 백업/복원·미게시 파일 삭제를 하지 않는다. 사전 검사 helper는 배포 Worker나 MCP 도구에 연결하지 않는다. [복구 범위와 운영 조건](../../docs/durable-storage.md#독립-로컬-저장소의-합성-복구-시험)
 
 `build.mjs`는 ESM·WASM·검증된 라이선스 고지를 `dist/server`에, migration을 `dist/.openai/drizzle`에 작성한다. pako 3.0.2는 bounded raw-DEFLATE runtime이다. cfb는 합성 fixture writer, Drizzle은 스키마/migration 생성, Miniflare·esbuild는 시험/빌드에만 사용한다. 이들은 배포 Worker의 별도 runtime 의존성이 아니다. [외부 구성요소 고지](../../THIRD_PARTY_NOTICES.md)
 

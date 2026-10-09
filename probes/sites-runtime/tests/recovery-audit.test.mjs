@@ -135,3 +135,29 @@ test('metadata is copied before asynchronous reads and input records are not ret
   const result=await run(f,async key=>{if(!calls++)f.snapshot.tables.hwp_documents[0].current_version=uuid();return f.keys.get(key);});
   assert.equal(result.audit,'passed');assert.equal(calls,3);
 });
+
+test('optional full inventory compares only validated immutable keys and omits private metadata', async () => {
+  const f = fixture(), before = structuredClone(f.snapshot), candidate = `hwp-easy/v1/synthetic:a/${uuid()}/${uuid()}.hwp`;
+  const result = await auditRecoverySnapshot(f.snapshot, { latestDeletions: f.latestDeletions,
+    readBlob: async key => f.keys.get(key), listBlobPage: async cursor => {
+      assert.equal(cursor, null);
+      return { objects: [...f.keys].map(([key, bytes]) => ({ key, size: bytes.length })).concat({ key: candidate, size: 2 }),
+        truncated: false, cursor: null };
+    } });
+  assert.equal(result.storage_inventory.recorded_objects, 3);
+  assert.equal(result.storage_inventory.unreferenced_managed_objects, 1);
+  assert.equal(result.storage_inventory.unreferenced_objects_deletable, false);
+  assert(!JSON.stringify(result).includes(candidate)); assert(!JSON.stringify(result).includes('PRIVATE_DOCUMENT_NAME'));
+  assert.deepEqual(f.snapshot, before);
+});
+
+test('invalid recovery metadata or corrupt bytes never invoke the optional inventory listing', async () => {
+  for (const invalidMetadata of [true, false]) {
+    const f = fixture(); if (invalidMetadata) f.snapshot.tables.hwp_versions[0].blob_key = 'PRIVATE_PATH';
+    let listings = 0;
+    await assert.rejects(() => auditRecoverySnapshot(f.snapshot, { latestDeletions: f.latestDeletions,
+      readBlob: async () => null, listBlobPage: async () => { listings++; } }),
+    rejected(invalidMetadata ? 'RECOVERY_METADATA_INCONSISTENT' : 'RECOVERY_BLOB_MISSING_OR_CORRUPT'));
+    assert.equal(listings, 0);
+  }
+});

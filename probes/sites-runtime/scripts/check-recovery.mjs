@@ -70,7 +70,7 @@ try {
   const deleteArgs = { owner: ownerA, document_id: deleted.document_id, expected_version: deleted.version_id, request_id: crypto.randomUUID() };
   await store.remove(deleteArgs);
   // An unreferenced candidate is deliberately excluded from the recorded-version
-  // recovery set. The drill does not claim to inventory or purge operational GC.
+  // recovery set. The inventory only reports it; no GC/deletion is performed.
   const orphanKey = `hwp-easy/v1/${ownerA}/${crypto.randomUUID()}/${crypto.randomUUID()}.hwp`;
   await bucket.put(orphanKey, bytes);
   const snapshot = await capture(db);
@@ -86,6 +86,29 @@ try {
   assert.equal(proof.documents, 2); assert.equal(proof.deletions, 1);
   assert.deepEqual(await capture(db), snapshot); // Audit is read-only.
   checks.push('metadata_owners_names_current_pointers_revisions_receipts_and_hashes_audited');
+  const listedBefore = (await bucket.list()).objects.map(object => ({ key: object.key, size: object.size }));
+  const allHashesBefore = new Map();
+  for (const object of listedBefore)
+    allHashesBefore.set(object.key, sha(new Uint8Array(await (await bucket.get(object.key)).arrayBuffer())));
+  let inventoryPages = 0;
+  const inventoryProof = await auditRecoverySnapshot(snapshot, { latestDeletions, readBlob: async key => blobs.get(key),
+    listBlobPage: async cursor => {
+      const result = await bucket.list({ limit: 2, ...(cursor === null ? {} : { cursor }) });
+      inventoryPages++;
+      return { objects: result.objects.map(object => ({ key: object.key, size: object.size })),
+        truncated: result.truncated, cursor: result.truncated ? result.cursor : null };
+    } });
+  assert.equal(inventoryPages, 3); assert.equal(inventoryProof.storage_inventory.objects, 5);
+  assert.equal(inventoryProof.storage_inventory.recorded_objects, 4);
+  assert.equal(inventoryProof.storage_inventory.unreferenced_managed_objects, 1);
+  assert.equal(inventoryProof.storage_inventory.unreferenced_managed_bytes, bytes.length);
+  assert.equal(inventoryProof.storage_inventory.unreferenced_objects_deletable, false);
+  assert(!JSON.stringify(inventoryProof).includes(orphanKey));
+  assert.deepEqual(await capture(db), snapshot);
+  assert.deepEqual((await bucket.list()).objects.map(object => ({ key: object.key, size: object.size })), listedBefore);
+  for (const [key, hash] of allHashesBefore)
+    assert.equal(sha(new Uint8Array(await (await bucket.get(key)).arrayBuffer())), hash);
+  checks.push('paginated_read_only_inventory_reports_one_unpublished_blob_and_preserves_all_metadata_and_five_blobs');
   await assert.rejects(() => audit(preDeletion), auditCode('RECOVERY_DELETION_LEDGER_MISMATCH'));
   const missingTombstone = structuredClone(snapshot); missingTombstone.tables.hwp_deletions = [];
   await assert.rejects(() => audit(missingTombstone), auditCode('RECOVERY_DELETION_LEDGER_MISMATCH'));
@@ -176,6 +199,7 @@ try {
     completed_deletion_receipts:1,actual_local_workerd_D1_R2:true,source_runtime_disposed_before_recovery:true,
     independent_recovery_store_restarted:true,actual_OAuth_verified:false,operational_backup_export_verified:false,
     platform_backup_restore_verified:false,deletion_ledger_freshness_in_production_verified:false,
+    synthetic_storage_inventory:inventoryProof.storage_inventory,
     unpublished_blob_GC_verified:false,layout_verified:false}));
 } finally {
   if(source)await source.dispose();if(recovered)await recovered.dispose();

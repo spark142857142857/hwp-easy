@@ -2,6 +2,7 @@
 // production route. A trusted operator must establish snapshot/ledger provenance.
 import { createHash } from 'node:crypto';
 import { validDocumentName } from '../storage/document-names.mjs';
+import { auditStorageInventory } from './storage-inventory-audit.mjs';
 
 export class RecoveryAuditError extends Error {
   constructor(code) { super(code); this.name = 'RecoveryAuditError'; this.code = code; }
@@ -55,8 +56,9 @@ function deletionRows(rows) {
  * including deletions after the recovery point. Never substitute the snapshot's
  * own ledger in an operational audit. Freshness/authenticity are caller duties.
  * Validates every row/key before calling readBlob; never returns private rows. */
-export async function auditRecoverySnapshot(input, { latestDeletions, readBlob } = {}) {
-  if (typeof readBlob !== 'function') fail('INVALID_RECOVERY_SNAPSHOT');
+export async function auditRecoverySnapshot(input, { latestDeletions, readBlob, listBlobPage } = {}) {
+  if (typeof readBlob !== 'function' || (listBlobPage !== undefined && typeof listBlobPage !== 'function'))
+    fail('INVALID_RECOVERY_SNAPSHOT');
   if (!object(input, ['format', 'tables']) || input.format !== 'hwp-easy-recovery-v1'
     || !object(input.tables, Object.keys(recoveryColumns))) fail('INVALID_RECOVERY_SNAPSHOT');
   // Bound flat metadata before copying it; blob bytes are supplied separately.
@@ -156,8 +158,11 @@ export async function auditRecoverySnapshot(input, { latestDeletions, readBlob }
       || createHash('sha256').update(bytes).digest('hex') !== row.sha256)
       fail('RECOVERY_BLOB_MISSING_OR_CORRUPT');
   }
+  const inventory = listBlobPage === undefined ? undefined : await auditStorageInventory(
+    [...versions.values()].map(row => ({ blob_key: row.blob_key, byte_size: row.byte_size })), { listBlobPage });
   return Object.freeze({ audit: 'passed', documents: documents.size, versions: versions.size,
     requests: receipts.size, deletions: tombstones.size, deleted_request_receipts: deletedReceipts,
     bytes_checked: byteCount, restored: false, snapshot_provenance_verified: false,
-    latest_deletion_ledger_freshness_verified: false, platform_backup_restore_verified: false });
+    latest_deletion_ledger_freshness_verified: false, platform_backup_restore_verified: false,
+    ...(inventory === undefined ? {} : { storage_inventory: inventory }) });
 }
