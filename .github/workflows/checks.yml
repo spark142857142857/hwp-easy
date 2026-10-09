@@ -118,3 +118,5 @@ jobs:
         run: node scripts/check-performance-limits.mjs
       - name: Verify hosted workload refusals preserve documents and versions
         run: node scripts/check-hosted-workload.mjs
+      - name: Verify parallel full reads, competing saves, replay and restore at hosted text boundary
+        run: node scripts/check-concurrent-workload.mjs --memory
