@@ -74,8 +74,10 @@ export async function documentViewerResponse(url, owner, service, canonicalOrigi
   if (!selected || selected.sha256 !== metadata.sha256) fail('BLOB_MISSING_OR_CORRUPT');
   // Reuse the already opened snapshot. A bounded first fragment supplies the
   // full-document aggregate without a second WASM open or full-text read.
-  const editability = workloadBlocked ? undefined
-    : snapshot.read({ expected_sha256: metadata.sha256, max_chars: 1, max_blocks: 1 }).editability_summary;
+  const readScope = workloadBlocked ? undefined
+    : snapshot.read({ expected_sha256: metadata.sha256, max_chars: 1, max_blocks: 1 });
+  const editability = readScope?.editability_summary;
+  const partialContent = readScope?.all_content_supported === false;
   const base = `/documents/${document_id}/versions/${version_id}`;
   let preview;
   if (workloadBlocked && page !== 0) fail('INVALID_PREVIEW_PAGE');
@@ -116,7 +118,8 @@ ${version_id !== current ? `<p><a href="/documents/${document_id}/versions/${cur
 ${workloadBlocked ? `<section aria-labelledby="workload-heading"><h2 id="workload-heading">이 저장본은 처리 제한을 넘었습니다</h2>
 <p>현재 서버의 처리 제한은 본문·표 셀을 합쳐 UTF-16 ${MAX_HOSTED_BODY_TEXT_CODE_UNITS.toLocaleString('ko-KR')}단위입니다. 일반 한글 1자는 1단위이며 이모지 등은 여러 단위를 사용할 수 있습니다.</p>
 <p class="notice">이 저장본의 내용 조회·편집·미리보기는 제공하지 않습니다. 같은 요청을 반복하거나 재인증해도 이 제한은 해결되지 않습니다.</p>
-<p>기존 문서와 버전은 유지됩니다. 위에서 이 버전 HWP를 다운로드하거나 저장 버전 목록에서 다른 저장본을 선택하세요. 내려받은 HWP는 외부 HWP 프로그램에서 확인할 수 있습니다.</p></section>` : `${editabilitySection(editability)}
+<p>기존 문서와 버전은 유지됩니다. 위에서 이 버전 HWP를 다운로드하거나 저장 버전 목록에서 다른 저장본을 선택하세요. 내려받은 HWP는 외부 HWP 프로그램에서 확인할 수 있습니다.</p></section>` : `${partialContent ? `<section aria-labelledby="content-scope-heading"><h2 id="content-scope-heading">일부 내용만 읽을 수 있습니다</h2>
+<p class="notice">이 문서의 일부 요소는 현재 에이전트 조회에 포함되지 않습니다. 전체 내용은 내려받은 HWP에서도 확인하세요.</p></section>` : ''}${editabilitySection(editability)}
 <section aria-labelledby="handoff-heading"><h2 id="handoff-heading">에이전트에게 전달</h2>
 <p>HWP Easy가 연결된 대화에 붙여넣고 원하는 작업을 이어서 적으세요. 같은 계정의 접근 권한이 필요합니다.</p>
 <button type="button" class="secondary" id="handoff-copy" aria-describedby="handoff-hint" disabled>링크와 읽기 요청 복사</button>

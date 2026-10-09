@@ -734,6 +734,24 @@ try {
     compressionRejectedBytes);
   checks.push('both_compression_profiles_miss_allocation_no_storage_mutation',
     'allocation_failure_numeric_feedback_no_private_values_or_unsafe_retry');
+  const partialBytes = syntheticFixture(HwpDocument, api.exportChecked, { header: true });
+  const partialUpload = await upload({}, headers, partialBytes); assert.equal(partialUpload.status, 200);
+  const partialDoc = await partialUpload.json(), partialArgs = { document_id: partialDoc.document_id, version_id: partialDoc.version_id };
+  const partialRead = await call('hwp_read', partialArgs);
+  assert.equal(partialRead.all_content_supported, false); assert.equal(partialRead.content_complete, false);
+  const partialHistory = await call('hwp_versions', { document_id: partialDoc.document_id }), partialBlobs = await blobState();
+  const partialPath = `${origin}/documents/${partialDoc.document_id}/versions/${partialDoc.version_id}/view`;
+  assert.equal((await mf.dispatchFetch(partialPath)).status, 401);
+  assert.equal((await mf.dispatchFetch(partialPath, { headers: other })).status, 404);
+  const partialView = await mf.dispatchFetch(partialPath, { headers }); assert.equal(partialView.status, 200);
+  const partialHtml = await partialView.text();
+  assert(partialHtml.includes('일부 내용만 읽을 수 있습니다'));
+  assert(partialHtml.indexOf('일부 내용만 읽을 수 있습니다') < partialHtml.indexOf('에이전트에게 전달'));
+  const partialDownload = await mf.dispatchFetch(`${origin}/documents/${partialDoc.document_id}/versions/${partialDoc.version_id}.hwp`, { headers });
+  assert.deepEqual(new Uint8Array(await partialDownload.arrayBuffer()), partialBytes);
+  assert.deepEqual(await call('hwp_versions', { document_id: partialDoc.document_id }), partialHistory);
+  assert.deepEqual(await blobState(), partialBlobs);
+  checks.push('partial_content_notice_matches_actual_hwp_profile_and_keeps_owner_guard_download_storage');
   console.log(JSON.stringify({ authenticated_host_contract: 'passed', checks,
     real_d1_r2_and_hwp: true, local_identity_headers_are_mocks_not_oauth: true,
     fileparam_network_is_mocked: true, native_client_attachment_verified: false, workflow }));

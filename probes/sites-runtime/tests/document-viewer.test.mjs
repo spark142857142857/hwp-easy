@@ -58,6 +58,34 @@ test('preview failure does not hide the immutable HWP download', async () => {
   }
 });
 
+test('partial content is visible before handoff; bounded fragments alone do not imply unsupported content', async () => {
+  for (const all_content_supported of [true, false]) {
+    let reads = 0, previews = 0;
+    const s = service(() => { previews++; return { page_count: 1, svg: '<svg />' }; });
+    const open = s.open.bind(s);
+    s.open = async (args) => {
+      const result = await open(args), read = result.snapshot.read;
+      result.snapshot.read = options => { reads++; return { ...read(options),
+        all_content_supported, content_complete: false,
+        unsupported: [{ reason: '<script>untrusted document detail</script>' }] }; };
+      return result;
+    };
+    const response = await documentViewerResponse(url, 'user:mock', s), html = await response.text();
+    const notice = html.indexOf('일부 내용만 읽을 수 있습니다');
+    assert.equal(notice >= 0, !all_content_supported);
+    if (!all_content_supported) {
+      assert(notice < html.indexOf('이 저장본의 편집 가능 범위'));
+      assert(notice < html.indexOf('에이전트에게 전달'));
+      assert(html.includes('전체 내용은 내려받은 HWP에서도 확인하세요'));
+    }
+    assert(!html.includes('untrusted document detail'));
+    assert(html.includes(`href="/documents/${document_id}/versions/${version_id}.hwp" download`));
+    assert.equal(reads, 1); assert.equal(previews, 1);
+    assert.equal(response.headers.get('Cache-Control'), 'private, no-store');
+    assert.deepEqual(s.calls.map(c => c[0]), ['open', 'history']);
+  }
+});
+
 test('version selection uses explicit current metadata despite clock order or equal save times', async () => {
   const s = service(), history = s.history.bind(s);
   s.history = async (args) => (await history(args)).map((v) => ({ ...v, created_at: 1791075723000 }));
