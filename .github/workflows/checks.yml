@@ -86,6 +86,8 @@ jobs:
         run: node scripts/check-workerd.mjs
       - name: Verify durable D1 and R2 save, restart, restore and failure handling
         run: node scripts/check-storage.mjs
+      - name: Verify isolated synthetic recovery and deletion-aware snapshot audit
+        run: node scripts/check-recovery.mjs
       - name: Verify authenticated document tool and binary transfer contracts
         run: node scripts/check-host.mjs
       - name: Verify bounded mixed style replacements preserve raw anchors and stored versions
