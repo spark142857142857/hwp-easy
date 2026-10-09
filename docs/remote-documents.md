@@ -79,6 +79,14 @@
 
 라이브러리의 동기 `snapshot.plan`은 빠른 대상·값 검사로 남아 `validation_scope: targets_and_values_only`, `serialization_checked: false`를 반환한다. 원격 MCP는 비동기 `snapshot.preflight`를 사용한다. Python 로컬 stdio의 계획 계약까지 강화됐다고 표현하지 않는다.
 
+### 계획·저장의 페이지 수 안내
+
+10월 9일 후속 소스의 `hwp_plan`과 `hwp_edit`에는 `pagination_diagnostic`을 추가했다. 기존 입력 검사와 결과 재열기에서 얻은 고정 엔진의 `page_count`를 사용하며 추가 문서 열기·렌더링을 하지 않는다. `source_page_count`, `output_page_count`, `page_count_changed`와 `changed`·`unchanged`·`unavailable` 상태를 반환한다. 개수 중 하나를 확인하지 못하면 해당 값과 변화 여부는 `null`이다. 기능 조회의 `engine_page_count_change_notice_available`로 소스의 계약을 알린다.
+
+이 수치는 기본 미리보기 엔진의 계산이며 외부 HWP 프로그램의 결과, 글꼴·줄바꿈·제출 분량을 인증하지 않는다. 페이지 수가 같아도 `layout_verified=false`, `page_limit_checked=false`를 유지한다. 페이지가 늘었다는 이유로 요청 문구를 자동으로 줄이거나 나누고 일부만 저장하지 않는다. 계획은 여전히 저장하지 않으며 실제 저장 응답과 정확한 재시도에도 같은 안내를 전달한다. 운영 배포는 하지 않았으므로 기존 버전 46에서 이 새 필드가 제공된 것으로 설명하지 않는다.
+
+공개 빈 양식의 같은 칸에 합성 500자·1,000자·4,096자·20,000자를 넣은 로컬 후속 검사에서는 기본 엔진의 계산이 원본 3쪽에서 각각 4·4·5·13쪽으로 늘었다. 내용·스타일·독립 raw 보존 검사 성공과 페이지 제한 충족을 구분해야 하는 실제 근거다. 이 긴 입력들은 운영에 업로드하거나 한글 2020에서 시각 비교하지 않았다. 상세 범위는 [첫 양식 검사](first-form-check.md#공개-빈-양식의-실제-연결-검사)에 기록한다.
+
 ### 셀 목록의 0 값 보존
 
 고정 엔진 0.8.6은 셀 LIST_HEADER의 offset 6–7 원래 word가 0일 때 재생성 경로에서 `0x0400`을 넣는다. 합성 HWP와 [해당 버전 writer 소스](https://github.com/edwardkim/rhwp/blob/v0.8.6/src/serializer/control.rs#L690)에서 이 동작을 확인했다. 이 word의 의미를 추정하거나 차이를 무시하지 않는다.

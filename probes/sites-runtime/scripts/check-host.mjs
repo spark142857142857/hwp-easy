@@ -62,6 +62,7 @@ try {
   assert.equal((await rpc('hwp_capabilities', {}, {})).status, 401);
   assert.equal((await rpc('hwp_capabilities', {}, { 'oai-authenticated-user-id': 'no-email' })).status, 401);
   assert.equal((await call('hwp_capabilities', {})).transfer_body_timeout_ms, 30000);
+  assert.equal((await call('hwp_capabilities', {})).engine_page_count_change_notice_available, true);
   const firstOwner = await authenticatedOwner(new Headers(headers));
   const renamedOwner = await authenticatedOwner(new Headers({ ...headers, 'oai-authenticated-user-email': 'changed@example.invalid' }));
   assert.equal(firstOwner, renamedOwner); assert.match(firstOwner, /^user:[0-9a-f]{64}$/);
@@ -108,6 +109,10 @@ try {
   assert.equal(planned.serialization_checked, true);
   assert.equal(planned.content_verified, true);
   assert.equal(planned.raw_preservation_verified, true);
+  assert.equal(planned.pagination_diagnostic.scope, 'pinned_engine_page_count_only');
+  assert.equal(planned.pagination_diagnostic.source_page_count, 1);
+  assert.equal(planned.pagination_diagnostic.layout_verified, false);
+  assert.equal(planned.pagination_diagnostic.page_limit_checked, false);
   assert.equal(planned.storage_checked, false);
   assert.equal(planned.saved, false);
   assert.equal(Object.hasOwn(planned, 'bytes'), false);
@@ -120,7 +125,11 @@ try {
   const edited = await call('hwp_edit', editArgs);
   assert.equal(edited.saved, true); assert.equal(edited.document_id, created.document_id);
   assert.equal(edited.raw_preservation_verified, true);
-  assert.equal((await call('hwp_edit', editArgs)).replayed, true);
+  assert.deepEqual(edited.pagination_diagnostic, planned.pagination_diagnostic);
+  const editedReplay = await call('hwp_edit', editArgs);
+  assert.equal(editedReplay.replayed, true);
+  assert.deepEqual(editedReplay.pagination_diagnostic, edited.pagination_diagnostic);
+  checks.push('engine_page_count_notice_survives_plan_save_and_exact_retry_without_layout_claim');
   const current = { document_id: created.document_id, version_id: edited.version_id };
   const link = await call('hwp_download', current);
   assert.equal(link.public_share_link, false);

@@ -17,6 +17,7 @@ import { indexUnicodeText } from './unicode-text.mjs';
 import { describeEditability } from './editability.mjs';
 import { mixedStyleEdit } from '../../../src/one_hwp/mixed_style.mjs';
 import { mixedStyleProfiles, verifyMixedStylePreservation } from './mixed-style.mjs';
+import { paginationDiagnostic } from './pagination.mjs';
 
 const fail = (code) => { throw new GuardError(code); };
 const copy = (value) => JSON.parse(JSON.stringify(value));
@@ -312,6 +313,7 @@ export function createDocumentEngine(HwpDocument, { readInspectionCache, hostedW
         cell_text_record_removals_verified: projection.verified_removals,
         restored_cell_list_words: repaired.restored_cell_list_words,
         body_mini_sector_growth: repaired.body_mini_sector_growth,
+        pagination_diagnostic: paginationDiagnostic(inspection.page_count, reopened.page_count),
         saved: false, persistence: 'none' };
     }
     async function preflight(options) {
@@ -330,6 +332,7 @@ export function createDocumentEngine(HwpDocument, { readInspectionCache, hostedW
         body_mini_sector_growth: candidate.body_mini_sector_growth,
         empty_cell_text_insertions_verified: candidate.empty_cell_text_insertions_verified,
         cell_text_record_removals_verified: candidate.cell_text_record_removals_verified,
+        pagination_diagnostic: candidate.pagination_diagnostic,
         raw_preservation_scope: candidate.raw_preservation_scope, saved: false };
     }
     function preview(options) {

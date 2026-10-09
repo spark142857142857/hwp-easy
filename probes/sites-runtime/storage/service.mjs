@@ -48,7 +48,9 @@ export function createDocumentService(engine, store) {
     const saved = await store.replace({ owner, document_id, expected_version, request_id,
       bytes: output.bytes, intent_sha256 });
     return { ...saved, content_verified: output.content_verified,
-      raw_preservation_verified: output.raw_preservation_verified, layout_verified: false };
+      raw_preservation_verified: output.raw_preservation_verified,
+      ...(output.pagination_diagnostic ? { pagination_diagnostic: output.pagination_diagnostic } : {}),
+      layout_verified: false };
   }
   async function preflight({ owner, document_id, version_id, request }) {
     try { request = structuredClone(request); } catch { throw new StorageError('INVALID_REQUEST'); }
