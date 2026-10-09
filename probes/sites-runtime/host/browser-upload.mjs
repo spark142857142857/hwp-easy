@@ -15,7 +15,8 @@ ${enabled ? `<form id="upload-form">
 <label for="hwp-file">HWP 파일</label><input id="hwp-file" type="file" accept=".hwp,application/x-hwp" aria-describedby="upload-limit">
 <p id="upload-limit"><small>.hwp 파일 · 최대 4 MiB · 본문·표 셀 합계 최대 40만 단위(예: 😀는 2단위, 👩‍💻는 5단위)</small></p>
 <button id="upload-button" type="submit" disabled>업로드</button>
-<p id="upload-status" role="status" aria-live="polite"></p></form>
+<p id="upload-status" role="status" aria-live="polite"></p>
+<p id="upload-recovery" hidden>이 화면을 유지한 채 <a href="/documents" target="_blank" rel="noopener">내 문서를 새 창에서 확인</a>하세요. 새로고침하면 재시도 정보를 잃습니다.</p></form>
 <noscript><p>파일 업로드에는 브라우저의 JavaScript가 필요합니다.</p></noscript>
 <p class="notice">선택한 파일은 내 문서 저장소에 업로드되어 직접 삭제할 때까지 보관됩니다. PC 원본은 변경하지 않습니다.</p>
 <p><small>현재 지원 범위가 제한된 개발용 연결입니다. 지원하지 않거나 손상된 HWP는 저장하지 않습니다.</small></p>`

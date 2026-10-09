@@ -75,8 +75,66 @@ try {
   assert.deepEqual(new Uint8Array(await download.arrayBuffer()), bytes);
   const bucket = await mf.getR2Bucket('BUCKET'); assert.equal((await bucket.list()).objects.length, 1);
   assert.equal(await count(), 1); assert.equal(outbound, 0);
+  const snapshot = async () => {
+    const tables = {};
+    for (const table of ['hwp_documents','hwp_versions','hwp_requests']) {
+      tables[table] = (await db.prepare(`SELECT * FROM ${table} ORDER BY owner, id`).all()).results;
+    }
+    const blobs = [];
+    for (const entry of (await bucket.list()).objects.sort((a,b) => a.key.localeCompare(b.key))) {
+      const object = await bucket.get(entry.key);
+      const digest = await crypto.subtle.digest('SHA-256', await object.arrayBuffer());
+      blobs.push({key:entry.key, size:entry.size, sha256:Buffer.from(digest).toString('hex')});
+    }
+    return {tables,blobs};
+  };
+  // Commit the real import, then replace only its acknowledgement. Never turn
+  // a transport/response fault into a new upload or a claim that nothing saved.
+  for (const fault of ['malformed-success','gateway','reauthentication','later-refusal']) {
+    const baselineCount = await count(), sent = []; let committed, beforeRetry;
+    const h = uploadClientHarness(async (url, init) => {
+      sent.push(init);
+      if (sent.length === 2 && ['reauthentication','later-refusal'].includes(fault)) {
+        return fault === 'reauthentication' ? new Response('PRIVATE_SENTINEL', {status:401})
+          : Response.json({error:'HOSTED_WORKLOAD_LIMIT_EXCEEDED',message:'PRIVATE_SENTINEL'}, {status:400});
+      }
+      const response = await mf.dispatchFetch(origin + url, {...init, headers:{...owner,Origin:origin,...init.headers}});
+      assert.equal(response.status, 200); committed = await response.clone().json();
+      if (sent.length === 1) {
+        beforeRetry = await snapshot();
+        if (fault === 'malformed-success') return Response.json({saved:true,document_id:'PRIVATE_SENTINEL',version_id:committed.version_id});
+        if (fault === 'gateway') return Response.json({error:'DOCUMENT_OPERATION_FAILED',message:'PRIVATE_SENTINEL'}, {status:503});
+        throw new Error('Lost response after commit');
+      }
+      assert.equal(committed.replayed, true); return response;
+    });
+    vm.runInNewContext(source, h.context);
+    const selected = new File([bytes], `${fault}.hwp`, {type:'application/x-hwp'});
+    h.select(selected); await h.submit(); assert.equal(await count(), baselineCount + 1);
+    assert.equal(h.navigations.length, 0); assert.equal(h.elements.get('hwp-file').disabled, true);
+    assert.equal(h.elements.get('upload-recovery').hidden, false);
+    assert(!h.elements.get('upload-status').textContent.includes('PRIVATE_SENTINEL'));
+    h.select(new File([new Uint8Array([1])], 'replacement.hwp')); await h.submit();
+    if (['reauthentication','later-refusal'].includes(fault)) {
+      assert(h.elements.get('upload-status').textContent.includes('이전 업로드 완료 여부는 아직 확인되지'));
+      assert(!h.elements.get('upload-status').textContent.includes('업로드하지 않았'));
+      assert.deepEqual(await snapshot(), beforeRetry);
+      if (fault === 'reauthentication') await h.submit();
+      else { await h.submit(); assert.equal(sent.length, 2); assert.equal(h.elements.get('upload-button').disabled, true); }
+    }
+    assert.equal(new Set(sent.map(r => r.headers['hwp-request-id'])).size, 1);
+    assert(sent.every(r => r.body === selected));
+    assert.deepEqual(await snapshot(), beforeRetry);
+    assert.equal(h.navigations.length, fault === 'later-refusal' ? 0 : 1);
+    assert.equal(h.elements.get('upload-recovery').hidden, fault !== 'later-refusal');
+    const recovered = await mf.dispatchFetch(origin + `/documents/${committed.document_id}/versions/${committed.version_id}.hwp`, {headers:owner});
+    assert.equal(recovered.status, 200); assert.deepEqual(new Uint8Array(await recovered.arrayBuffer()), bytes);
+  }
+  assert.equal(await count(), 5); assert.equal((await bucket.list()).objects.length, 5); assert.equal(outbound, 0);
   console.log(JSON.stringify({browser_upload_contract:'passed',actual_compiled_workerd_d1_r2_wasm:true,
     page_and_selection_read_only:true,disabled_gate_and_csrf_enforced:true,lost_ack_same_request_one_document:true,
+    malformed_ack_gateway_and_auth_retry_one_document_each:true,later_refusal_preserves_prior_uncertainty:true,
+    recovery_keeps_document_version_receipt_and_blob_bytes:true,synthetic_documents:5,
     selected_saved_version_viewer_and_exact_download:true,document_preview_stays_passive:true,
     identity_and_dom_are_mocks:true,actual_oauth_browser_upload_verified:false,layout_verified:false}));
 } finally { await mf.dispose(); }
