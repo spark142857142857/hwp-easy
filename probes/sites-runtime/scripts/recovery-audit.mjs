@@ -52,13 +52,9 @@ function deletionRows(rows) {
   return unique(rows, documentKey);
 }
 
-/** latestDeletions is an independently obtained COMPLETE, authoritative ledger,
- * including deletions after the recovery point. Never substitute the snapshot's
- * own ledger in an operational audit. Freshness/authenticity are caller duties.
- * Validates every row/key before calling readBlob; never returns private rows. */
-export async function auditRecoverySnapshot(input, { latestDeletions, readBlob, listBlobPage } = {}) {
-  if (typeof readBlob !== 'function' || (listBlobPage !== undefined && typeof listBlobPage !== 'function'))
-    fail('INVALID_RECOVERY_SNAPSHOT');
+// Internal private-data copy for offline packaging. Applies schema/size bounds
+// before allocation; semantic validity still requires auditRecoverySnapshot.
+export function copyBoundedRecoveryMetadata(input, latestDeletions) {
   if (!object(input, ['format', 'tables']) || input.format !== 'hwp-easy-recovery-v1'
     || !object(input.tables, Object.keys(recoveryColumns))) fail('INVALID_RECOVERY_SNAPSHOT');
   // Bound flat metadata before copying it; blob bytes are supplied separately.
@@ -79,6 +75,17 @@ export async function auditRecoverySnapshot(input, { latestDeletions, readBlob, 
   let snapshot, ledger;
   try { snapshot = structuredClone(input); ledger = structuredClone(latestDeletions); }
   catch { fail('INVALID_RECOVERY_SNAPSHOT'); }
+  return { snapshot, ledger };
+}
+
+/** latestDeletions is an independently obtained COMPLETE, authoritative ledger,
+ * including deletions after the recovery point. Never substitute the snapshot's
+ * own ledger in an operational audit. Freshness/authenticity are caller duties.
+ * Validates every row/key before calling readBlob; never returns private rows. */
+export async function auditRecoverySnapshot(input, { latestDeletions, readBlob, listBlobPage } = {}) {
+  if (typeof readBlob !== 'function' || (listBlobPage !== undefined && typeof listBlobPage !== 'function'))
+    fail('INVALID_RECOVERY_SNAPSHOT');
+  const { snapshot, ledger } = copyBoundedRecoveryMetadata(input, latestDeletions);
   if (!object(snapshot, ['format', 'tables']) || snapshot.format !== 'hwp-easy-recovery-v1'
     || !object(snapshot.tables, Object.keys(recoveryColumns))) fail('INVALID_RECOVERY_SNAPSHOT');
   const tables = snapshot.tables;

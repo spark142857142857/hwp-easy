@@ -16,6 +16,7 @@ import { createDocumentService } from '../storage/service.mjs';
 import { authenticatedOwner } from '../host/transfer.mjs';
 import { applyTestMigrations } from './migrations.mjs';
 import { auditRecoverySnapshot, recoveryColumns, RecoveryAuditError } from './recovery-audit.mjs';
+import { createRecoveryBundle, readRecoveryBundle } from './recovery-bundle.mjs';
 
 if (process.argv.length !== 2) throw Error('Synthetic recovery check accepts no arguments');
 const require = createRequire(import.meta.url);
@@ -126,7 +127,14 @@ try {
   await assert.rejects(() => auditRecoverySnapshot(wrongKey, { latestDeletions, readBlob: async()=>{ reads++; } }), auditCode('RECOVERY_METADATA_INCONSISTENT'));
   assert.equal(reads,0);
   checks.push('missing_corrupt_and_cross_document_blob_metadata_refused_before_recovery');
+  const bundle = await createRecoveryBundle(snapshot, { latestDeletions, readBlob: async key => blobs.get(key) });
+  const bundlePath = path.join(persist, 'synthetic.hwpbak');
+  fs.writeFileSync(bundlePath, bundle.bytes, { flag: 'wx' });
   await source.dispose(); source = undefined; // Nothing below reads source storage.
+  blobs.clear(); // Recovery must use the persisted bundle, not source byte memory.
+  const recoveryData = await readRecoveryBundle(fs.readFileSync(bundlePath), { latestDeletions });
+  assert.deepEqual(recoveryData.snapshot, snapshot);
+  checks.push('private_bundle_persisted_and_reopened_after_source_runtime_and_blob_memory_discarded');
   recovered = new Miniflare(options('recovered'));
   let recoveredDb = await recovered.getD1Database('DB'), recoveredBucket = await recovered.getR2Bucket('BUCKET');
   await applyTestMigrations(recoveredDb);
@@ -134,13 +142,17 @@ try {
     assert.equal((await recoveredDb.prepare(`SELECT count(*) AS n FROM ${table}`).first()).n, 0);
   assert.equal((await recoveredBucket.list()).objects.length,0);
   // This fixed synthetic test setup is NOT exposed as an operational importer.
-  await audit(snapshot);
-  for (const row of snapshot.tables.hwp_versions) {
-    const result = await recoveredBucket.put(row.blob_key, blobs.get(row.blob_key), {
+  await auditRecoverySnapshot(recoveryData.snapshot, { latestDeletions, readBlob: recoveryData.readBlob });
+  const corruptBundle = Buffer.from(bundle.bytes); corruptBundle[20] ^= 1;
+  await assert.rejects(() => readRecoveryBundle(corruptBundle, { latestDeletions }), code('RECOVERY_BUNDLE_CORRUPT'));
+  assert.equal((await recoveredBucket.list()).objects.length, 0);
+  checks.push('corrupt_bundle_refused_while_new_recovery_store_remains_empty');
+  for (const row of recoveryData.snapshot.tables.hwp_versions) {
+    const result = await recoveredBucket.put(row.blob_key, await recoveryData.readBlob(row.blob_key), {
       onlyIf: { etagDoesNotMatch: '*' }, sha256: row.sha256, httpMetadata: { contentType: 'application/x-hwp' } });
     assert(result);
   }
-  await recoveredDb.batch(Object.entries(recoveryColumns).flatMap(([table, columns]) => snapshot.tables[table].map(row =>
+  await recoveredDb.batch(Object.entries(recoveryColumns).flatMap(([table, columns]) => recoveryData.snapshot.tables[table].map(row =>
     recoveredDb.prepare(`INSERT INTO ${table} (${columns.join(',')}) VALUES (${columns.map(()=>'?').join(',')})`).bind(...columns.map(column=>row[column])))));
   assert.deepEqual(await capture(recoveredDb), snapshot);
   assert.equal((await recoveredBucket.list()).objects.length,4);
@@ -196,6 +208,8 @@ try {
   assert.deepEqual(recoveredAudit,proof);
   checks.push('post_restart_recovery_audit_matches_capture_and_every_recorded_blob_hash');
   console.log(JSON.stringify({synthetic_recovery:'passed',checks,recovered_documents:2,recovered_versions:4,
+    bundle_file_roundtrip_verified:true,bundle_bytes:bundle.bytes.length,source_blob_memory_cleared_before_recovery:true,
+    bundle_authenticated:false,bundle_encrypted:false,
     completed_deletion_receipts:1,actual_local_workerd_D1_R2:true,source_runtime_disposed_before_recovery:true,
     independent_recovery_store_restarted:true,actual_OAuth_verified:false,operational_backup_export_verified:false,
     platform_backup_restore_verified:false,deletion_ledger_freshness_in_production_verified:false,
