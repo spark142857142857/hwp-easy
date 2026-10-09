@@ -1,4 +1,4 @@
-import { StorageError, saveRejectionDiagnostic } from '../storage/store.mjs';
+import { StorageError, saveRejectionDiagnostic, mutationOutcomeDiagnostic } from '../storage/store.mjs';
 import { fileDescriptorOrigin, fileOriginRejectionDiagnostic } from './transfer.mjs';
 import { publicErrorCode } from './public-errors.mjs';
 import { bodyRepairAllocationDiagnostic } from '../guard/container.mjs';
@@ -16,9 +16,44 @@ export function uploadDisabledError(file) {
   return error;
 }
 
-export function documentToolError(error) {
+export function documentToolError(error, toolName) {
   const code = publicErrorCode(error);
   const result = { isError: true, content: [{ type: 'text', text: code }] };
+  const outcome = mutationOutcomeDiagnostic(error);
+  if (outcome?.reason === code && (code === 'COMMIT_OUTCOME_UNKNOWN'
+    ? ['hwp_import', 'hwp_edit', 'hwp_restore'].includes(toolName) : toolName === 'hwp_delete')) {
+    const guidance = {
+      COMMIT_OUTCOME_UNKNOWN: {
+        status: 'save_outcome_unknown', saved: null,
+        message_ko: '저장 완료 여부를 확인하지 못했습니다. 이미 저장되었을 수 있으므로 실패나 미저장으로 단정하지 마세요. 연결과 저장소 응답이 회복되면 에이전트가 기존 요청을 그대로 다시 확인해야 합니다. 새 요청으로 중복 저장하거나 요청하지 않은 다른 문서로 저장하지 마세요.',
+        suggested_action: 'reconcile_by_retrying_exact_original_save',
+        preserve_original: ['request_id', 'file_bytes_or_edit_intent', 'expected_version_if_present', 'source_version_if_present'],
+        automatic_version_deletion_allowed: false,
+      },
+      DELETE_OUTCOME_UNKNOWN: {
+        status: 'delete_outcome_unknown', deleted: null, cleanup_complete: null, document_access_revoked: null,
+        message_ko: '삭제 완료 여부와 문서 접근 차단 상태를 확인하지 못했습니다. 연결과 저장소 응답이 회복되면 이미 허용한 삭제 요청을 그대로 다시 확인하세요. 새 요청을 만들거나 다른 문서·버전으로 삭제 대상을 바꾸지 마세요.',
+        suggested_action: 'reconcile_by_retrying_exact_authorized_delete',
+        preserve_original: ['request_id', 'document_id', 'expected_version', 'confirmation'],
+      },
+      DELETE_INCOMPLETE_RETRY_SAME_REQUEST: {
+        status: 'delete_cleanup_incomplete', deleted: null, cleanup_complete: false, document_access_revoked: true,
+        message_ko: '삭제 요청은 반영되어 새 조회와 저장을 차단했지만, 기록된 버전 정리가 완료되지 않았습니다. 삭제 완료로 보고하지 마세요. 저장소 응답이 회복되면 이미 허용한 삭제 요청을 그대로 이어 확인하세요. 다른 문서나 버전으로 삭제 대상을 바꾸지 마세요.',
+        suggested_action: 'resume_exact_authorized_delete_cleanup',
+        preserve_original: ['request_id', 'document_id', 'expected_version', 'confirmation'],
+      },
+    }[code];
+    const feedback = { stage: 'private-development', layout_verified: false,
+      data: { error: code, recovery_diagnostic: { ...guidance,
+        outcome_confirmed: false, retry_same_request_recommended: true,
+        retry_when: 'service_available_and_original_authorization_still_applies',
+        new_request_id_allowed: false, automatic_overwrite_allowed: false,
+        unrequested_deletion_allowed: false, unrequested_save_as_allowed: false,
+      } } };
+    result.content.push({ type: 'text', text: JSON.stringify(feedback) });
+    result.structuredContent = feedback;
+    return result;
+  }
   if (code === 'MIXED_STYLE_EDIT_UNSUPPORTED') {
     const feedback = { stage: 'private-development', layout_verified: false,
       data: { error: code, edit_diagnostic: {

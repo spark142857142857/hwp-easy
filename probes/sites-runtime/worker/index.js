@@ -313,7 +313,7 @@ export default {
         .call(rpc.params?.name, rpc.params?.arguments, request)); }
       catch (err) {
         if (publicErrorCode(err) === 'AUTHENTICATION_REQUIRED') return response({ error: 'Authentication required' }, 401);
-        return reply(documentToolError(err));
+        return reply(documentToolError(err, rpc.params?.name));
       }
     }
     if (rpc.params?.name !== 'hwp_runtime_probe' || !rpc.params.arguments

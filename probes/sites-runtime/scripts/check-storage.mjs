@@ -14,6 +14,7 @@ import { createVersionStore, StorageError } from '../storage/store.mjs';
 import { createDocumentService } from '../storage/service.mjs';
 import { applyTestMigrations } from './migrations.mjs';
 import { documentToolError } from '../host/error-feedback.mjs';
+import { authenticatedOwner } from '../host/transfer.mjs';
 const require = createRequire(import.meta.url);
 initSync({ module: fs.readFileSync(new URL('./rhwp_bg.wasm', pathToFileURL(require.resolve('@rhwp/core')))) });
 const engine = createDocumentEngine(HwpDocument), api = createEngineApi(HwpDocument);
@@ -97,6 +98,69 @@ try {
   assert.equal(recovered.replayed, true);
   assert.deepEqual((await store.read({ owner, document_id: recovered.document_id })).bytes, bytes);
   checks.push('injected_unknown_commit_keeps_blob_and_recovers_on_exact_retry');
+
+  // Both possible facts behind the SAME public uncertainty: transaction not
+  // committed, or committed with its acknowledgement/receipt read lost.
+  const state = async () => {
+    const tables = {};
+    for (const table of ['hwp_documents','hwp_versions','hwp_requests','hwp_deletions'])
+      tables[table] = (await db.prepare(`SELECT * FROM ${table}`).all()).results
+        .sort((a,b) => JSON.stringify(a).localeCompare(JSON.stringify(b)));
+    const objects = [];
+    for (const {key} of (await bucket.list()).objects.sort((a,b)=>a.key.localeCompare(b.key))) {
+      const data = await (await bucket.get(key)).arrayBuffer();
+      objects.push({key,hash:Buffer.from(await crypto.subtle.digest('SHA-256',data)).toString('hex')});
+    }
+    return {tables,objects};
+  };
+  const existingHistory = await store.history({ owner, document_id: created.document_id });
+  for (const mode of ['before_commit','after_commit']) for (const operation of ['create','edit','restore']) {
+    let seed;
+    if (operation !== 'create') seed = await service.create({owner,request_id:crypto.randomUUID(),bytes});
+    const source = seed;
+    if (operation === 'restore') seed = await service.edit({owner,document_id:seed.document_id,
+      expected_version:seed.version_id,request_id:crypto.randomUUID(),request});
+    const args = {owner,request_id:crypto.randomUUID(),...(operation === 'create' ? {bytes}
+      : {document_id:seed.document_id,expected_version:seed.version_id,...(operation === 'edit'
+        ? {request} : {source_version:source.version_id})})};
+    let receiptUnavailable = false;
+    const fault = {
+      prepare(sql) { const raw = db.prepare(sql); return {bind(...values) {
+        const bound = raw.bind(...values);
+        return sql.includes('SELECT r.fingerprint') ? {first:async()=>{
+          if (receiptUnavailable) throw Error('PRIVATE_RECEIPT_FAILURE'); return bound.first();
+        }} : bound;
+      }}; },
+      async batch(statements) {
+        if (mode === 'after_commit') await db.batch(statements);
+        receiptUnavailable = true; throw Error('PRIVATE_COMMIT_ACK');
+      },
+    };
+    const failingService = createDocumentService(engine,createVersionStore(fault,bucket));
+    const tool = {create:'hwp_import',edit:'hwp_edit',restore:'hwp_restore'}[operation];
+    const beforeKeys = (await bucket.list()).objects.map(o=>o.key).sort();
+    await assert.rejects(()=>failingService[operation](args), error=>{
+      assert(isCode('COMMIT_OUTCOME_UNKNOWN')(error));
+      const response = documentToolError(error,tool), d = response.structuredContent.data.recovery_diagnostic;
+      assert.equal(d.saved,null); assert.equal(d.retry_same_request_recommended,true); assert.equal(d.new_request_id_allowed,false);
+      assert(!JSON.stringify(response).includes('PRIVATE_')); return true;
+    });
+    const afterKeys = (await bucket.list()).objects.map(o=>o.key).sort();
+    assert.equal(afterKeys.length,beforeKeys.length+1); // Uncertain bytes retained.
+    const receiptRow = await db.prepare('SELECT document_id,version_id FROM hwp_requests WHERE owner = ? AND id = ?')
+      .bind(owner,args.request_id).first();
+    assert.equal(Boolean(receiptRow),mode==='after_commit');
+    const settled = await service[operation](args);
+    assert.equal(settled.replayed,mode==='after_commit');
+    if (receiptRow) assert.equal(settled.version_id,receiptRow.version_id);
+    assert.equal((await store.history({owner,document_id:settled.document_id})).length,
+      operation==='create'?1:operation==='edit'?2:3);
+    const settledState = await state();
+    assert.equal((await service[operation](args)).version_id,settled.version_id);
+    assert.deepEqual(await state(),settledState);
+    checks.push(`${operation}_${mode}_unknown_guidance_retains_bytes_and_exact_retry_publishes_once`);
+  }
+  assert.deepEqual(await store.history({owner,document_id:created.document_id}),existingHistory);
 
   // R2 fails before any metadata transaction: do not alter the current version.
   const brokenBucket = { put: async () => { throw new Error('private detail'); },
@@ -206,6 +270,36 @@ try {
   assert.equal((await store.purgeSyntheticOwner(owner)).cleanup_complete, true);
   await assert.rejects(() => store.purgeSyntheticOwner('production-owner'), isCode('NOT_A_SYNTHETIC_OWNER'));
   checks.push('cleanup_exact_generated_namespace_only');
+
+  // Verify the compiled MCP transport passes operation context to diagnostics.
+  // A local SQLite trigger injects an aborted save, never a production failure.
+  const rpcIdentity = new Headers({'Content-Type':'application/json',
+    'oai-authenticated-user-id':'synthetic-uncertain-save','oai-authenticated-user-email':'synthetic@example.invalid'});
+  const rpcOwner = await authenticatedOwner(rpcIdentity);
+  const rpcSeed = await service.create({owner:rpcOwner,request_id:crypto.randomUUID(),bytes});
+  const rpcArgs = {document_id:rpcSeed.document_id,expected_version:rpcSeed.version_id,
+    request_id:crypto.randomUUID(),...request};
+  const callRpc = async () => (await mf.dispatchFetch('https://probe.invalid/mcp',{method:'POST',headers:rpcIdentity,
+    body:JSON.stringify({jsonrpc:'2.0',id:1,method:'tools/call',params:{name:'hwp_edit',arguments:rpcArgs}})})).json();
+  let uncertain;
+  await db.exec("CREATE TRIGGER synthetic_commit_abort BEFORE INSERT ON hwp_versions BEGIN SELECT RAISE(ABORT,'PRIVATE_COMMIT_FAILURE'); END;");
+  try { uncertain = await callRpc(); }
+  finally { await db.exec('DROP TRIGGER synthetic_commit_abort'); }
+  assert.equal(uncertain.result.isError,true); assert.equal(uncertain.result.content[0].text,'COMMIT_OUTCOME_UNKNOWN');
+  assert.equal(uncertain.result.structuredContent.data.recovery_diagnostic.saved,null);
+  assert(!JSON.stringify(uncertain).includes('PRIVATE_'));
+  const rpcPrefix = `hwp-easy/v1/${rpcOwner}/${rpcSeed.document_id}/`;
+  const uncertainKeys = (await bucket.list({prefix:rpcPrefix})).objects.map(o=>o.key);
+  assert.equal(uncertainKeys.length,2);
+  const originalKey = `${rpcPrefix}${rpcSeed.version_id}.hwp`, unpublishedKeys = uncertainKeys.filter(key=>key!==originalKey);
+  const rpcSaved = (await callRpc()).result.structuredContent.data;
+  assert.equal(rpcSaved.saved,true); assert.equal((await callRpc()).result.structuredContent.data.version_id,rpcSaved.version_id);
+  assert.equal((await store.history({owner:rpcOwner,document_id:rpcSeed.document_id})).length,2);
+  await store.remove({owner:rpcOwner,document_id:rpcSeed.document_id,expected_version:rpcSaved.version_id,request_id:crypto.randomUUID()});
+  // Test-fixture cleanup of ONLY this known aborted candidate; not operational GC.
+  assert(unpublishedKeys.every(key=>key.startsWith(rpcPrefix)&&uncertainKeys.includes(key)));
+  await bucket.delete(unpublishedKeys);
+  checks.push('compiled_mcp_unknown_save_feedback_preserves_original_request_and_exact_retry');
 
   // Now exercise the bundled Worker route, not just the JS store API.
   assert.equal((await mf.dispatchFetch('https://probe.invalid/storage-probe')).status, 405);

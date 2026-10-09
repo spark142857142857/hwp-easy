@@ -10,6 +10,7 @@ import { createEngineApi } from '../../../src/one_hwp/rhwp_api.mjs';
 import { syntheticFixture } from '../../../src/one_hwp/synthetic_fixtures.mjs';
 import { createVersionStore } from '../storage/store.mjs';
 import { applyTestMigrations } from './migrations.mjs';
+import { documentToolError } from '../host/error-feedback.mjs';
 const require = createRequire(import.meta.url);
 initSync({ module: fs.readFileSync(new URL('./rhwp_bg.wasm', pathToFileURL(require.resolve('@rhwp/core')))) });
 const mf = new Miniflare(convertV4MiniflareOptions({ compatibilityDate: '2026-10-01',
@@ -51,7 +52,13 @@ try {
   const retryDoc = await create(), retryArgs = args(retryDoc);
   const failingBucket = { put: (...a) => bucket.put(...a), get: (...a) => bucket.get(...a),
     delete: async () => { throw new Error('injected R2 failure'); } };
-  await assert.rejects(() => createVersionStore(db, failingBucket).remove(retryArgs), code('DELETE_INCOMPLETE_RETRY_SAME_REQUEST'));
+  await assert.rejects(() => createVersionStore(db, failingBucket).remove(retryArgs), error => {
+    assert(code('DELETE_INCOMPLETE_RETRY_SAME_REQUEST')(error));
+    const d = documentToolError(error,'hwp_delete').structuredContent.data.recovery_diagnostic;
+    assert.equal(d.deleted,null); assert.equal(d.cleanup_complete,false); assert.equal(d.document_access_revoked,true);
+    assert.equal(d.retry_same_request_recommended,true); assert.equal(d.new_request_id_allowed,false);
+    return true;
+  });
   await assert.rejects(() => store.read({ owner, document_id: retryDoc.document_id }), code('DOCUMENT_OR_VERSION_NOT_FOUND'));
   await assert.rejects(() => store.replace({ owner, document_id: retryDoc.document_id, expected_version: retryDoc.version_id,
     request_id: crypto.randomUUID(), bytes }), code('DOCUMENT_OR_VERSION_NOT_FOUND'));
@@ -76,7 +83,13 @@ try {
     };
     const wrapped = createVersionStore(broken, bucket);
     if (mode === 'unavailable_begin_receipt') {
-      await assert.rejects(() => wrapped.remove(request), code('DELETE_OUTCOME_UNKNOWN'));
+      await assert.rejects(() => wrapped.remove(request), error=>{
+        assert(code('DELETE_OUTCOME_UNKNOWN')(error));
+        const d = documentToolError(error,'hwp_delete').structuredContent.data.recovery_diagnostic;
+        assert.equal(d.deleted,null); assert.equal(d.cleanup_complete,null); assert.equal(d.document_access_revoked,null);
+        assert.equal(d.retry_same_request_recommended,true); assert.equal(d.new_request_id_allowed,false);
+        return true;
+      });
       assert(await bucket.get(`hwp-easy/v1/${owner}/${next.document_id}/${next.version_id}.hwp`));
       assert.equal((await store.remove(request)).deleted, true);
     } else assert.equal((await wrapped.remove(request)).deleted, true);

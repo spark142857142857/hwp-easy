@@ -7,7 +7,20 @@ import { createDocumentNames, validDocumentName } from './document-names.mjs';
 export class StorageError extends Error {
   constructor(code) { super(code); this.name = 'StorageError'; this.code = code; }
 }
-const fail = (code) => { throw new StorageError(code); };
+const mutationOutcomes = new WeakMap();
+const uncertainMutationCodes = new Set(['COMMIT_OUTCOME_UNKNOWN', 'DELETE_OUTCOME_UNKNOWN', 'DELETE_INCOMPLETE_RETRY_SAME_REQUEST']);
+const fail = (code) => {
+  const error = new StorageError(code);
+  if (uncertainMutationCodes.has(code)) mutationOutcomes.set(error, code);
+  throw error;
+};
+// Only failures reached through this store can attest a mutation outcome.
+// No identifiers, intent, document text, storage exception or signed URL is held.
+export function mutationOutcomeDiagnostic(error) {
+  const code = mutationOutcomes.get(error);
+  try { return code && error.code === code ? { reason: code } : undefined; }
+  catch { return undefined; }
+}
 const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
 const hashPattern = /^[0-9a-f]{64}$/;
 const MAX_BYTES = 4 * 1024 * 1024, MAX_VERSIONS = 128;
