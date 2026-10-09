@@ -138,7 +138,9 @@ try {
   let allLinks=[],route='/documents';do {html=await (await get(route)).text();allLinks.push(...links(html));route=next(html);}while(route);
   assert.equal(allLinks.find(l=>l.doc===doc.document_id).version,edited.version_id);
   // Pending deletion is excluded even while the document row still exists.
-  const hidden=documents[1],owner=(await db.prepare('SELECT owner FROM hwp_documents WHERE id=?').bind(hidden.document_id).first()).owner;
+  // UUID ordering can place any imported document first. Keep the deletion
+  // fixture distinct from the document whose name revision was advanced above.
+  const hidden=documents.find(d=>d.document_id!==doc.document_id),owner=(await db.prepare('SELECT owner FROM hwp_documents WHERE id=?').bind(hidden.document_id).first()).owner;
   await db.prepare("INSERT INTO hwp_deletions (owner,document_id,request_id,expected_version,phase,version_count,created_at) VALUES (?,?,?,?,'pending',1,1)")
     .bind(owner,hidden.document_id,crypto.randomUUID(),hidden.version_id).run();
   html=await (await get()).text();assert(!html.includes(hidden.document_id));
