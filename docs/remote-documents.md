@@ -121,21 +121,25 @@
 
 원격 어댑터는 같은 레코드 순서·수·레벨, 모델에 맞는 셀 좌표·병합·문단 수와 나머지 셀 헤더의 바이트 완전 일치를 확인한 경우에만 `0 → 0x0400`을 원래의 두 0 바이트로 되돌린다. 다른 변화와 반대 방향·다른 nonzero word는 복구 대상으로 해석하지 않는다. 기본 CFB 교체 함수는 기존 sector/mini-sector 수와 저장 종류가 같은 경우만 허용한다. 원격 보완 경로에는 아래의 한 mini-sector 증가 예외만 있으며, 이외 공간 변화는 `BODY_REPAIR_ALLOCATION_UNSUPPORTED`로 거부한다. 전체 모델 재열기와 독립 raw 보존 검사는 보완 뒤에도 필수다.
 
-기본 DEFLATE 설정이 기존 할당 조건을 벗어나면 같은 raw 바이트를 level 9로 한 번만 다시 압축한다. 임의 padding이나 요청하지 않은 내용 변경으로 크기를 맞추지 않으며 압축 설정의 변경을 내용·서식 보존 검사 예외로 취급하지 않는다. 합성 8×2 표의 압축 경계 사례로 기본 설정의 실패와 대체 설정의 동일 할당·재열기·저장 전 불변·실제 로컬 workerd 저장 및 회수를 확인한다. 별도 39×2 표에서는 대체 설정의 할당 감소가 여전히 거부되며 저장 상태와 원래 다운로드 바이트를 유지한다. 처리 시간과 전체 메모리 한도 인증은 아니다.
+기본 DEFLATE 설정이 기존 할당 조건을 벗어나면 같은 raw 바이트를 level 9로 한 번만 다시 압축한다. 임의 padding이나 요청하지 않은 내용 변경으로 크기를 맞추지 않으며 압축 설정의 변경을 내용·서식 보존 검사 예외로 취급하지 않는다. 합성 8×2 표의 압축 경계 사례로 기본 설정의 실패와 대체 설정의 동일 할당·재열기·저장 전 불변·실제 로컬 workerd 저장 및 회수를 확인한다. 별도 39×2 표의 한 mini-sector 감소는 아래의 제한된 반환 경로로 보완한다. 처리 시간과 전체 메모리 한도 인증은 아니다.
 
 대체 설정에도 공간이 **한 64바이트 mini-sector만 증가**하는 본문 한 개는, 이미 확보된 root mini-stream의 논리 끝 다음 공간이 64바이트 전체 0이고 기존 miniFAT 항목이 `FREESECT`일 때만 그 공간을 연결할 수 있다. root 논리 크기는 64바이트 증가하지만 파일 길이·일반 FAT·root sector chain·directory tree와 다른 스트림의 위치·바이트는 유지한다. 본문 크기 DWORD, root 크기 DWORD와 miniFAT 두 DWORD 및 지정 본문 데이터 밖의 모든 파일 바이트가 그대로인지 확인하고 CFB를 다시 파싱한다. root 크기의 64바이트 정렬과 변경하는 크기 필드의 high DWORD 0도 요구한다. 공간 부족·점유·nonzero 꼬리·손상 체인, miniFAT 확장·root/FAT 확장, 할당 감소·저장 종류 전환, 두 mini 증가 또는 여러 본문의 동시 증가는 거부한다. 기존 root 내부의 빈 구멍을 재사용하지 않는다. [CFB miniFAT 구조](https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-cfb/c5d235f7-b73c-4ec5-bf8d-5c08306cd023)에 맞춘 제한된 연결 변경이며 일반 allocator가 아니다.
 
 고정 합성 3×2 표의 셀 비우기로 이 경로의 계획·저장·재시도·다운로드·재열기와 이전 버전 불변을 실제 로컬 workerd/D1/R2에서 검사한다. CFB v3/v4의 비연속 mini 연결과 다른 스트림 보존, 잘못된 꼬리·할당·메타데이터의 거부도 시험한다. 원격 계획과 메모리 편집의 `body_mini_sector_growth`는 0 또는 1이며 원격 저장 응답의 필드나 서식 정확성 인증은 아니다.
 
+보완 후 압축된 본문 **한 개가 한 64바이트 mini-sector만 감소**하는 경우에는 검증된 체인의 마지막 mini-sector만 반환한다. 남는 마지막 연결을 `ENDOFCHAIN`, 반환한 항목을 `FREESECT`로 바꾸고 반환 영역은 0으로 지운다. 파일 길이·일반 FAT·root 논리 크기와 chain·directory tree, 다른 스트림의 위치·바이트는 유지한다. 본문 데이터와 크기 DWORD, miniFAT 두 DWORD 밖의 모든 바이트 불변, 독립 CFB 재파싱·전체 스트림 일치·위치 불변을 검사한다. 이는 [CFB miniFAT의 체인 종료와 미할당 항목](https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-cfb/b3142838-fc70-4f54-a194-90c3c9515afd)에 맞춘 제한된 꼬리 반환이다. 빈 본문·저장 종류 전환·일반 sector 감소·두 mini 이상 감소·두 본문 조정·증가와 감소의 동시 적용은 거부한다. 반환한 빈 구멍의 재사용이나 임의 재배치는 제공하지 않는다. 기본 exact-allocation 함수와 기존 growth-only 함수의 계약은 유지한다.
+
+CFB v3/v4의 인접·비연속 꼬리, 잘못된/공유 체인·크기 high DWORD·여러 본문 요청의 불변과 별도 CFB reader를 검사한다. 고정 합성 39×2 표의 실제 로컬 workerd/D1/R2에서 무저장 계획·타인 거부·저장·정확한 재시도·다운로드·재열기·원본 복구를 확인한다. 계획과 메모리 편집의 `body_mini_sector_release`는 0 또는 1이며 원격 저장 응답에 이 구현 필드를 추가하지 않는다. caller의 재열기·모델 비교와 raw 보존 검사는 그대로 필수다. 소스 검사와 운영 반영 여부는 [최신 MVP 상태](mvp-status.md)를 따른다.
+
 계획과 메모리 편집 결과의 `restored_cell_list_words`는 이 정확한 보완의 개수를 알린다. 원격 저장 응답에 이 개수가 포함된다는 뜻은 아니다. 합성 문서의 무저장 계획·같은 문서 저장·다운로드·재열기, 쪽 번호 보존과의 조합, unrelated 메타데이터 거부 및 CFB v3/v4 mini/regular 경계를 검사한다. 일반 CFB/HWP writer, 서식 인증, Python 로컬 stdio의 지원 확대는 아니다.
 
 ### 할당 조건 실패의 에이전트 피드백
 
-검증된 CFB 본문 스트림에서 기존 할당 수나 mini/regular 저장 종류의 불일치가 확인되면, MCP는 `isError: true`와 첫 텍스트의 `BODY_REPAIR_ALLOCATION_UNSUPPORTED`를 유지하면서 `data.edit_diagnostic`을 추가한다. 한국어 설명, `existing_body_allocation_mismatch` 상태와 후보·보완 데이터의 바이트 수, 단위 크기·개수 및 저장 종류만 전달한다. 원본 HWP의 크기나 PC 디스크 용량이 아니라 **writer가 만든 편집 후보의 본문 할당 조건**이다. 작아진 압축 데이터도 기존 할당 개수가 달라지면 거부하므로 이를 모두 공간 부족으로 설명하지 않는다.
+검증된 CFB 본문 스트림에서 위의 제한된 append/release까지 지원하지 못하는 할당 수나 mini/regular 저장 종류의 불일치가 확인되면, MCP는 `isError: true`와 첫 텍스트의 `BODY_REPAIR_ALLOCATION_UNSUPPORTED`를 유지하면서 `data.edit_diagnostic`을 추가한다. 한국어 설명, `existing_body_allocation_mismatch` 상태와 후보·보완 데이터의 바이트 수, 단위 크기·개수 및 저장 종류만 전달한다. 원본 HWP의 크기나 PC 디스크 용량이 아니라 **writer가 만든 편집 후보의 본문 할당 조건**이다. 작아진 압축 데이터도 지원하는 한 mini 꼬리 반환 조건을 벗어나면 거부하므로 이를 모두 공간 부족으로 설명하지 않는다.
 
 `saved: false`, `file_changed: false`와 함께 동일 요청의 무조건 재시도를 권하지 않고, `suggested_action: report_limit_without_altering_request`를 제공한다. 재인증이나 저장소 용량 오류로 오인하지 않으며 실패 이유를 알리고 현재 요청을 유지한다. 자동 일부 저장, 요청을 쪼개 일부만 반영하기, 요청하지 않은 변경 추가 및 임의 축약·공백·padding으로 압축 크기를 맞추기는 허용하지 않는다. 사용자가 요청 범위를 바꾸기 전에는 저장 성공을 위해 다른 내용을 고치지 않는다.
 
-진단은 검증된 컨테이너 경로가 만든 오류 객체에만 연결한다. 임의 upstream 오류의 속성·메시지·stack을 진단으로 읽지 않으며 문서 텍스트·이름·ID·해시·스트림 경로·URL은 포함하지 않는다. 모양이 같은 오류나 누락된 스트림에는 진단을 붙이지 않는다. CFB v3/v4의 증가·감소·저장 종류 경계, 위조·오염 오류의 개인정보 비노출과 실제 로컬 workerd/D1/R2의 계획·저장 거부 후 버전·blob·다운로드 불변을 검사한다. 지원 폭을 넓히거나 할당 제한을 해결한 기능은 아니며 Python 로컬 stdio의 오류 계약은 유지한다.
+진단은 검증된 컨테이너 경로가 만든 오류 객체에만 연결한다. 임의 upstream 오류의 속성·메시지·stack을 진단으로 읽지 않으며 문서 텍스트·이름·ID·해시·스트림 경로·URL은 포함하지 않는다. 모양이 같은 오류나 누락된 스트림에는 진단을 붙이지 않는다. CFB v3/v4의 증가·감소·저장 종류 경계, 위조·오염 오류의 개인정보 비노출을 검사한다. 이번 한 mini 꼬리 반환 보완도 일반 할당 변경을 지원하지 않으며 Python 로컬 stdio의 오류 계약은 유지한다.
 
 ### 조회 단계의 대상별 편집 제한
 

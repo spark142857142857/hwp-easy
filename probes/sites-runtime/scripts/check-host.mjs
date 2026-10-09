@@ -14,7 +14,7 @@ import { authenticatedOwner, boundedBytes, fetchInputFile } from '../host/transf
 import { applyTestMigrations } from './migrations.mjs';
 import { withCheckedDeflateTrailers } from '../tests/trailer-fixtures.mjs';
 import { withPageNumber, rewriteSyntheticBody } from '../tests/page-number-fixtures.mjs';
-import { compressionFallbackFixture, compressionRejectedFixture, miniGrowthFixture } from '../tests/cell-list-fixtures.mjs';
+import { compressionFallbackFixture, miniReleaseFixture, miniGrowthFixture } from '../tests/cell-list-fixtures.mjs';
 import { readCfb, readHwp } from '../guard/container.mjs';
 import { parseRecords } from '../guard/records.mjs';
 import { createHwpChunkCollector } from '../host/document-chunks.mjs';
@@ -695,45 +695,44 @@ try {
     growthFixture.bytes);
   assert.equal((await call('hwp_versions', { document_id: growthDoc.document_id })).versions.length, 2);
   checks.push('one_mini_tail_growth_actual_worker_plan_no_mutation_save_replay_download_reopen_original_retained');
-  const compressionRejectedBytes = compressionRejectedFixture(HwpDocument, api).bytes;
-  const compressionRejectedUpload = await upload({}, headers, compressionRejectedBytes);
-  assert.equal(compressionRejectedUpload.status, 200);
-  const compressionRejectedDoc = await compressionRejectedUpload.json();
-  const compressionRejectedArgs = { document_id: compressionRejectedDoc.document_id, version_id: compressionRejectedDoc.version_id };
-  const compressionRejectedRead = await call('hwp_read', compressionRejectedArgs);
-  const compressionRejectedTarget = compressionRejectedRead.blocks.find((b) => b.editable && b.text);
-  const compressionRejectedEdits = { expected_sha256: compressionRejectedDoc.sha256, operations: [{
-    target_id: compressionRejectedTarget.target_id, expected_old: compressionRejectedTarget.text, new_text: compressionRejectedTarget.text,
+  const releaseBoundaryBytes = miniReleaseFixture(HwpDocument, api).bytes;
+  const releaseBoundaryUpload = await upload({}, headers, releaseBoundaryBytes);
+  assert.equal(releaseBoundaryUpload.status, 200);
+  const releaseBoundaryDoc = await releaseBoundaryUpload.json();
+  const releaseBoundaryArgs = { document_id: releaseBoundaryDoc.document_id, version_id: releaseBoundaryDoc.version_id };
+  const releaseBoundaryRead = await call('hwp_read', releaseBoundaryArgs);
+  const releaseBoundaryTarget = releaseBoundaryRead.blocks.find((b) => b.editable && b.text);
+  const releaseBoundaryEdits = { expected_sha256: releaseBoundaryDoc.sha256, operations: [{
+    target_id: releaseBoundaryTarget.target_id, expected_old: releaseBoundaryTarget.text, new_text: releaseBoundaryTarget.text,
   }] };
-  const compressionRejectedHistory = await call('hwp_versions', { document_id: compressionRejectedDoc.document_id });
-  const compressionRejectedBlobs = await blobState();
-  const allocationPlanFailure = await denied('hwp_plan', { ...compressionRejectedArgs, ...compressionRejectedEdits }, 'BODY_REPAIR_ALLOCATION_UNSUPPORTED');
-  const allocationEditFailure = await denied('hwp_edit', { document_id: compressionRejectedDoc.document_id,
-    expected_version: compressionRejectedDoc.version_id, request_id: crypto.randomUUID(), ...compressionRejectedEdits },
-  'BODY_REPAIR_ALLOCATION_UNSUPPORTED');
-  for (const result of [allocationPlanFailure, allocationEditFailure]) {
-    const d = result.structuredContent.data.edit_diagnostic;
-    assert.deepEqual(JSON.parse(result.content[1].text), result.structuredContent);
-    assert.equal(d.status, 'existing_body_allocation_mismatch');
-    assert.equal(d.allocation.reason, 'allocation_count_changed');
-    assert.equal(d.allocation.candidate_stream_bytes, 965); assert.equal(d.allocation.repaired_stream_bytes, 959);
-    assert.equal(d.allocation.candidate_units, 16); assert.equal(d.allocation.repaired_units, 15);
-    assert.equal(d.saved, false); assert.equal(d.file_changed, false);
-    assert.equal(d.retry_same_request_recommended, false);
-    assert.equal(d.automatic_partial_save_allowed, false); assert.equal(d.unrequested_edits_allowed, false);
-    assert.equal(d.suggested_action, 'report_limit_without_altering_request');
-    for (const privateValue of [compressionRejectedDoc.document_id, compressionRejectedDoc.version_id,
-      compressionRejectedDoc.sha256, compressionRejectedTarget.target_id, compressionRejectedTarget.text]) {
-      assert(!JSON.stringify(result).includes(privateValue));
-    }
-  }
-  assert.deepEqual(await call('hwp_versions', { document_id: compressionRejectedDoc.document_id }), compressionRejectedHistory);
-  assert.deepEqual(await blobState(), compressionRejectedBlobs);
-  const compressionRejectedLink = await call('hwp_download', compressionRejectedArgs);
-  assert.deepEqual(new Uint8Array(await (await mf.dispatchFetch(compressionRejectedLink.download_url, { headers })).arrayBuffer()),
-    compressionRejectedBytes);
-  checks.push('both_compression_profiles_miss_allocation_no_storage_mutation',
-    'allocation_failure_numeric_feedback_no_private_values_or_unsafe_retry');
+  const releaseBoundaryHistory = await call('hwp_versions', { document_id: releaseBoundaryDoc.document_id });
+  const releaseBoundaryBlobs = await blobState();
+  const releasePlan = await call('hwp_plan', { ...releaseBoundaryArgs, ...releaseBoundaryEdits });
+  assert.equal(releasePlan.body_mini_sector_release, 1); assert.equal(releasePlan.saved, false);
+  assert.equal(releasePlan.raw_preservation_verified, true);
+  assert.deepEqual(await call('hwp_versions', { document_id: releaseBoundaryDoc.document_id }), releaseBoundaryHistory);
+  assert.deepEqual(await blobState(), releaseBoundaryBlobs);
+  const releaseBoundaryLink = await call('hwp_download', releaseBoundaryArgs);
+  assert.deepEqual(new Uint8Array(await (await mf.dispatchFetch(releaseBoundaryLink.download_url, { headers })).arrayBuffer()),
+    releaseBoundaryBytes);
+  await denied('hwp_plan', { ...releaseBoundaryArgs, ...releaseBoundaryEdits }, 'DOCUMENT_OR_VERSION_NOT_FOUND', other);
+  const releaseSaveArgs = { document_id: releaseBoundaryDoc.document_id,
+    expected_version: releaseBoundaryDoc.version_id, request_id: crypto.randomUUID(), ...releaseBoundaryEdits };
+  const releaseSaved = await call('hwp_edit', releaseSaveArgs), releaseReplay = await call('hwp_edit', releaseSaveArgs);
+  assert.equal(releaseSaved.saved, true); assert.equal(releaseSaved.raw_preservation_verified, true);
+  assert.equal(releaseReplay.replayed, true); assert.equal(releaseReplay.version_id, releaseSaved.version_id);
+  const releaseLink = await call('hwp_download', { document_id: releaseBoundaryDoc.document_id, version_id: releaseSaved.version_id });
+  const releaseOutput = new Uint8Array(await (await mf.dispatchFetch(releaseLink.download_url, { headers })).arrayBuffer());
+  const releaseLocal = await engine.edit(releaseBoundaryBytes, releaseBoundaryEdits, releaseBoundaryDoc.sha256);
+  assert.deepEqual(releaseOutput, releaseLocal.bytes);
+  const releaseReopened = await engine.open(releaseOutput);
+  assert.deepEqual(releaseReopened.read({ expected_sha256: releaseSaved.sha256 }).blocks.map(b => [b.id, b.text, b.style]),
+    releaseBoundaryRead.blocks.map(b => [b.id, b.text, b.style]));
+  const releaseRestore = await call('hwp_restore', { document_id: releaseBoundaryDoc.document_id,
+    expected_version: releaseSaved.version_id, source_version: releaseBoundaryDoc.version_id, request_id: crypto.randomUUID() });
+  assert.equal(releaseRestore.sha256, releaseBoundaryDoc.sha256);
+  assert.equal((await call('hwp_versions', { document_id: releaseBoundaryDoc.document_id })).versions.length, 3);
+  checks.push('one_mini_tail_release_actual_worker_plan_no_mutation_owner_guard_save_replay_download_reopen_restore');
   const partialBytes = syntheticFixture(HwpDocument, api.exportChecked, { header: true });
   const partialUpload = await upload({}, headers, partialBytes); assert.equal(partialUpload.status, 200);
   const partialDoc = await partialUpload.json(), partialArgs = { document_id: partialDoc.document_id, version_id: partialDoc.version_id };

@@ -333,6 +333,67 @@ export function replaceBodyStreamsWithMiniTailGrowth(input, replacements) {
   return { bytes: output, body_mini_sector_growth: 1 };
 }
 
+/** Adapter-only extension: release ONE last mini sector of ONE body chain.
+ * Keep file/FAT/root allocation, directory tree and every other stream fixed.
+ * No class transition, stream relocation, arbitrary shrink or free-hole reuse.
+ * The exact writer and growth-only entry point keep their original contracts.
+ */
+export function replaceBodyStreamsWithMiniTailAdjustment(input, replacements) {
+  let originalFailure;
+  try {
+    return { ...replaceBodyStreamsWithMiniTailGrowth(input, replacements), body_mini_sector_release: 0 };
+  } catch (error) {
+    if (!bodyRepairAllocationDiagnostic(error)) throw error;
+    originalFailure = error;
+  }
+  const reject = () => { throw originalFailure; };
+  const { streams, layouts, miniLayout } = parseCfb(input, {}, true);
+  let shrinking;
+  for (const [name, bytes] of replacements) {
+    const original = streams.get(name), layout = layouts.get(name);
+    if (!original || !layout) reject();
+    if ((bytes.length >= 4096) === (original.length >= 4096)
+      && Math.ceil(bytes.length / layout.unit) === layout.locations.length) continue;
+    if (shrinking || layout.unit !== 64 || bytes.length >= 4096 || bytes.length === 0
+      || layout.locations.length < 2 || Math.ceil(bytes.length / 64) !== layout.locations.length - 1
+      || layout.miniSectorIds?.length !== layout.locations.length) reject();
+    shrinking = { name, layout };
+  }
+  if (!shrinking) reject();
+  const ids = shrinking.layout.miniSectorIds;
+  const keptTail = ids.at(-2), releasedTail = ids.at(-1);
+  const keptFatOffset = miniLayout.fatEntryOffset(keptTail), releasedFatOffset = miniLayout.fatEntryOffset(releasedTail);
+  const sourceView = new DataView(input.buffer, input.byteOffset, input.byteLength);
+  if (keptFatOffset === undefined || releasedFatOffset === undefined
+    || sourceView.getUint32(shrinking.layout.sizeOffset + 4, true) !== 0
+    || sourceView.getUint32(keptFatOffset, true) !== releasedTail
+    || sourceView.getUint32(releasedFatOffset, true) !== END) reject();
+  const output = new Uint8Array(input), view = new DataView(output.buffer);
+  const allowed = new Uint8Array(input.length), permit = (offset, length) => allowed.fill(1, offset, offset + length);
+  for (const [name, bytes] of replacements) {
+    const { locations, unit, sizeOffset } = layouts.get(name);
+    locations.forEach((offset, index) => {
+      permit(offset, unit); output.fill(0, offset, offset + unit);
+      output.set(bytes.subarray(index * unit, (index + 1) * unit), offset);
+    });
+    permit(sizeOffset, 4); view.setUint32(sizeOffset, bytes.length, true);
+  }
+  permit(keptFatOffset, 4); view.setUint32(keptFatOffset, END, true);
+  permit(releasedFatOffset, 4); view.setUint32(releasedFatOffset, FREE, true);
+  if (input.some((byte, index) => byte !== output[index] && !allowed[index])) fail('BODY_REPAIR_INVALID');
+  const checked = parseCfb(output, {}, true);
+  if (streams.size !== checked.streams.size || [...streams].some(([name, original]) =>
+    !checked.streams.has(name) || !equal(replacements.get(name) ?? original, checked.streams.get(name)))) fail('BODY_REPAIR_INVALID');
+  for (const [name, layout] of layouts) {
+    const after = checked.layouts.get(name), expectedLocations = name === shrinking.name ? layout.locations.slice(0, -1) : layout.locations;
+    if (!after || after.unit !== layout.unit || after.sizeOffset !== layout.sizeOffset
+      || !equal(expectedLocations, after.locations)) fail('BODY_REPAIR_INVALID');
+  }
+  if (checked.miniLayout.rootSize !== miniLayout.rootSize
+    || checked.miniLayout.rootCapacity !== miniLayout.rootCapacity) fail('BODY_REPAIR_INVALID');
+  return { bytes: output, body_mini_sector_growth: 0, body_mini_sector_release: 1 };
+}
+
 export function readHwp(input, options = {}) {
   const limits = boundedOptions(options), streams = readCfb(input, options), header = streams.get('FileHeader');
   const signature = new TextEncoder().encode('HWP Document File\0');

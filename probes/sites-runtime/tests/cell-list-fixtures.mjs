@@ -19,7 +19,7 @@ function fixture(HwpDocument, api, rows, sourcePadding = false) {
   }));
   const preferred = deflateRaw(patched), fallback = deflateRaw(patched, { level: 9 });
   const allocated_packed_bytes = readCfb(candidate).get(name).length;
-  // Negative fixture only: HWP permits zero padding after raw DEFLATE. Supply
+  // Boundary fixture only: HWP permits zero padding after raw DEFLATE. Supply
   // an originally padded input; production repair must NOT add padding to fit.
   const source = sourcePadding ? new Uint8Array(allocated_packed_bytes) : fallback;
   if (sourcePadding) source.set(fallback);
@@ -28,7 +28,7 @@ function fixture(HwpDocument, api, rows, sourcePadding = false) {
 }
 
 export const compressionFallbackFixture = (HwpDocument, api) => fixture(HwpDocument, api, 8);
-export const compressionRejectedFixture = (HwpDocument, api) => fixture(HwpDocument, api, 39, true);
+export const miniReleaseFixture = (HwpDocument, api) => fixture(HwpDocument, api, 39, true);
 
 // Fixed, non-personal one-mini growth boundary: clear the third question cell.
 // The deterministic ASCII answers avoid relying on a personal document's data.

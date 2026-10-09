@@ -332,6 +332,7 @@ export function createDocumentEngine(HwpDocument, { readInspectionCache, hostedW
         cell_text_record_removals_verified: projection.verified_removals,
         restored_cell_list_words: repaired.restored_cell_list_words,
         body_mini_sector_growth: repaired.body_mini_sector_growth,
+        body_mini_sector_release: repaired.body_mini_sector_release,
         pagination_diagnostic: paginationDiagnostic(inspection.page_count, reopened.page_count),
         saved: false, persistence: 'none' };
     }
@@ -349,6 +350,7 @@ export function createDocumentEngine(HwpDocument, { readInspectionCache, hostedW
         raw_preservation_verified: candidate.raw_preservation_verified,
         restored_cell_list_words: candidate.restored_cell_list_words,
         body_mini_sector_growth: candidate.body_mini_sector_growth,
+        body_mini_sector_release: candidate.body_mini_sector_release,
         empty_cell_text_insertions_verified: candidate.empty_cell_text_insertions_verified,
         cell_text_record_removals_verified: candidate.cell_text_record_removals_verified,
         pagination_diagnostic: candidate.pagination_diagnostic,

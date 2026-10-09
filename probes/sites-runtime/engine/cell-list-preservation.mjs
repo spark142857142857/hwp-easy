@@ -1,6 +1,6 @@
 /** Pinned @rhwp/core 0.8.6 zero -> 0x0400 cell LIST_HEADER fallback only. */
 import { deflateRaw } from 'pako';
-import { readCfb, readHwp, replaceBodyStreamsWithMiniTailGrowth } from '../guard/container.mjs';
+import { readCfb, readHwp, replaceBodyStreamsWithMiniTailAdjustment } from '../guard/container.mjs';
 import { GuardError, parseRecords } from '../guard/records.mjs';
 
 const fail = () => { throw new GuardError('PRESERVATION_MISMATCH'); };
@@ -13,7 +13,8 @@ const equal = (a, b) => a.length === b.length && a.every((value, index) => value
  * coordinates/paragraph count against the model, then restore exactly two bytes.
  * All other differences remain for the mandatory whole-document raw guard.
  * Compression prefers exact allocation; a bounded one-mini-sector append may
- * use only already allocated zero tail space. Reopen/model
+ * use only already allocated zero tail space; a one-mini release keeps the
+ * root/file allocation and every other stream fixed. Reopen/model
  * comparison and raw verification are REQUIRED by the caller after this step.
  */
 export function preserveZeroCellListWords(before, candidate, inspection) {
@@ -55,13 +56,13 @@ export function preserveZeroCellListWords(before, candidate, inspection) {
           && Math.ceil(bytes.length / unit) === Math.ceil(allocated.length / unit);
         // One bounded alternate compression profile, never content padding.
         // The writer separately checks exact allocation or its one-mini-sector
-        // tail append; all other allocation changes remain unsupported.
+        // tail append/release; all other allocation changes remain unsupported.
         if (!fits(packed)) packed = deflateRaw(patched, { level: 9 });
       }
       replacements.set(name, packed);
     }
   }
-  const result = replacements.size ? replaceBodyStreamsWithMiniTailGrowth(candidate, replacements)
-    : { bytes: candidate, body_mini_sector_growth: 0 };
+  const result = replacements.size ? replaceBodyStreamsWithMiniTailAdjustment(candidate, replacements)
+    : { bytes: candidate, body_mini_sector_growth: 0, body_mini_sector_release: 0 };
   return { ...result, restored_cell_list_words: restored };
 }

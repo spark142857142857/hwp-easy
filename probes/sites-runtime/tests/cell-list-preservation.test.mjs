@@ -15,7 +15,7 @@ import { cellTextClearProfiles } from '../guard/empty-cell-clear.mjs';
 import { projectVerifiedCellTextTransitions } from '../guard/empty-cell-fill.mjs';
 import { encodeRecords } from './page-number-fixtures.mjs';
 import { rewriteSyntheticBody, withPageNumber } from './page-number-fixtures.mjs';
-import { compressionFallbackFixture, compressionRejectedFixture, miniGrowthFixture } from './cell-list-fixtures.mjs';
+import { compressionFallbackFixture, miniReleaseFixture, miniGrowthFixture } from './cell-list-fixtures.mjs';
 
 const require = createRequire(import.meta.url);
 initSync({ module: fs.readFileSync(new URL('./rhwp_bg.wasm', pathToFileURL(require.resolve('@rhwp/core')))) });
@@ -103,18 +103,29 @@ test('one alternate compression profile preserves the same allocation without re
   assert.deepEqual(f.bytes, original); assert.deepEqual(f.candidate, candidate);
 });
 
-test('repair still fails if both compression profiles miss the existing allocation', async () => {
-  const f = compressionRejectedFixture(HwpDocument, api), original = f.bytes.slice(), candidate = f.candidate.slice();
+test('one-mini release repairs the compression boundary with mandatory raw and model checks', async () => {
+  const f = miniReleaseFixture(HwpDocument, api), original = f.bytes.slice(), candidate = f.candidate.slice();
   for (const packed of [f.preferred, f.fallback]) assert.notEqual(Math.ceil(packed.length / 64),
     Math.ceil(f.allocated_packed_bytes / 64));
-  assert.throws(() => preserveZeroCellListWords(readHwp(f.bytes), f.candidate, inspect(f.bytes)),
-    /BODY_REPAIR_ALLOCATION_UNSUPPORTED/);
+  const repaired = preserveZeroCellListWords(readHwp(f.bytes), f.candidate, inspect(f.bytes));
+  assert.equal(repaired.body_mini_sector_release, 1); assert.equal(repaired.body_mini_sector_growth, 0);
+  assert.equal(repaired.bytes.length, candidate.length);
+  assert.deepEqual(readCfb(repaired.bytes).get('BodyText/Section0'), f.fallback);
+  assert.equal(verifyPreservation(readHwp(f.bytes).streams, readHwp(repaired.bytes).streams, []).verified, true);
+  assert.deepEqual(inspect(repaired.bytes), inspect(f.candidate));
   const snapshot = await createDocumentEngine(HwpDocument).open(f.bytes);
   const target = snapshot.read({ expected_sha256: snapshot.source_sha256 }).blocks.find((b) => b.editable && b.text);
   const request = { expected_sha256: snapshot.source_sha256,
     operations: [{ target_id: target.target_id, expected_old: target.text, new_text: target.text }] };
-  await assert.rejects(snapshot.preflight(request), /BODY_REPAIR_ALLOCATION_UNSUPPORTED/);
-  await assert.rejects(snapshot.edit(request), /BODY_REPAIR_ALLOCATION_UNSUPPORTED/);
+  const plan = await snapshot.preflight(request);
+  assert.equal(plan.body_mini_sector_release, 1); assert.equal(plan.saved, false);
+  assert.equal(plan.file_changed, false); assert.equal(plan.raw_preservation_verified, true);
+  const result = await snapshot.edit(request);
+  assert.equal(result.body_mini_sector_release, 1); assert.equal(result.raw_preservation_verified, true);
+  assert.equal(result.content_verified, true); assert.equal(result.layout_verified, false);
+  const corrupted = new Map(readHwp(result.bytes).streams);
+  const info = corrupted.get('DocInfo').slice(); info[10] ^= 1; corrupted.set('DocInfo', info);
+  assert.throws(() => verifyPreservation(readHwp(f.bytes).streams, corrupted, []), /PRESERVATION_MISMATCH/);
   assert.deepEqual(f.bytes, original); assert.deepEqual(f.candidate, candidate);
 });
 
