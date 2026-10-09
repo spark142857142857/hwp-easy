@@ -109,7 +109,7 @@ export function mapRawTargets(decoded, blocks) {
 
 export function createDocumentEngine(HwpDocument, { readInspectionCache, hostedWorkloadBudget = false } = {}) {
   if (typeof hostedWorkloadBudget !== 'boolean') fail('INVALID_ARGUMENTS');
-  const api = createEngineApi(HwpDocument, { mixedStyleSameLength: true });
+  const api = createEngineApi(HwpDocument, { mixedStyleSameLength: true, languageFontSelection: true });
   function inspect(bytes) {
     return quietEngine(() => {
       const document = api.openDocument(bytes);

@@ -1,9 +1,13 @@
 /** Host-free pinned-engine operations shared by Node and browser ESM adapters. */
 import { MAX_MIXED_STYLE_RUNS, mixedStyleEdit } from './mixed_style.mjs';
-export function createEngineApi(HwpDocument, { mixedStyleSameLength = false } = {}) {
+import { expectedEditedBlock } from './text_font_selection.mjs';
+export function createEngineApi(HwpDocument, { mixedStyleSameLength = false, languageFontSelection = false } = {}) {
   // Internal host opt-in: callers must independently prove exact raw style
   // anchors before/after saving. The local adapter retains its default profile.
   if (typeof mixedStyleSameLength !== 'boolean') throw new Error('Invalid mixed style profile');
+  // Remote opt-in only while full language mappings and independent raw font/
+  // style definitions are preserved. Local bridge remains conservative.
+  if (typeof languageFontSelection !== 'boolean') throw new Error('Invalid language font profile');
   const EDIT_LIMIT = 100_000;
   const json = (value) => JSON.parse(value);
   const checked = (value) => {
@@ -270,8 +274,8 @@ export function createEngineApi(HwpDocument, { mixedStyleSameLength = false } = 
       const reopened = openDocument(output);
       try {
         const after = inspectDocument(reopened);
-        const expected = before.blocks.map((block) => ({ ...block,
-          text: plans.find((plan) => plan.block.id === block.id)?.operation.new_text ?? block.text }));
+        const expected = before.blocks.map((block) => expectedEditedBlock(block,
+          plans.find((plan) => plan.block.id === block.id)?.operation.new_text ?? block.text, languageFontSelection));
         if (JSON.stringify(expected) !== JSON.stringify(after.blocks)
           || JSON.stringify(before.tables) !== JSON.stringify(after.tables)
           || JSON.stringify(before.unsupported) !== JSON.stringify(after.unsupported)) {
