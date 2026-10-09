@@ -32,6 +32,14 @@
 
 보기 화면도 같은 선택 버전의 집계를 표시한다. 이미 연 스냅샷에서 길이 1의 제한된 조각과 집계를 가져오므로 이를 위해 WASM을 다시 열거나 전체 본문을 HTML에 표시하지 않는다. capabilities의 `editability_summary_available`와 `target_read_only_reasons_available`가 이 안내를 명시한다. 새 소스의 합성 검사와 운영 버전 45 반영은 확인했으며 새 화면의 실제 로그인 브라우저 검증은 아직 남아 있다.
 
+### 반복 문구와 빈 칸의 대상 좌표
+
+후속 소스의 `hwp_read.coordinate_system`은 좌표의 `index_base: 0`을 명시한다. `section`·본문 `paragraph`·표 `control`·저장 순서 `cell`·셀 안의 `cell_paragraph`·격자 `row`·`column`은 모두 0부터 시작한다. 셀 블록의 `paragraph`는 그 표를 포함한 본문 문단 번호다. `row_span`·`column_span`은 시작 좌표가 아니라 차지하는 행·열의 개수이며, 병합 셀의 `row`·`column`은 시작 격자 위치다.
+
+`cell`은 병합 이후의 저장 순서이므로 `row × 열 수 + column`으로 계산하지 않는다. 예를 들어 합성 3열 표의 첫 두 칸을 병합하면 두 번째 줄 첫 칸은 `row: 1, column: 0, cell: 2`다. 병합 셀 하나에도 여러 문단이 있을 수 있어 `cell_paragraph`로 구분한다. 문구나 빈 값이 같다는 이유만으로 대상을 고르거나 ID를 조합하지 말고, 사용자 요청의 질문·표·위치와 조회 결과를 대조한 뒤 **반환된 정확한 `target_id`와 해당 블록 전체의 `expected_old`**를 사용한다. 사용자 표현의 ‘첫 줄’과 내부 0값을 그대로 같은 번호로 해석하지 않는다. 여전히 모호하면 편집 전에 대상을 확인한다.
+
+모든 이어 읽기 응답과 검사 캐시 응답에 같은 좌표 계약을 담고, 반환한 메타데이터를 호출자가 바꿔도 다음 응답은 영향을 받지 않는다. 합성 병합 표에서 반복 문구 한 칸만 저장한 결과와 다른 문단·좌표·서식 보존, 이전 버전 대상 ID 거부, 0 좌표·여러 셀 문단·이어 읽기·실제 캐시 재사용을 검사했다. 실제 로컬 compiled Worker에서도 계약 전달과 이어 읽기를 확인했다. 편집 가능 범위나 보존 검사를 넓힌 기능이 아니며 **운영 버전 46에는 아직 배포하지 않았다**. 로컬 Python/stdio의 응답에 새 필드를 추가한 것은 아니다.
+
 ### 혼합 글자 서식의 제한된 치환
 
 운영 버전 46은 원격 엔진의 본문·최상위 표 셀 문단에서 기존 혼합 서식을 유지하는 제한된 치환을 제공한다. 로컬 Python/stdio 엔진은 기존 읽기 전용 제한을 유지한다. capabilities의 `mixed_style_same_length_edit_available: true`, 대상의 `mixed_style_same_length_supported: true`, 집계의 `mixed_style_same_length_candidates`로 구분한다. 10월 7일 실제 연결에서 이 기능 조회와 합성 본문·일반 셀·병합 셀의 저장·회수·복구를 확인했다.

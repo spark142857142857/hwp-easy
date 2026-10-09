@@ -177,6 +177,13 @@ export function createDocumentEngine(HwpDocument, { readInspectionCache, hostedW
       restrictions, emptyCellProfiles, clearCellProfiles, mixedProfiles });
     const base = () => ({ source_sha256: version, scope: 'supported_paragraph_and_cell_blocks',
       supported_blocks: inspection.blocks.length, table_count: inspection.tables.length,
+      coordinate_system: { index_base: 0,
+        index_fields: ['section', 'paragraph', 'control', 'cell', 'cell_paragraph', 'row', 'column'],
+        span_fields_are_counts: ['row_span', 'column_span'],
+        merged_cell_coordinates: 'top_left_grid_anchor',
+        cell_index: 'stored_cell_order_not_row_times_columns',
+        paragraph_for_cells: 'host_body_paragraph',
+        target_selection: 'exact_returned_target_id_and_whole_block_expected_old' },
       all_content_supported: allContentSupported, edit_profile_supported: editableProfile,
       preserved_controls: copy(preservedControls),
       unsupported: copy(unsupported), target_mapping_verified: mappingVerified,

@@ -98,6 +98,15 @@ try {
   assert.equal(repeated.replayed, true); assert.equal(repeated.document_id, created.document_id);
   const args = { document_id: created.document_id, version_id: created.version_id };
   const before = await call('hwp_read', args);
+  assert.equal(before.coordinate_system.index_base, 0);
+  assert.equal(before.coordinate_system.cell_index, 'stored_cell_order_not_row_times_columns');
+  const fragment = await call('hwp_read', { ...args, max_chars: 1, max_blocks: 1 });
+  assert.ok(fragment.next_cursor);
+  assert.deepEqual(fragment.coordinate_system, before.coordinate_system);
+  fragment.coordinate_system.index_base = 99;
+  const continued = await call('hwp_read', { ...args, cursor: fragment.next_cursor, max_chars: 1, max_blocks: 1 });
+  assert.deepEqual(continued.coordinate_system, before.coordinate_system);
+  checks.push('zero_based_coordinate_contract_survives_continued_read_without_guessing_cell_indices');
   const body = before.blocks.find((b) => b.kind === 'paragraph' && b.editable && b.text),
     cell = before.blocks.find((b) => b.kind === 'cell' && b.editable && b.text);
   const edits = { expected_sha256: created.sha256, operations: [body, cell].map((b, i) => ({
