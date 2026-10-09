@@ -3,6 +3,7 @@
  * The host owns file transfer, isolation and conditional durable saves.
  */
 import { createEngineApi } from '../../../src/one_hwp/rhwp_api.mjs';
+import { rawUniformStyleProofs } from './uniform-style.mjs';
 import { readHwp } from '../guard/container.mjs';
 import { GuardError, parseRecords } from '../guard/records.mjs';
 import { verifyPreservation } from '../guard/preservation.mjs';
@@ -107,13 +108,24 @@ export function mapRawTargets(decoded, blocks) {
   return mapping;
 }
 
-export function createDocumentEngine(HwpDocument, { readInspectionCache, hostedWorkloadBudget = false } = {}) {
+export function createDocumentEngine(HwpDocument, { readInspectionCache, hostedWorkloadBudget = false, uniformStyleInspection = true } = {}) {
   if (typeof hostedWorkloadBudget !== 'boolean') fail('INVALID_ARGUMENTS');
-  const api = createEngineApi(HwpDocument, { mixedStyleSameLength: true, languageFontSelection: true });
+  if (typeof uniformStyleInspection !== 'boolean') fail('INVALID_ARGUMENTS');
+  const api = createEngineApi(HwpDocument, { mixedStyleSameLength: true, languageFontSelection: true,
+    ...(uniformStyleInspection ? { uniformStyleProofs(bytes, blocks) {
+      const decoded = readHwp(bytes);
+      let mapping;
+      try { mapping = mapRawTargets(decoded, blocks); }
+      catch (error) {
+        if (error instanceof GuardError && error.code === 'TARGET_MAPPING_UNVERIFIED') return undefined;
+        throw error;
+      }
+      return rawUniformStyleProofs(decoded, blocks, mapping);
+    } } : {}) });
   function inspect(bytes) {
     return quietEngine(() => {
       const document = api.openDocument(bytes);
-      try { return api.inspectDocument(document); }
+      try { return api.inspectDocument(document, bytes); }
       finally { document.free(); }
     });
   }

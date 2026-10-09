@@ -1,13 +1,14 @@
 /** Host-free pinned-engine operations shared by Node and browser ESM adapters. */
 import { MAX_MIXED_STYLE_RUNS, mixedStyleEdit } from './mixed_style.mjs';
 import { expectedEditedBlock } from './text_font_selection.mjs';
-export function createEngineApi(HwpDocument, { mixedStyleSameLength = false, languageFontSelection = false } = {}) {
+export function createEngineApi(HwpDocument, { mixedStyleSameLength = false, languageFontSelection = false, uniformStyleProofs } = {}) {
   // Internal host opt-in: callers must independently prove exact raw style
   // anchors before/after saving. The local adapter retains its default profile.
   if (typeof mixedStyleSameLength !== 'boolean') throw new Error('Invalid mixed style profile');
   // Remote opt-in only while full language mappings and independent raw font/
   // style definitions are preserved. Local bridge remains conservative.
   if (typeof languageFontSelection !== 'boolean') throw new Error('Invalid language font profile');
+  if (uniformStyleProofs !== undefined && typeof uniformStyleProofs !== 'function') throw new Error('Invalid uniform style proof provider');
   const EDIT_LIMIT = 100_000;
   const json = (value) => JSON.parse(value);
   const checked = (value) => {
@@ -49,7 +50,7 @@ export function createEngineApi(HwpDocument, { mixedStyleSameLength = false, lan
     return false;
   }
 
-  function formatProfile(document, block, budget) {
+  function formatProfile(document, block, budget, provenShapeId) {
     const paragraph = json(block.kind === 'paragraph'
       ? document.getParaPropertiesAt(block.section, block.paragraph)
       : document.getCellParaPropertiesAt(block.section, block.paragraph, block.control,
@@ -62,6 +63,14 @@ export function createEngineApi(HwpDocument, { mixedStyleSameLength = false, lan
     budget.remaining -= cost;
     const ids = new Set();
     const first = charProperties(document, block, 0);
+    // Internal host proof: one plain-text raw paragraph and one shape anchor,
+    // matched against the complete ordered model from these exact bytes. Query
+    // representative model IDs too; uncertainty keeps the original full scan.
+    if (count > 2048 && Number.isSafeInteger(provenShapeId) && provenShapeId >= 0
+      && first.charShapeId === provenShapeId
+      && [Math.floor(count / 2), count - 1].every((offset) => charProperties(document, block, offset).charShapeId === provenShapeId)) {
+      return { paragraph, char_shape_ids: [provenShapeId], char: first };
+    }
     ids.add(first.charShapeId);
     const runs = [{ start: 0, end: count, char_shape_id: first.charShapeId }];
     let runsOverflow = false;
@@ -80,14 +89,15 @@ export function createEngineApi(HwpDocument, { mixedStyleSameLength = false, lan
       ...(ids.size === 1 ? { char: first } : {}) };
   }
 
-  function inspectDocument(document) {
+  function inspectDocument(document, sourceBytes) {
     const info = json(document.getDocumentInfo());
     const model = json(document.getCursorModel());
     const budget = { remaining: 800_000, text: 0, blocks: 0 };
-    const style = (block) => {
+    const styleOrder = [];
+    const queueStyle = (block) => {
       budget.text += block.text.length;
       if (++budget.blocks > 4096 || budget.text > 2_000_000) throw new Error('Content inspection limit exceeded');
-      return formatProfile(document, block, budget);
+      styleOrder.push(block);
     };
     if (document.getSectionCount() > 64 || model.lists.length > 4096) throw new Error('Content inspection limit exceeded');
     const controls = json(document.getControls());
@@ -130,9 +140,7 @@ export function createEngineApi(HwpDocument, { mixedStyleSameLength = false, lan
           row: metadata.row, column: metadata.col, row_span: metadata.rowSpan,
           column_span: metadata.colSpan,
           text: document.getTextInCell(section, paragraph, control, cell.cellIndex, index, 0, length) };
-        block.style = style(block);
-        block.editable = !block.style.profile && (block.style.char_shape_ids.length === 1 || Boolean(block.style.char_runs));
-        block.edit_limit = EDIT_LIMIT;
+        queueStyle(block);
         list.push(block);
         paragraphIds.push(block.id);
       }
@@ -149,15 +157,21 @@ export function createEngineApi(HwpDocument, { mixedStyleSameLength = false, lan
         const length = document.getParagraphLength(section, paragraph);
         const block = { id, kind: 'paragraph', section, paragraph,
           text: document.getTextRange(section, paragraph, 0, length) };
-        block.style = style(block);
-        // Table-host paragraphs are read-only; their individual cell paragraphs are targets.
-        block.editable = !cellBlocks.has(id)
-          && !controls.some((control) => control.ctrlId === 'pgnp' && control.list === 0 && control.para === paragraph)
-          && !block.style.profile
-          && (block.style.char_shape_ids.length === 1 || Boolean(block.style.char_runs));
-        block.edit_limit = EDIT_LIMIT;
+        queueStyle(block);
         blocks.push(block, ...(cellBlocks.get(id) || []));
       }
+    }
+    const proofs = uniformStyleProofs && sourceBytes instanceof Uint8Array
+      ? uniformStyleProofs(new Uint8Array(sourceBytes), JSON.parse(JSON.stringify(blocks))) : undefined;
+    if (proofs !== undefined && !(proofs instanceof Map)) throw new Error('Invalid uniform style proofs');
+    // Retain the original cells-first style budget order and response fields.
+    for (const block of styleOrder) {
+      block.style = formatProfile(document, block, budget, proofs?.get(block.id));
+      block.editable = (block.kind === 'cell' || (!cellBlocks.has(block.id)
+        && !controls.some((control) => control.ctrlId === 'pgnp' && control.list === 0 && control.para === block.paragraph)))
+        && !block.style.profile
+        && (block.style.char_shape_ids.length === 1 || Boolean(block.style.char_runs));
+      block.edit_limit = EDIT_LIMIT;
     }
     const validation = json(document.getValidationWarnings());
     return { blocks, tables: [...tables.values()], unsupported,
@@ -196,7 +210,7 @@ export function createEngineApi(HwpDocument, { mixedStyleSameLength = false, lan
     if (typeof prepare !== 'function') throw new Error('Invalid edit preparation');
     const document = openDocument(bytes);
     try {
-      const before = inspectDocument(document);
+      const before = inspectDocument(document, bytes);
       const prepared = prepare(JSON.parse(JSON.stringify(before)));
       if (!prepared || Object.getPrototypeOf(prepared) !== Object.prototype
         || Object.keys(prepared).some((key) => !['operations', 'preservePageNumbers', 'clearCellTargets'].includes(key))) {
@@ -273,7 +287,7 @@ export function createEngineApi(HwpDocument, { mixedStyleSameLength = false, lan
       const output = exportChecked(document);
       const reopened = openDocument(output);
       try {
-        const after = inspectDocument(reopened);
+        const after = inspectDocument(reopened, output);
         const expected = before.blocks.map((block) => expectedEditedBlock(block,
           plans.find((plan) => plan.block.id === block.id)?.operation.new_text ?? block.text, languageFontSelection));
         if (JSON.stringify(expected) !== JSON.stringify(after.blocks)
