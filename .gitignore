@@ -15,6 +15,8 @@ docs/local/
 *.hwpx
 *.hwpbak
 *.hwpbake
+# DPAPI-protected recovery keys are private operator material, not source.
+*.dpapi
 *.pdf
 *.docx
 # Local credentials, runtime state and generated release archives.
