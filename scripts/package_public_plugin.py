@@ -89,7 +89,10 @@ def inspect_package(package: Path) -> tuple[dict, dict, list[str]]:
         if not all(isinstance(case.get(field), str) and case[field].strip()
                    for field in ("description", "prompt", "tools_triggered", "expected_behavior")):
             raise ValueError("Incomplete positive review case")
-    missing = []
+    # The current draft deliberately has no confirmed client registration.
+    # The submission portal treated this as a provided client and rejected it
+    # because clientId was missing. URLs alone do not complete OAuth setup.
+    missing = ["oauth_client_registration"]
     if not isinstance(interface.get("developerName"), str) or not interface["developerName"].strip():
         missing.append("verified_publisher_display_name")
     for field in ("websiteURL", "supportURL", "privacyPolicyURL", "termsOfServiceURL"):

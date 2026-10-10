@@ -38,12 +38,24 @@ class PublicPluginPackageTests(unittest.TestCase):
         report = packager.build(self.package, target, draft=True)
         self.assertEqual(report["public_publication"], "NOT_DONE")
         self.assertIn("demo_recording_url", report["missing_submission_metadata"])
+        self.assertIn("oauth_client_registration", report["missing_submission_metadata"])
         with zipfile.ZipFile(target) as archive:
             self.assertEqual(set(archive.namelist()), set(packager.FILES))
             mcp = json.loads(archive.read(".mcp.json"))
             self.assertEqual(mcp["mcpServers"]["hwp-easy"]["extensions"]["com.openai"]["auth"]["type"], "oauth")
 
     def test_incomplete_submission_does_not_create_release_zip(self):
+        target = self.root / "release.zip"
+        with self.assertRaisesRegex(ValueError, "metadata is incomplete"):
+            packager.build(self.package, target)
+        self.assertFalse(target.exists())
+
+    def test_demo_url_does_not_make_unregistered_oauth_submittable(self):
+        self.change(".codex-plugin/plugin.json", lambda data:
+                    data["extensions"]["com.openai"]["review"].update(
+                        demo_recording_url="https://example.invalid/synthetic-demo"))
+        _, _, missing = packager.inspect_package(self.package)
+        self.assertEqual(missing, ["oauth_client_registration"])
         target = self.root / "release.zip"
         with self.assertRaisesRegex(ValueError, "metadata is incomplete"):
             packager.build(self.package, target)
