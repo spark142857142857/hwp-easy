@@ -31,7 +31,6 @@ HWP Easy의 현재 제품은 한글 없는 HWP 엔진과 에이전트 연결입�
 | [Codex Cloud 기준](codex-cloud.md) | 클라이언트별 실제 확인 상태 |
 | [Cloud 회수 절차](cloud-client-check.md) | 고정 합성 파일의 입력부터 결과 회수까지 |
 | [공개 사용자 안내 초안](public-user-notices-draft.md) | 출시 전 검토할 데이터 처리·지원·이용 안내 |
-| [보안 신고](../SECURITY.md) | 공개 이슈와 비공개 취약점 신고의 구분 |
 | [외부 의존성 고지](../THIRD_PARTY_NOTICES.md) | 실제 사용하는 엔진·패키지와 라이선스 고지 |
 
 ## 이전 Windows COM 경로

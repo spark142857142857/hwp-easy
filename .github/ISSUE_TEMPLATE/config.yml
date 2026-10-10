@@ -1,5 +1,0 @@
-blank_issues_enabled: false
-contact_links:
-  - name: 보안 문제 비공개 신고 / Private security report
-    url: https://github.com/spark142857142857/hwp-easy/security
-    about: Security → Report a vulnerability를 사용하세요. 인증 정보나 개인 문서를 공개하지 마세요.

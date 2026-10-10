@@ -2,7 +2,7 @@
 
 **한글 설치 없이, 에이전트로 HWP 양식의 필요한 칸을 읽고 수정합니다.**
 
-[English](README.en.md) · [사용 안내](docs/quick-start.md) · [문서 모음](docs/README.md) · [기여 안내](CONTRIBUTING.md)
+[English](README.en.md) · [사용 안내](docs/quick-start.md) · [문서 모음](docs/README.md)
 
 HWP를 직접 처리하는 WASM 엔진에 대상 확인, 편집 검증, 버전 저장과 MCP 연결을 더한 프로젝트입니다. 사용자는 기존 ChatGPT·Codex 대화에서 수정을 요청하고, 결과를 HWP로 내려받는 흐름을 목표로 합니다.
 
@@ -53,8 +53,8 @@ docs/legacy/           이전 Windows COM 개발·배포·형식 안내
 
 디렉터리의 역사적 이름을 유지해 기존 실행 경로와 연결을 보존합니다. 개발 환경은 Node.js 22 이상과 Python 3.11 이상이며, 새 엔진 경로에 한글·COM·Wine·GUI는 필요하지 않습니다. 개발자는 [개발 시작](docs/developer-guide.md)과 [구조 설명](docs/architecture.md)을 확인하세요. 설치 명령은 일반 사용자의 정상 이용 흐름으로 요구하지 않습니다.
 
-## 문의·기여·라이선스
+## 문의·라이선스
 
-일반 버그와 제안은 [Issues](https://github.com/spark142857142857/hwp-easy/issues)에 남겨 주세요. 개인 HWP·토큰·쿠키·인증 코드 대신 개인정보 없는 합성 재현을 사용합니다. 보안 문제는 [보안 신고 안내](SECURITY.md), 코드 변경은 [기여 안내](CONTRIBUTING.md)를 따릅니다.
+일반 버그와 제안은 [Issues](https://github.com/spark142857142857/hwp-easy/issues)에 남겨 주세요. 개인 HWP·토큰·쿠키·인증 코드 대신 개인정보 없는 합성 재현을 사용합니다.
 
 HWP Easy 자체의 라이선스는 아직 확정하지 않았습니다. 외부 엔진의 MIT 고지는 프로젝트 자체의 라이선스와 구분하며 [외부 의존성 고지](THIRD_PARTY_NOTICES.md)를 유지합니다. Dots는 추후 확장 항목입니다.

@@ -37,3 +37,5 @@ src/*.egg-info/
 *.log
 Thumbs.db
 .DS_Store
+# Local agent instructions are not part of the public repository.
+/AGENTS.md

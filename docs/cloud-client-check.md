@@ -89,7 +89,7 @@ helper의 `native_client_transport_verified`, `native_file_attachment_verified`,
 
 ```text
 이 저장소의 HWP Easy를 실제 Codex Cloud 작업에서 검증해줘.
-AGENTS.md와 docs/cloud-client-check.md를 읽고, 그 절차에 따라 이 Cloud
+docs/developer-guide.md와 docs/cloud-client-check.md를 읽고, 그 절차에 따라 이 Cloud
 작업에서 만든 고정 합성 HWP의 native import → 전체 읽기 → 문단/셀
 plan·같은 문서 저장 → 버전 고정 조각 회수 → save-chunk-result.mjs를 통한
 독립 바이트 검사·재열기 → 이전 버전 복구 → 편집 HWP 결과 파일 제공까지

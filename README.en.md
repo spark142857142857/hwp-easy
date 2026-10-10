@@ -2,7 +2,7 @@
 
 **Read and edit supported HWP form fields with an agent, without installing Hancom.**
 
-[한국어](README.md) · [Documentation](docs/README.md) · [Developer setup](docs/developer-guide.md) · [Contributing](CONTRIBUTING.md)
+[한국어](README.md) · [Documentation](docs/README.md) · [Developer setup](docs/developer-guide.md)
 
 HWP Easy combines the pinned `@rhwp/core` WASM engine with exact target selection, independent preservation checks, recoverable version storage and MCP tools for agents. The intended user experience is to connect HWP Easy in ChatGPT or Codex, upload an HWP, request an edit, and download the verified HWP.
 
@@ -39,6 +39,6 @@ Developer setup requires Node.js 22+ and Python 3.11+. The new engine path does 
 
 ## Support and licensing
 
-Use [Issues](https://github.com/spark142857142857/hwp-easy/issues) for ordinary bugs and proposals, with synthetic reproductions. Do not post personal HWP files, credentials, cookies or authentication codes. Follow [SECURITY.md](SECURITY.md) for security reports.
+Use [Issues](https://github.com/spark142857142857/hwp-easy/issues) for ordinary bugs and proposals, with synthetic reproductions. Do not post personal HWP files, credentials, cookies or authentication codes.
 
 The license for HWP Easy itself is not yet specified. Upstream engine notices apply to their respective components and do not relicense this project. See [third-party notices](THIRD_PARTY_NOTICES.md). Dots integration remains outside the MVP scope.

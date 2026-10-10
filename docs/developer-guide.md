@@ -67,6 +67,6 @@ python scripts/package_public_plugin.py --draft
 
 ## 변경과 배포
 
-PR에는 문제·결과·검증과 지원 범위를 적고 [기여 안내](../CONTRIBUTING.md)의 Conventional Commits를 사용합니다. 작업 중 다른 변경을 되돌리지 않습니다. 저장소 관리자는 현재 합의에 따라 검증한 변경을 `main`에 직접 반영할 수 있으며, 외부 기여자는 fork와 PR을 사용합니다.
+변경에는 문제·결과·검증과 지원 범위를 적고 `feat:`·`fix:`·`docs:` 등 Conventional Commits를 사용합니다. 작업 중 다른 변경을 되돌리지 않습니다. 저장소 관리자는 현재 합의에 따라 검증한 변경을 `main`에 직접 반영할 수 있습니다.
 
 GitHub 소스 공개·push와 운영 Sites 배포·사용자 접근 변경·플러그인 디렉터리 게시를 각각 구분합니다. 운영 저장소 신원과 D1/R2 바인딩을 재생성하지 않으며, 별도로 요청받은 배포만 진행합니다. [구조 설명](architecture.md)과 [공개 출시 준비](public-plugin-release.md)를 참고하세요.
