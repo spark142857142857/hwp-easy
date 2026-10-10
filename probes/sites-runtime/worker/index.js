@@ -14,6 +14,7 @@ import { authenticatedOwner, boundedBytes } from '../host/transfer.mjs';
 import { documentToolError } from '../host/error-feedback.mjs';
 import { publicErrorCode } from '../host/public-errors.mjs';
 import { syntheticDownloadBytes, syntheticDownloadResponse } from '../host/synthetic-download.mjs';
+import { domainChallengeResponse, documentSignInResponse } from '../host/public-entry.mjs';
 const wasm = initSync({ module: wasmModule });
 const json = JSON.parse;
 const checked = (value) => { if (json(value).ok !== true) throw new Error('operation'); };
@@ -256,10 +257,19 @@ const tools = [{ name: 'hwp_runtime_probe',
 export default {
   async fetch(request) {
     const path = new URL(request.url).pathname;
+    const challenge = domainChallengeResponse(request, env.HWP_EASY_OPENAI_APP_CHALLENGE);
+    if (challenge) return challenge;
     if (path.startsWith('/diagnostics/') && path !== '/diagnostics/stored-document') {
       return syntheticDownloadResponse(request, () => syntheticDownloadBytes(HwpDocument));
     }
     if (path === '/documents' || path.startsWith('/documents/') || path === '/diagnostics/stored-document') {
+      if (path === '/documents') {
+        try { await authenticatedOwner(request.headers); }
+        catch {
+          const signIn = documentSignInResponse(request);
+          if (signIn) return signIn;
+        }
+      }
       try { return await createHostApp(env, hostEngine(), HwpDocument).http(request); }
       catch { return response({ error: 'DOCUMENT_SERVICE_UNAVAILABLE' }, 503); }
     }

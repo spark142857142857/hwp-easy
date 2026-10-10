@@ -91,3 +91,9 @@ Windows 포장 때 워크플로 프로세스에만 Git Bash PATH와 `TAR_OPTIONS
 이 조건 전에는 `cloud_documents_enabled`, `document_upload_supported`, `independent_preservation_guard_ported`, `storage_contract_verified`, `user_isolation_verified`, `layout_verified`, `total_isolate_memory_measured`를 모두 `false`로 유지한다. 별도 외부 호스팅으로의 변경은 사용자와 확인한다.
 
 새 Codex Cloud 작업의 연결과 파일 회수는 Sites 서버의 실행과 별도다. [Codex Cloud 지원 기준](../../docs/codex-cloud.md)의 실제 클라이언트 검증을 통과하기 전에는 클라우드 세션에서 사용자 문서를 처리할 수 있다고 표시하지 않는다. 앱 설명의 친절한 안내 문구는 핵심 작업 흐름 검증 후 마무리한다.
+
+## 공개 플러그인의 도메인 확인
+
+`HWP_EASY_OPENAI_APP_CHALLENGE`는 제출 포털이 발급한 공개 도메인 확인 문자열이다. 인증용 bearer token이나 사용자 입력으로 대체하지 않는다. 설정이 유효하면 `GET /.well-known/openai-apps-challenge`는 그 값만 plain text로 반환하며, 없거나 잘못된 설정은 404로 거부한다. 이 응답은 문서 저장소와 무관하다.
+
+Sites의 공개 URL 접근 설정과 문서 권한은 별도다. 익명 브라우저의 `/documents`에는 플랫폼 로그인 안내만 제공한다. API와 MCP 실행, 개별 문서·버전은 기존 trusted 사용자 신원과 소유권 검사를 유지한다. 공개 접근 전후의 실제 거부 검사와 포털 도메인 확인을 각각 기록하며, 실제 두 OAuth 계정의 격리 검증을 대신하지 않는다.

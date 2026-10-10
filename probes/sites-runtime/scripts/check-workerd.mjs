@@ -4,8 +4,18 @@ import { Miniflare, convertV4MiniflareOptions } from 'miniflare';
 const mf = new Miniflare(convertV4MiniflareOptions({
   compatibilityDate: '2026-10-01', modulesRoot: path.resolve('dist/server'),
   modules: [{ type: 'ESModule', path: path.resolve('dist/server/index.js') },
-    { type: 'CompiledWasm', path: path.resolve('dist/server/rhwp_bg.wasm') }] }));
+    { type: 'CompiledWasm', path: path.resolve('dist/server/rhwp_bg.wasm') }],
+  bindings: { HWP_EASY_OPENAI_APP_CHALLENGE: 'synthetic-domain-proof-0123456789' } }));
 try {
+  const proof = await mf.dispatchFetch('https://probe.invalid/.well-known/openai-apps-challenge');
+  assert.equal(proof.status, 200); assert.equal(await proof.text(), 'synthetic-domain-proof-0123456789');
+  const entry = await mf.dispatchFetch('https://probe.invalid/documents?return_to=https://outside.invalid',
+    { headers: { Accept: 'text/html' } });
+  assert.equal(entry.status, 401);
+  const entryHtml = await entry.text();
+  assert.match(entryHtml, /href="\/signin-with-chatgpt\?return_to=%2Fdocuments"/);
+  assert.doesNotMatch(entryHtml, /outside\.invalid/);
+  // No DB/R2 bindings: public proof and sign-in cannot query stored documents.
   const headers = { 'oai-authenticated-user-id': 'synthetic-user',
     'oai-authenticated-user-email': 'synthetic@example.invalid' };
   const incompleteIdentities = [{}, { 'oai-authenticated-user-id': 'partial' },
@@ -75,6 +85,7 @@ try {
   assert.equal((await rpc.json()).error.code, -32602);
   assert.equal((await mf.dispatchFetch('https://probe.invalid/upload', { method: 'POST', body: 'no documents' })).status, 404);
   console.log(JSON.stringify({ local_workerd: 'passed', checks: ['runtime', 'fixed_fixture_raw_preservation', 'raw_guard_fixed_negatives',
-    'initialize', 'discovery', 'complete_trusted_identity_gate', 'anonymous_diagnostics_denied_before_storage',
+    'initialize', 'discovery', 'public_domain_proof', 'anonymous_browser_sign_in_without_storage',
+    'complete_trusted_identity_gate', 'anonymous_diagnostics_denied_before_storage',
     'tool_call', 'no_document_arguments', 'no_upload'], report }));
 } finally { await mf.dispose(); }
