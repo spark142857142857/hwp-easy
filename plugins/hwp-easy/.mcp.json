@@ -6,7 +6,12 @@
         "com.openai": {
           "auth": {
             "type": "oauth",
-            "resource": "https://hwp-easy-runtime-probe.spark142857.chatgpt.site/mcp"
+            "resource": "https://hwp-easy-runtime-probe.spark142857.chatgpt.site/mcp",
+            "client": {
+              "mode": "provided",
+              "clientId": "oaiapp_595af3501ec716497612db5ef56aabf1c19b06de27ad52cd7137ce0b55223934",
+              "tokenEndpointAuthMethod": "none"
+            }
           }
         }
       }

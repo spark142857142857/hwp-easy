@@ -1,6 +1,6 @@
 {
-  "name": "hwp-easy",
-  "version": "0.1.0",
+  "name": "hwp-easy-public",
+  "version": "0.1.8",
   "description": "Read and edit supported HWP text with an agent, without installing Hancom.",
   "keywords": [
     "hwp",
