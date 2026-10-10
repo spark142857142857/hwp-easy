@@ -259,14 +259,24 @@ try {
   assert.equal(blobRead, false);
   checks.push('injected_cross_owner_blob_reference_rejected_before_read');
 
-  const prefix = `hwp-easy/v1/${owner}/`;
-  const victim = (await bucket.list({ prefix })).objects[0];
-  await bucket.put(victim.key, new Uint8Array([9]));
-  const victimVersion = victim.key.split('/').at(-1).replace('.hwp', '');
-  const victimDocument = victim.key.split('/').at(-2);
-  await assert.rejects(() => store.read({ owner, document_id: victimDocument,
-    version_id: victimVersion }), isCode('BLOB_MISSING_OR_CORRUPT'));
-  checks.push('real_blob_corruption_detected');
+  // R2 listing also contains retained unpublished candidates from unknown
+  // commits above. Its first random key is not necessarily a recorded version.
+  // Force an unpublished object first to make this distinction deterministic.
+  const unpublishedDocument = '00000000-0000-4000-8000-000000000000';
+  const unpublishedVersion = '00000000-0000-4000-8000-000000000001';
+  const unpublishedKey = `hwp-easy/v1/${owner}/${unpublishedDocument}/${unpublishedVersion}.hwp`;
+  const unpublishedBytes = new Uint8Array([7, 8, 9]);
+  await bucket.put(unpublishedKey, unpublishedBytes);
+  assert.equal((await bucket.list({ prefix: `hwp-easy/v1/${owner}/` })).objects[0].key, unpublishedKey);
+  await assert.rejects(() => store.read({ owner, document_id: unpublishedDocument,
+    version_id: unpublishedVersion }), isCode('DOCUMENT_OR_VERSION_NOT_FOUND'));
+  const victimArgs = { owner, document_id: guardDoc.document_id, version_id: guardDoc.version_id };
+  assert.equal((await store.read(victimArgs)).sha256, guardDoc.sha256);
+  const victimKey = `hwp-easy/v1/${owner}/${guardDoc.document_id}/${guardDoc.version_id}.hwp`;
+  await bucket.put(victimKey, new Uint8Array([9]));
+  await assert.rejects(() => store.read(victimArgs), isCode('BLOB_MISSING_OR_CORRUPT'));
+  assert.deepEqual(new Uint8Array(await (await bucket.get(unpublishedKey)).arrayBuffer()), unpublishedBytes);
+  checks.push('real_blob_corruption_detected', 'unpublished_first_R2_object_not_used_as_recorded_corruption_victim');
   assert.equal((await store.purgeSyntheticOwner(owner)).cleanup_complete, true);
   await assert.rejects(() => store.purgeSyntheticOwner('production-owner'), isCode('NOT_A_SYNTHETIC_OWNER'));
   checks.push('cleanup_exact_generated_namespace_only');
