@@ -21,13 +21,16 @@
             },
             {
               "description": "Read every supported block in a synthetic uploaded form",
-              "prompt": "I uploaded the synthetic review form. Read all its supported body and table text, without editing it.",
+              "prompt": "I downloaded the linked synthetic review HWP and uploaded it into my own authenticated document area at /documents/upload. Read all its supported body and table text without editing it. Use the document and version from that upload; a chat attachment alone is not a server upload.",
               "tools_triggered": "hwp_read",
-              "expected_behavior": "Use the document and version from the upload screen; follow every next_cursor on that fixed version, identify coordinates and repeated text separately, and disclose unsupported content. Keep all bytes and versions unchanged."
+              "expected_behavior": "Use the explicit browser upload at /documents/upload as the setup step. Use the resulting document and version from the upload screen; follow every next_cursor on that fixed version, identify coordinates and repeated text separately, and disclose unsupported content. Reading creates no edit or new version.",
+              "file_attachment_urls": [
+                "https://github.com/spark142857142857/hwp-easy/releases/download/review-demo-2026-10-10/hwp-easy-synthetic-review.hwp"
+              ]
             },
             {
               "description": "Validate the exact selected cell without saving",
-              "prompt": "For the synthetic form, check replacing the first paragraph of the selected answer cell with 'Review answer'. Do not save yet.",
+              "prompt": "For the synthetic document uploaded in test case 2, check replacing the first paragraph of the first table's row 0, column 1 answer cell, whose whole text is '합성 답변 원문', with 'Review answer'. Do not save yet.",
               "tools_triggered": "hwp_read, hwp_plan",
               "expected_behavior": "Confirm the selected coordinate, returned target_id and whole old text; run serialization, reopen and preservation checks. Return a plan without a new version or automatic text changes."
             },
@@ -62,11 +65,12 @@
             }
           ]
         },
+        "demo_recording_url": "https://github.com/spark142857142857/hwp-easy/releases/download/review-demo-2026-10-10/hwp-easy-demo-review.mp4",
         "commerce": false,
         "commerce_description": "This package contains no checkout, sales or subscription purchase flow."
       },
       "publication": {
-        "release_notes": "Public-package draft 0.1.9 for the existing Sites HWP remote MCP. Review scenarios cover supported reads, guarded planning, editing, download and restore, with an incorrect-old-text refusal test that can run within one dedicated test account. Reviewer access, video, review-account execution, submission and directory publication remain pending.",
+        "release_notes": "Public-package draft 0.1.9 for the existing Sites HWP remote MCP. Adds a synthetic owner-development walkthrough URL and single-account review scenarios for supported reads, guarded planning, editing, HWP download and restore. The walkthrough shows one answer-cell replacement and original restoration. It does not certify public installation or reviewer-account execution. Reviewer access, submission and directory publication remain pending.",
         "translations": {
           "ko-KR": {
             "subtitle": "HWP 양식을 읽고 필요한 칸 수정",

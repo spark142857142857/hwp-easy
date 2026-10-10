@@ -34,6 +34,8 @@ class PublicPluginPackageTests(unittest.TestCase):
         path.write_text(json.dumps(data), encoding="utf-8")
 
     def test_draft_contains_only_reviewable_public_files(self):
+        self.change(".codex-plugin/plugin.json", lambda data:
+                    data["extensions"]["com.openai"]["review"].pop("demo_recording_url", None))
         target = self.root / "draft.zip"
         report = packager.build(self.package, target, draft=True)
         self.assertEqual(report["public_publication"], "NOT_DONE")
@@ -45,6 +47,8 @@ class PublicPluginPackageTests(unittest.TestCase):
             self.assertEqual(mcp["mcpServers"]["hwp-easy"]["extensions"]["com.openai"]["auth"]["type"], "oauth")
 
     def test_incomplete_submission_does_not_create_release_zip(self):
+        self.change(".codex-plugin/plugin.json", lambda data:
+                    data["extensions"]["com.openai"]["review"].pop("demo_recording_url", None))
         target = self.root / "release.zip"
         with self.assertRaisesRegex(ValueError, "metadata is incomplete"):
             packager.build(self.package, target)
