@@ -52,6 +52,27 @@ portable 검사본은 root `plugin.json`·`mcp.json`과 명시적인 `streamable
 
 현재는 **포털의 저장된 설정과 실제 OAuth 연결 설정 사이의 반영 문제 가능성**을 조사하고 있다. 공급자가 ID를 거부했다거나 callback 불일치가 발생했다고 단정하지 않는다. 실제 등록 정보 또는 공식적으로 지원되는 연결 설정 경로가 필요하다. 사용자의 지시에 따라 이메일은 계속 보류하며, 이번 조사는 운영 배포·접근·사용자 문서를 변경하지 않았다.
 
+## 추가 대안 조사와 로컬 OAuth 실험
+
+현재 공개 포털의 Plugins 목록과 Upload Plugin 창을 직접 확인했다. ZIP 업로드 경로만 노출됐고, 일부 [원격 MCP 검토 안내](https://developers.openai.com/plugins/deploy/app-review)에 나오는 직접 MCP 등록 폼은 이 계정 화면에서 확인되지 않았다. 해당 안내도 [현재 제출 절차](https://developers.openai.com/plugins/deploy/submission)를 기준으로 삼으라고 명시한다. 문서의 다른 표현만으로 숨겨진 등록 API나 별도 폼이 사용 가능하다고 판단하지 않는다.
+
+| 대안 | 확인한 범위 | 공개 출시와 남은 작업 |
+| --- | --- | --- |
+| 기존 Sites OAuth·현재 공개 초안 | 기존 연결을 유지하면서 조사할 수 있으나, 제공한 ID가 실제 연결 설정에 반영되는 지원 경로와 등록 콜백·인증 방법은 확인되지 않았다. | 포털 연결 오류가 해결돼야 한다. 같은 Connect를 반복하거나 필드 이름을 임의로 바꾸지 않는다. |
+| 독립 Cloudflare Workers MCP + 자동 OAuth 등록 | 공식 라이브러리와 현재 Worker의 WASM·D1·R2 구조를 조사했다. 합성 신원의 로컬 actual workerd에서 DCR·S256 발급·한 번의 갱신 등 9개 검사를 통과했다. | 구현 가능한 후보다. 실제 사용자 로그인·동의·이메일 검증·UserInfo·권한 철회·두 계정 문서 격리·실제 ChatGPT/Codex·포털 연결은 미검증이다. 운영 전환이나 공개 심사 통과를 의미하지 않는다. |
+| 별도 관리형 OAuth 공급자 | [Auth0](https://auth0.com/docs/api/authentication/dynamic-application-client-registration/dynamic-application-registration)는 DCR 엔드포인트를 문서화한다. [Cloudflare 공식 안내](https://developers.cloudflare.com/agents/model-context-protocol/protocol/authorization/)는 외부 신원 공급자와 MCP 권한을 연결하는 구성을 지원한다. | 공급자 계정·설정과 실제 호환성 검증이 필요하다. 공급자만 바꿔 현재 Sites 관리 인증을 우회하는 방식은 구현하지 않는다. |
+| GitHub marketplace를 통한 배포 | [공식 패키징 안내](https://developers.openai.com/plugins/build/plugins)와 [워크스페이스 가져오기 안내](https://help.openai.com/en/articles/20001504-importing-and-syncing-plugin-marketplaces-from-github)에 별도 설치 경로가 있다. | 공개 디렉터리와 별도다. 가져오기는 사용자 서비스 권한을 부여하지 않으며, 원격 MCP 선언도 Desktop only로 표시될 수 있다. 현재 목표인 누구나 ChatGPT·Codex에서 검색·설치를 충족한 것으로 집계하지 않는다. |
+
+독립 서버 후보는 [Cloudflare OAuth 라이브러리](https://github.com/cloudflare/workers-oauth-provider) **1.2.3**을 고정해 운영과 분리된 로컬 실험에서 검사했다. 사전 제공 ID·Secret 없이 `none` 방식의 DCR 등록이 성공했고, 정확한 issuer/resource 발견, S256 교환, 두 고정 합성 신원의 토큰 컨텍스트, 한 번의 refresh token 회전, 다른 resource 토큰 거부, 인증 코드 재사용 거부와 그 grant의 토큰 무효화를 확인했다. 위조 Sites 신원 헤더만으로는 접근할 수 없었다. 합성 로그인·동의 fixture를 사용한 OAuth 프로토콜 실험이며 실제 사용자나 HWP 문서 흐름 검증이 아니다. 토큰·코드·쿠키는 기록이나 출력에 넣지 않았다.
+
+추가 CIMD 실험은 지원 메타데이터 표시까지 확인했으나, 로컬 workerd의 `https://chatgpt.com/oauth/client.json` 조회가 HTTP 403으로 거부되어 문서 해석·교환을 통과하지 못했다. 웹 조회 도구에서는 그 공개 JSON을 읽을 수 있었다. 이 차이의 원인은 미확인이고 우회하지 않았다. [OpenAI 인증·등록 안내](https://developers.openai.com/plugins/build/auth)와 패키징 안내는 `client.mode=cimd`와 `dcr`를 지원하지만, 현재 Sites 공급자에 없는 지원을 선언하는 것만으로 사용할 수 있지는 않다. 새 구현에서는 CIMD를 우선 검토하고 DCR을 호환 경로로 검증할 수 있으며, 두 경로의 실제 포털 동작은 별도로 검사해야 한다.
+
+호스팅 도구 조회에서는 연결된 Cloudflare 계정과 Workers·D1 목록 읽기를 확인했다. 해당 조회에 HWP 이름의 리소스는 없었고 R2 목록 조회는 `10000: Authentication error`로 거부됐다. 일부 목록 읽기로 리소스 생성·배포·R2 사용 권한을 확정하지 않는다. Vercel의 HWP 이름 프로젝트 조회도 성공했지만 결과는 없었다. 새 리소스·계정·배포·도메인·권한은 만들거나 변경하지 않았다.
+
+현재 코드를 독립 서버에 그대로 노출해서는 안 된다. `authenticatedOwner`는 **Sites의 신뢰된 dispatch가 공급한 헤더**를 전제로 하므로, 독립 인증 어댑터는 실제 토큰의 issuer·audience·scope·안정된 subject를 검증한 컨텍스트로 사용자 범위를 만들어야 한다. 엔진·보존 검사와 저장 서비스는 재사용 후보이며, 브라우저 로그인·세션·MCP 발견과 인증 경계는 교체·검증 대상이다. 기존 Sites 문서를 이메일만으로 새 사용자 범위에 연결하거나 소유자 토큰을 공유하지 않는다.
+
+이 조사는 **독립 Workers + 사용자 인증 연결 + 자동 등록**을 가장 구체적인 대안 후보로 좁혔다. 운영 전환·심사·게시를 완료한 것은 아니며, 기존 공개 초안 0.1.2와 운영 Sites를 유지했다. 이메일은 계속 보류한다.
+
 ## 공개 전에 완료할 항목
 
 | 항목 | 현재 상태 / 완료 근거 |
