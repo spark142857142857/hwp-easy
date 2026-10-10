@@ -59,11 +59,17 @@ jobs:
   worker-runtime:
     name: Synthetic Worker / ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 10
+    timeout-minutes: ${{ matrix.timeout_minutes }}
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, windows-latest]
+        include:
+          - os: ubuntu-latest
+            timeout_minutes: 10
+          # The full Windows regression reached the final concurrency step
+          # before the 10-minute job timeout. Keep a bounded runner allowance.
+          - os: windows-latest
+            timeout_minutes: 15
     defaults:
       run:
         working-directory: probes/sites-runtime
