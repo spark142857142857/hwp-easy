@@ -17,6 +17,7 @@ import { authenticatedOwner } from '../host/transfer.mjs';
 import { applyTestMigrations } from './migrations.mjs';
 import { auditRecoverySnapshot, recoveryColumns, RecoveryAuditError } from './recovery-audit.mjs';
 import { createEncryptedRecoveryBundle, readEncryptedRecoveryBundle } from './encrypted-recovery-bundle.mjs';
+import { preflightRecoveryHwp } from './recovery-hwp-preflight.mjs';
 
 if (process.argv.length !== 2) throw Error('Synthetic recovery check accepts no arguments');
 const require = createRequire(import.meta.url);
@@ -150,12 +151,35 @@ try {
   await assert.rejects(() => readEncryptedRecoveryBundle(fs.readFileSync(bundlePath), { encryptionKey: randomBytes(32), latestDeletions }), code('ENCRYPTED_RECOVERY_BUNDLE_AUTH_FAILED'));
   assert.equal((await recoveredBucket.list()).objects.length, 0);
   checks.push('corrupt_bundle_and_wrong_key_refused_while_new_recovery_store_remains_empty');
-  for (const row of recoveryData.snapshot.tables.hwp_versions) {
-    const result = await recoveredBucket.put(row.blob_key, await recoveryData.readBlob(row.blob_key), {
+  // Correct hashes and authenticated encryption cannot prove an HWP is readable.
+  // Put invalid HWP in the LAST version of an otherwise valid encrypted bundle.
+  const unreadableBytes = Buffer.from('Synthetic bytes, not an HWP document');
+  const unreadableSnapshot = structuredClone(recoveryData.snapshot);
+  const unreadableRow = unreadableSnapshot.tables.hwp_versions.at(-1);
+  unreadableRow.sha256 = sha(unreadableBytes); unreadableRow.byte_size = unreadableBytes.length;
+  const unreadableBundle = await createEncryptedRecoveryBundle(unreadableSnapshot, { encryptionKey, latestDeletions,
+    readBlob: key => key === unreadableRow.blob_key ? unreadableBytes : recoveryData.readBlob(key) });
+  const unreadableData = await readEncryptedRecoveryBundle(unreadableBundle.bytes, { encryptionKey, latestDeletions });
+  assert.equal(unreadableData.proof.authentication_verified_on_read, true);
+  await assert.rejects(() => preflightRecoveryHwp(unreadableData.snapshot, {
+    latestDeletions, readBlob: unreadableData.readBlob, engine }), code('RECOVERY_HWP_UNREADABLE'));
+  for (const table of Object.keys(recoveryColumns))
+    assert.equal((await recoveredDb.prepare(`SELECT count(*) AS n FROM ${table}`).first()).n, 0);
+  assert.equal((await recoveredBucket.list()).objects.length, 0);
+  checks.push('correctly_hashed_authenticated_non_HWP_refused_before_any_new_D1_R2_write');
+  const preflight = await preflightRecoveryHwp(recoveryData.snapshot, {
+    latestDeletions, readBlob: recoveryData.readBlob, engine });
+  assert.equal(preflight.proof.hwp_versions_checked, 4);
+  assert.equal(preflight.proof.hwp_content_complete_versions, 4);
+  assert.equal(preflight.proof.hwp_partial_content_versions, 0);
+  assert.equal(preflight.proof.restored, false);
+  checks.push('all_four_HWP_versions_fully_read_before_first_new_D1_R2_write');
+  for (const row of preflight.snapshot.tables.hwp_versions) {
+    const result = await recoveredBucket.put(row.blob_key, await preflight.readBlob(row.blob_key), {
       onlyIf: { etagDoesNotMatch: '*' }, sha256: row.sha256, httpMetadata: { contentType: 'application/x-hwp' } });
     assert(result);
   }
-  await recoveredDb.batch(Object.entries(recoveryColumns).flatMap(([table, columns]) => recoveryData.snapshot.tables[table].map(row =>
+  await recoveredDb.batch(Object.entries(recoveryColumns).flatMap(([table, columns]) => preflight.snapshot.tables[table].map(row =>
     recoveredDb.prepare(`INSERT INTO ${table} (${columns.join(',')}) VALUES (${columns.map(()=>'?').join(',')})`).bind(...columns.map(column=>row[column])))));
   assert.deepEqual(await capture(recoveredDb), snapshot);
   assert.equal((await recoveredBucket.list()).objects.length,4);
@@ -213,6 +237,7 @@ try {
   console.log(JSON.stringify({synthetic_recovery:'passed',checks,recovered_documents:2,recovered_versions:4,
     bundle_file_roundtrip_verified:true,bundle_bytes:bundle.bytes.length,source_blob_memory_cleared_before_recovery:true,
     bundle_authenticated_with_supplied_key:true,bundle_encrypted:true,key_custody_verified:false,
+    HWP_preflight_before_first_restore_write:true,HWP_preflight:preflight.proof,
     completed_deletion_receipts:1,actual_local_workerd_D1_R2:true,source_runtime_disposed_before_recovery:true,
     independent_recovery_store_restarted:true,actual_OAuth_verified:false,operational_backup_export_verified:false,
     platform_backup_restore_verified:false,deletion_ledger_freshness_in_production_verified:false,
