@@ -6,12 +6,47 @@ import { fixture } from './rhwp_fixtures.mjs';
 import { openDocument, inspectDocument } from '../src/one_hwp/rhwp_bridge.mjs';
 import { structuralEdit } from '../src/one_hwp/local_structure.mjs';
 import CFB from '../probes/sites-runtime/node_modules/cfb/cfb.js';
+import { rewriteSyntheticBody } from '../probes/sites-runtime/tests/page-number-fixtures.mjs';
+import { readHwp } from '../probes/sites-runtime/guard/container.mjs';
+import { parseRecords } from '../probes/sites-runtime/guard/records.mjs';
 const inspect = bytes => { const doc=openDocument(bytes); try{return inspectDocument(doc);}finally{doc.free();} };
 const target = (bytes,block) => `hwp5:${createHash('sha256').update(bytes).digest('hex')}:${Buffer.from(block.id).toString('base64url')}`;
 function edit(bytes,block,operation) {
   return structuralEdit(HwpDocument,bytes,createHash('sha256').update(bytes).digest('hex'),
     {target_id:target(bytes,block),expected_old:block.text,...operation});
 }
+const zeroCellWords=bytes=>rewriteSyntheticBody(bytes,records=>records.map(record=>{
+ if(record.tag!==72)return record;const payload=record.payload.slice();payload.fill(0,6,8);return {...record,payload};
+}));
+const cellWords=bytes=>[...parseRecords(readHwp(bytes).streams.get('BodyText/Section0'))].filter(r=>r.tag===72)
+ .map(r=>new DataView(r.payload.buffer,r.payload.byteOffset,r.payload.byteLength).getUint16(6,true));
+
+for(const operationType of ['multiline_cell','insert_paragraphs','create_table'])test(`structural ${operationType} preserves original zero cell words`,()=>{
+ const bytes=zeroCellWords(fixture()),before=inspect(bytes),block=before.blocks.find(b=>operationType==='multiline_cell'
+   ?b.kind==='cell'&&b.text==='합성 답변 원문':b.kind==='paragraph'&&b.text==='중간 합성 문단');
+ const operation=operationType==='multiline_cell'?{type:'replace_text',new_text:'첫 답변\n둘째 답변'}
+  :operationType==='insert_paragraphs'?{type:operationType,paragraphs:['새 문단','둘째 문단']}
+  :{type:operationType,cells:[['항목','값'],['새 항목','새 값']]};
+ const result=edit(bytes,block,operation),words=cellWords(result.bytes);
+ assert.equal(result.restored_cell_list_words,4);assert.equal(words.filter(word=>word===0).length,4);
+ assert.equal(words.length,operationType==='create_table'?8:4);
+ assert.ok(words.every(word=>word===0||word===0x0400));
+ assert.deepEqual(cellWords(bytes),[0,0,0,0]);
+});
+
+test('structural cell-word repair refuses a different opaque transition',()=>{
+ const bytes=zeroCellWords(fixture()),hash=createHash('sha256').update(bytes).digest('hex'),block=inspect(bytes).blocks.find(b=>b.text==='중간 합성 문단');
+ class CorruptingDocument {
+  constructor(input){const doc=new HwpDocument(input);return new Proxy(doc,{get(target,property){
+   if(property==='exportHwpWithReport')return ()=>{const exported=target.exportHwpWithReport();return {
+    contentLoss:()=>exported.contentLoss(),free:()=>exported.free(),takeBytes:()=>rewriteSyntheticBody(exported.takeBytes(),records=>records.map(record=>{
+     if(record.tag!==72)return record;const payload=record.payload.slice();payload[7]=5;return {...record,payload};
+    }))};};
+   const value=target[property];return typeof value==='function'?value.bind(target):value;
+  }});}
+ }
+ assert.throws(()=>structuralEdit(CorruptingDocument,bytes,hash,{type:'insert_paragraphs',target_id:target(bytes,block),expected_old:block.text,paragraphs:['요청한 문단']}),/CELL_PRESERVATION_MISMATCH/);
+});
 test('body multiline replacement preserves surrounding content and existing table',()=>{
  const bytes=fixture(),before=inspect(bytes),block=before.blocks.find(b=>b.text==='중간 합성 문단');
  const out=edit(bytes,block,{type:'replace_text',new_text:'첫줄\n둘째줄 😀\n'});

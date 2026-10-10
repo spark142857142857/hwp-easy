@@ -5,6 +5,7 @@ import { GuardError, parseRecords } from '../../probes/sites-runtime/guard/recor
 import { canonicalRecord, textControlBytes } from '../../probes/sites-runtime/guard/preservation.mjs';
 import { mapRawTargets } from '../../probes/sites-runtime/engine/document.mjs';
 import { expectedEditedBlock } from './text_font_selection.mjs';
+import { packStructuralBodyRepairs } from '../../probes/sites-runtime/engine/structural-body-repair.mjs';
 
 const fail = (code) => { throw new GuardError(code); };
 const equal = (a, b) => JSON.stringify(a) === JSON.stringify(b);
@@ -119,30 +120,56 @@ function compareRecords(left, right, changed) {
   if (a.length !== b.length || a.some((r, i) => r.tag !== b[i].tag || r.level !== b[i].level
     || !bytesEqual(r.payload, b[i].payload))) fail('PRESERVATION_MISMATCH');
 }
-function verifyCellHeaders(beforeRaw, afterRaw, translate, newHost) {
-  const headers = raw => {
+function cellHeaders(raw) {
     const result = [];
     for (const {section} of raw.profile.sections) {
       let host = -1;
       for (const r of parseRecords(raw.streams.get(`BodyText/Section${section}`))) {
         if (r.tag === 66 && r.level === 0) host++;
-        if (r.tag === 72) result.push({section,host,payload:r.payload});
+        if (r.tag === 72) result.push({section,host,level:r.level,payload:r.payload});
       }
     }
     return result;
-  };
-  const left = headers(beforeRaw),right = headers(afterRaw).filter(r=>!(newHost
+}
+function matchedCellHeaders(beforeRaw, afterRaw, translate, newHost) {
+  const left = cellHeaders(beforeRaw),right = cellHeaders(afterRaw).filter(r=>!(newHost
     && r.section===newHost.section && r.host===newHost.paragraph));
   if(left.length!==right.length)fail('CELL_PRESERVATION_MISMATCH');
   left.forEach((r,i)=>{
     const target=translate({section:r.section,paragraph:r.host,kind:'paragraph'}),saved=right[i];
-    if(saved.section!==target.section||saved.host!==target.paragraph)fail('CELL_PRESERVATION_MISMATCH');
+    if(saved.section!==target.section||saved.host!==target.paragraph||r.level!==2||saved.level!==2
+      ||r.payload.length<34||saved.payload.length!==r.payload.length)fail('CELL_PRESERVATION_MISMATCH');
+  });
+  return left.map((r,i)=>[r,right[i]]);
+}
+function verifyCellHeaders(beforeRaw, afterRaw, translate, newHost) {
+  matchedCellHeaders(beforeRaw,afterRaw,translate,newHost).forEach(([r,saved])=>{
     const a=r.payload.slice(),b=saved.payload.slice();
     // Counts were independently checked against the complete model and raw
     // ordering. Every remaining cell-header byte stays unchanged.
     a.fill(0,0,2);b.fill(0,0,2);
     if(!bytesEqual(a,b))fail('CELL_PRESERVATION_MISMATCH');
   });
+}
+// The pinned writer defaults an opaque zero word to 0x0400. Restore ONLY that
+// exact transition after matching complete ordered cell headers, translated
+// hosts, and independently verified paragraph counts. New table headers are
+// never patched. The full raw/model checks still run on the repaired bytes.
+function preserveStructuralCellWords(beforeRaw, candidate, afterRaw, before, after, translate, newHost) {
+  verifyListCounts(beforeRaw,before);verifyListCounts(afterRaw,after);
+  const patches=new Map();let restored=0;
+  for(const [original,saved] of matchedCellHeaders(beforeRaw,afterRaw,translate,newHost)) {
+    const a=original.payload.slice(),b=saved.payload.slice();a.fill(0,0,2);b.fill(0,0,2);
+    if(bytesEqual(a,b))continue;
+    if(view(a).getUint16(6,true)!==0||view(b).getUint16(6,true)!==0x0400
+      ||a.some((byte,i)=>i!==6&&i!==7&&byte!==b[i]))fail('CELL_PRESERVATION_MISMATCH');
+    const name=`BodyText/Section${saved.section}`,body=afterRaw.streams.get(name);
+    if(!patches.has(name))patches.set(name,body.slice());
+    const offset=saved.payload.byteOffset-body.byteOffset;
+    patches.get(name).set(original.payload.subarray(6,8),offset+6);restored++;
+  }
+  if(!restored)return {bytes:candidate,restored_cell_list_words:0};
+  return {...packStructuralBodyRepairs(candidate,afterRaw,patches),restored_cell_list_words:restored};
 }
 function verifyListCounts(raw, model) {
   for (const { section } of raw.profile.sections) {
@@ -241,10 +268,10 @@ export function structuralEdit(HwpDocument, source, hash, operation) {
       }));
       added = 2; tableAdded = true;
     }
-    const output = api.exportChecked(doc), reopened = api.openDocument(output);
+    let output = api.exportChecked(doc);const reopened = api.openDocument(output);
     let after;
     try { after = api.inspectDocument(reopened, output); } finally { reopened.free(); }
-    const savedRaw = readHwp(output), savedRecords = recordsByBlock(savedRaw, after);
+    let savedRaw = readHwp(output);
     if (after.unsupported.length || savedRaw.profile.unsupported.length) fail('UNSUPPORTED_EDIT_PROFILE');
     const translate = (old) => {
       const result = copy(old);
@@ -257,6 +284,15 @@ export function structuralEdit(HwpDocument, source, hash, operation) {
         ? `:t${result.control}:c${result.cell}:p${result.cell_paragraph}` : '');
       return result;
     };
+    const newHost=tableAdded?{section:block.section,paragraph:tableHost}:null;
+    const repaired=preserveStructuralCellWords(raw,output,savedRaw,before,after,translate,newHost);
+    if(repaired.bytes!==output) {
+      const repairCheck=api.openDocument(repaired.bytes);
+      try{if(!equal(api.inspectDocument(repairCheck,repaired.bytes),after))fail('PRESERVATION_MISMATCH');}
+      finally{repairCheck.free();}
+      output=repaired.bytes;savedRaw=readHwp(output);
+    }
+    const savedRecords=recordsByBlock(savedRaw,after);
     const originalIds = new Set();
     for (const old of before.blocks) {
       let expected = translate(old);
@@ -307,10 +343,11 @@ export function structuralEdit(HwpDocument, source, hash, operation) {
     const existingTables = after.tables.filter(t => !(tableAdded && t.section === block.section && t.paragraph === tableHost));
     if (!equal(expectedTables, existingTables)) fail('TABLE_PRESERVATION_MISMATCH');
     verifyListCounts(savedRaw, after);
-    verifyCellHeaders(raw,savedRaw,translate,tableAdded?{section:block.section,paragraph:tableHost}:null);
+    verifyCellHeaders(raw,savedRaw,translate,newHost);
     verifyOutsideBody(raw, savedRaw, tableAdded);
     return { bytes: output, content_verified: true, raw_preservation_verified: true,
       raw_preservation_scope: 'existing_blocks_and_streams_with_explicit_structure_changes',
+      restored_cell_list_words:repaired.restored_cell_list_words,
       structure_changed: true, layout_verified: false };
   } finally { doc.free(); }
 }
