@@ -312,14 +312,22 @@ try {
   checks.push('compiled_mcp_unknown_save_feedback_preserves_original_request_and_exact_retry');
 
   // Now exercise the bundled Worker route, not just the JS store API.
+  const probeHeaders = { 'oai-authenticated-user-id': 'synthetic-storage-diagnostic',
+    'oai-authenticated-user-email': 'synthetic@example.invalid' };
   assert.equal((await mf.dispatchFetch('https://probe.invalid/storage-probe')).status, 405);
-  assert.equal((await mf.dispatchFetch('https://probe.invalid/storage-probe?owner=attacker', { method: 'POST' })).status, 400);
-  assert.equal((await mf.dispatchFetch('https://probe.invalid/storage-probe', { method: 'POST', body: 'not accepted' })).status, 400);
-  const result = await mf.dispatchFetch('https://probe.invalid/storage-probe', { method: 'POST' });
+  for (const headers of [{}, { 'oai-authenticated-user-id': 'partial' },
+    { 'OAI-Sites-Authorization': 'synthetic-service-access-is-not-identity' }]) {
+    assert.equal((await mf.dispatchFetch('https://probe.invalid/storage-probe', { method: 'POST', headers })).status, 401);
+  }
+  assert.equal((await db.prepare('SELECT count(*) AS n FROM hwp_documents').first()).n, 0);
+  assert.equal((await bucket.list()).objects.length, 0);
+  assert.equal((await mf.dispatchFetch('https://probe.invalid/storage-probe?owner=attacker', { method: 'POST', headers: probeHeaders })).status, 400);
+  assert.equal((await mf.dispatchFetch('https://probe.invalid/storage-probe', { method: 'POST', headers: probeHeaders, body: 'not accepted' })).status, 400);
+  const result = await mf.dispatchFetch('https://probe.invalid/storage-probe', { method: 'POST', headers: probeHeaders });
   assert.equal(result.status, 200);
   const report = await result.json();
   assert.equal(report.passed, true); assert.equal(report.synthetic_cleanup_complete, true);
-  checks.push('bundled_worker_synthetic_storage_probe', 'no_client_owner_or_document_input');
+  checks.push('bundled_worker_synthetic_storage_probe', 'no_client_owner_or_document_input', 'anonymous_storage_diagnostic_does_not_write');
   assert.equal((await db.prepare('SELECT count(*) AS n FROM hwp_documents').first()).n, 0);
   assert.equal((await bucket.list()).objects.length, 0);
   console.log(JSON.stringify({ local_d1_r2: 'passed', runtime_restart_verified: true,

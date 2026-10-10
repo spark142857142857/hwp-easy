@@ -6,7 +6,23 @@ const mf = new Miniflare(convertV4MiniflareOptions({
   modules: [{ type: 'ESModule', path: path.resolve('dist/server/index.js') },
     { type: 'CompiledWasm', path: path.resolve('dist/server/rhwp_bg.wasm') }] }));
 try {
-  const result = await mf.dispatchFetch('https://probe.invalid/runtime-probe');
+  const headers = { 'oai-authenticated-user-id': 'synthetic-user',
+    'oai-authenticated-user-email': 'synthetic@example.invalid' };
+  const incompleteIdentities = [{}, { 'oai-authenticated-user-id': 'partial' },
+    { 'oai-authenticated-user-email': 'partial@example.invalid' },
+    { ...headers, 'oai-authenticated-user-id': 'x'.repeat(1025) },
+    { ...headers, 'oai-authenticated-user-email': 'x'.repeat(513) },
+    { 'OAI-Sites-Authorization': 'synthetic-service-access-is-not-identity' }];
+  for (const incomplete of incompleteIdentities) {
+    for (const route of ['/', '/runtime-probe', '/storage-probe']) {
+      const denied = await mf.dispatchFetch('https://probe.invalid' + route, {
+        method: route === '/storage-probe' ? 'POST' : 'GET', headers: incomplete });
+      assert.equal(denied.status, 401, route);
+      assert.deepEqual(await denied.json(), { error: 'Authentication required' });
+    }
+  }
+  // No DB/R2 bindings are configured here: these denials happen before storage.
+  const result = await mf.dispatchFetch('https://probe.invalid/runtime-probe', { headers });
   assert.equal(result.status, 200);
   const report = await result.json();
   assert.equal(report.engine_execution_passed, true);
@@ -37,7 +53,7 @@ try {
   }
   const call = (body, authenticated = false) => mf.dispatchFetch('https://probe.invalid/mcp', {
     method: 'POST', headers: { 'Content-Type': 'application/json',
-      ...(authenticated ? { 'oai-authenticated-user-id': 'synthetic-user' } : {}) }, body: JSON.stringify(body) });
+      ...(authenticated ? headers : {}) }, body: JSON.stringify(body) });
   let rpc = await call({ jsonrpc: '2.0', id: 1, method: 'initialize', params: {} });
   assert.deepEqual((await rpc.json()).result.serverInfo, { name: 'HWP Easy', version: '0.3.0' });
   rpc = await call({ jsonrpc: '2.0', id: 2, method: 'tools/list' });
@@ -47,6 +63,11 @@ try {
   assert.equal(discovered[0].inputSchema.additionalProperties, false);
   const request = { jsonrpc: '2.0', id: 3, method: 'tools/call', params: { name: 'hwp_runtime_probe', arguments: {} } };
   assert.equal((await call(request)).status, 401);
+  for (const incomplete of incompleteIdentities) {
+    const denied = await mf.dispatchFetch('https://probe.invalid/mcp', { method: 'POST',
+      headers: { ...incomplete, 'Content-Type': 'application/json' }, body: JSON.stringify(request) });
+    assert.equal(denied.status, 401);
+  }
   rpc = await call(request, true);
   const toolReport = (await rpc.json()).result.structuredContent;
   assert.deepEqual(toolReport, report);
@@ -54,6 +75,6 @@ try {
   assert.equal((await rpc.json()).error.code, -32602);
   assert.equal((await mf.dispatchFetch('https://probe.invalid/upload', { method: 'POST', body: 'no documents' })).status, 404);
   console.log(JSON.stringify({ local_workerd: 'passed', checks: ['runtime', 'fixed_fixture_raw_preservation', 'raw_guard_fixed_negatives',
-    'initialize', 'discovery', 'identity_header_presence_gate',
+    'initialize', 'discovery', 'complete_trusted_identity_gate', 'anonymous_diagnostics_denied_before_storage',
     'tool_call', 'no_document_arguments', 'no_upload'], report }));
 } finally { await mf.dispose(); }

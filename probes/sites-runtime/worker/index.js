@@ -1,4 +1,4 @@
-// Fixed diagnostics only. No personal upload/document API is exposed.
+// Document routes and synthetic diagnostics run behind trusted Sites dispatch.
 import wasmModule from './rhwp_bg.wasm';
 import { env } from 'cloudflare:workers';
 import { HwpDocument, initSync } from '@rhwp/core';
@@ -10,7 +10,7 @@ import { createReadInspectionCache } from '../engine/read-inspection-cache.mjs';
 import { runStorageProbe } from '../storage/probe.mjs';
 import { createHostApp } from '../host/app.mjs';
 import { documentTools } from '../host/tools.mjs';
-import { boundedBytes } from '../host/transfer.mjs';
+import { authenticatedOwner, boundedBytes } from '../host/transfer.mjs';
 import { documentToolError } from '../host/error-feedback.mjs';
 import { publicErrorCode } from '../host/public-errors.mjs';
 import { syntheticDownloadBytes, syntheticDownloadResponse } from '../host/synthetic-download.mjs';
@@ -265,8 +265,11 @@ export default {
     }
     if (path === '/storage-probe') {
       if (request.method !== 'POST') return new Response(null, { status: 405, headers: { Allow: 'POST' } });
-      // Owner-private Sites boundary authorizes fixed diagnostics, not identity.
-      // No body or query input; every owner namespace is generated internally.
+      // Authenticate before reading input or starting a DB/R2 diagnostic. A
+      // private audience or a service bypass credential is not user identity.
+      try { await authenticatedOwner(request.headers); }
+      catch { return response({ error: 'Authentication required' }, 401); }
+      // No body or query input; every test namespace is generated internally.
       if (new URL(request.url).search) return response({ error: 'No input accepted' }, 400);
       if (request.body) {
         const reader = request.body.getReader();
@@ -281,9 +284,11 @@ export default {
       try { return response(await runStorageProbe(env.DB, env.BUCKET, createDocumentEngine(HwpDocument), HwpDocument)); }
       catch { return response({ error: 'Synthetic storage check failed' }, 500); }
     }
-    // /runtime-probe is a fixed synthetic diagnostic behind the PRIVATE Site
-    // access boundary. Platform service access conveys no user document rights.
+    // Fixed diagnostics also require complete trusted user identity when the
+    // Site audience changes. Never authorize using a caller's namespace input.
     if (request.method === 'GET' && (path === '/' || path === '/runtime-probe')) {
+      try { await authenticatedOwner(request.headers); }
+      catch { return response({ error: 'Authentication required' }, 401); }
       try { return response(await probeOnce()); }
       catch { return response({ error: 'Synthetic engine runtime check failed' }, 500); }
     }
@@ -307,7 +312,8 @@ export default {
     if (rpc.method === 'ping') return reply({});
     if (rpc.method === 'tools/list') return reply({ tools });
     if (rpc.method !== 'tools/call') return error(-32601, 'Method not found');
-    if (!request.headers.get('oai-authenticated-user-id')) return response({ error: 'Authentication required' }, 401);
+    try { await authenticatedOwner(request.headers); }
+    catch { return response({ error: 'Authentication required' }, 401); }
     if (rpc.params?.name !== 'hwp_runtime_probe') {
       try { return reply(await createHostApp(env, hostEngine(), HwpDocument)
         .call(rpc.params?.name, rpc.params?.arguments, request)); }
