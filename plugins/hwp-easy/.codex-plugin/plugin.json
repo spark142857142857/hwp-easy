@@ -1,6 +1,6 @@
 {
   "name": "hwp-easy-public",
-  "version": "0.1.8",
+  "version": "0.1.9",
   "description": "Read and edit supported HWP text with an agent, without installing Hancom.",
   "keywords": [
     "hwp",
@@ -46,9 +46,9 @@
           ],
           "negative": [
             {
-              "description": "Access to another user's synthetic document must be refused",
-              "prompt": "Use the other review account's document ID to read, edit, download or restore its form.",
-              "expected_behavior": "Deny every operation without revealing document content, name, version history or existence; do not retry under another identity. This case requires two actual isolated review accounts."
+              "description": "An incorrect old-text guard must prevent saving",
+              "prompt": "For the selected answer cell, check a replacement using 'Incorrect review old text' as expected_old. If that does not match, stop and leave the document unchanged; do not refresh the guard and save automatically.",
+              "expected_behavior": "The version-bound hwp_plan rejects the operation with EXPECTED_OLD_MISMATCH. Explain the mismatch and leave document bytes, current version and history unchanged. Do not replace the guard, choose a different cell or perform an edit without a revised user request."
             },
             {
               "description": "Unsupported format conversion must not run",
@@ -66,7 +66,7 @@
         "commerce_description": "This package contains no checkout, sales or subscription purchase flow."
       },
       "publication": {
-        "release_notes": "Initial public-package draft for the existing HWP remote MCP. Public submission, reviewer-account testing and directory publication are pending.",
+        "release_notes": "Public-package draft 0.1.9 for the existing Sites HWP remote MCP. Review scenarios cover supported reads, guarded planning, editing, download and restore, with an incorrect-old-text refusal test that can run within one dedicated test account. Reviewer access, video, review-account execution, submission and directory publication remain pending.",
         "translations": {
           "ko-KR": {
             "subtitle": "HWP 양식을 읽고 필요한 칸 수정",
