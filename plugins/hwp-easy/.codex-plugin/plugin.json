@@ -81,6 +81,8 @@
     "shortDescription": "Read and edit HWP forms",
     "longDescription": "Read supported HWP paragraphs and table cells, identify the exact existing field, check an edit plan, and save verified changes to the same remote document. Download the saved HWP or restore an earlier version. Hancom installation is not required. Authenticate your account and explicitly upload a document; a chat attachment is not automatically available to the server. The current remote limit is 4 MiB and 400,000 UTF-16 units across body and table text. Unsupported documents or edits are refused. Saving does not change the original file on your PC. New paragraphs, table rows, format conversion and guaranteed visual fidelity are outside the supported scope. Check important results in an external HWP viewer. Authentication may require reconnection; automatic refresh is still under investigation.",
     "category": "Productivity",
+    "websiteURL": "https://github.com/spark142857142857/hwp-easy",
+    "supportURL": "https://github.com/spark142857142857/hwp-easy/issues",
     "capabilities": [
       "Read HWP",
       "Edit existing text",

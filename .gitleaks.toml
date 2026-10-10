@@ -1,0 +1,10 @@
+title = "HWP Easy: default secret rules with one public algorithm label exception"
+
+[extend]
+useDefault = true
+
+[[allowlists]]
+description = "Public cipher-suite label in recovery metadata; not key material"
+targetRules = ["generic-api-key"]
+regexTarget = "secret"
+regexes = ['^aes-256-gcm-with-supplied-key$']

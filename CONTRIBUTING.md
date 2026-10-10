@@ -1,6 +1,8 @@
 # 기여 안내
 
-HWP Easy는 일반 사용자가 에이전트에 한글 없는 HWP 작업을 맡길 수 있도록 만드는 프로젝트입니다. 먼저 [AGENTS.md](AGENTS.md), [PRD](docs/PRD.md), [새 엔진 개발자 안내](docs/native-engine.md)를 확인하세요. [이전 COM 안내](docs/development.md)와 [Windows 배포안](docs/distribution-plan.md)은 보존된 이전 경로의 자료입니다.
+HWP Easy는 일반 사용자가 에이전트에 한글 없는 HWP 작업을 맡길 수 있도록 만드는 프로젝트입니다. 먼저 [개발 시작](docs/developer-guide.md), [AGENTS.md](AGENTS.md), [PRD](docs/PRD.md)를 확인하세요. 전체 안내는 [문서 모음](docs/README.md)에 있습니다. 보안 문제는 [비공개 신고 안내](SECURITY.md)를 따릅니다.
+
+외부 기여자는 fork에서 변경한 뒤 PR을 보내 주세요. 저장소 관리자의 검증한 직접 `main` 반영 정책과 구분합니다. 공개 소스가 플러그인 디렉터리 게시나 운영 사이트 접근을 뜻하지 않습니다. [이전 COM 문서](docs/legacy/README.md)는 보존된 별도 경로의 자료입니다.
 
 ## 변경의 기준
 

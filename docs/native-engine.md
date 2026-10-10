@@ -2,7 +2,7 @@
 
 상태: 2026년 10월 2일의 1차 개발 구현. 일반 사용자용 설치·연결 안내가 아니다.
 
-이 경로는 **바이너리 HWP 5.x를 읽고, 본문 문단이나 표 셀을 지정해 수정하고, 현재 HWP에 저장**한다. 한글·COM·Wine·GUI를 실행하지 않으며 PDF·DOCX·HWPX를 입력·중간 파일·출력으로 만들지 않는다. 기존 `one-hwp`와 `one-hwp-mcp` COM 경로는 [이전 안내](development.md)에 별도로 보존한다.
+이 경로는 **바이너리 HWP 5.x를 읽고, 본문 문단이나 표 셀을 지정해 수정하고, 현재 HWP에 저장**한다. 한글·COM·Wine·GUI를 실행하지 않으며 PDF·DOCX·HWPX를 입력·중간 파일·출력으로 만들지 않는다. 기존 `one-hwp`와 `one-hwp-mcp` COM 경로는 [이전 안내](legacy/development.md)에 별도로 보존한다.
 
 ## 구현 구조와 지원 범위
 
