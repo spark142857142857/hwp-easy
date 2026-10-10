@@ -1,13 +1,16 @@
 /** Host-free pinned-engine operations shared by Node and browser ESM adapters. */
 import { MAX_MIXED_STYLE_RUNS, mixedStyleEdit } from './mixed_style.mjs';
 import { expectedEditedBlock } from './text_font_selection.mjs';
-export function createEngineApi(HwpDocument, { mixedStyleSameLength = false, languageFontSelection = false, uniformStyleProofs } = {}) {
+export function createEngineApi(HwpDocument, { mixedStyleSameLength = false, languageFontSelection = false, uniformStyleProofs, existingLineBreaksEditable = false } = {}) {
   // Internal host opt-in: callers must independently prove exact raw style
   // anchors before/after saving. The local adapter retains its default profile.
   if (typeof mixedStyleSameLength !== 'boolean') throw new Error('Invalid mixed style profile');
   // Remote opt-in only while full language mappings and independent raw font/
   // style definitions are preserved. Local bridge remains conservative.
   if (typeof languageFontSelection !== 'boolean') throw new Error('Invalid language font profile');
+  // Local structural inspection only: the host must prove requested LF/control
+  // transitions and all existing/new raw records before publishing bytes.
+  if (typeof existingLineBreaksEditable !== 'boolean') throw new Error('Invalid structural line break profile');
   if (uniformStyleProofs !== undefined && typeof uniformStyleProofs !== 'function') throw new Error('Invalid uniform style proof provider');
   const EDIT_LIMIT = 100_000;
   const json = (value) => JSON.parse(value);
@@ -57,7 +60,7 @@ export function createEngineApi(HwpDocument, { mixedStyleSameLength = false, lan
         block.cell, block.cell_paragraph));
     const count = [...block.text].length;
     if (count > EDIT_LIMIT) return { paragraph, profile: 'edit_limit_exceeded' };
-    if (/[\r\n]/.test(block.text)) return { paragraph, profile: 'existing_line_breaks_not_editable' };
+    if (!existingLineBreaksEditable && /[\r\n]/.test(block.text)) return { paragraph, profile: 'existing_line_breaks_not_editable' };
     const cost = Math.max(1, count);
     if (cost > budget.remaining) return { paragraph, profile: 'style_scan_limit_exceeded' };
     budget.remaining -= cost;

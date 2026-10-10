@@ -46,6 +46,12 @@ jobs:
         run: npm ci --ignore-scripts --no-audit --no-fund
       - name: Compare browser guard with independent Python reader and canonical checks
         run: node probes/sites-runtime/scripts/check-python-guard.mjs
+      - name: Verify local same-file edits, structural changes and isolated plugin runtime
+        run: |
+          node --test tests/test_local_runner.mjs tests/test_local_structure.mjs
+          node scripts/package_local_plugin.mjs
+          node scripts/check-local-plugin.mjs
+          python scripts/check-local-structure.py
       - name: Run regressions and real HWP MCP flows without Hancom
         env:
           HWP_EASY_NATIVE_TESTS: '1'
