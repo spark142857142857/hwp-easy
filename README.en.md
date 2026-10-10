@@ -4,15 +4,15 @@
 
 [한국어](README.md) · [Documentation](docs/README.md) · [Developer setup](docs/developer-guide.md)
 
-HWP Easy combines the pinned `@rhwp/core` WASM engine with exact target selection, independent preservation checks, recoverable version storage and MCP tools for agents. The intended user experience is to connect HWP Easy in ChatGPT or Codex, upload an HWP, request an edit, and download the verified HWP.
+HWP Easy combines the pinned `@rhwp/core` WASM engine with exact target selection, independent preservation checks and recoverable storage. A new local Codex execution path reads the selected HWP and saves checked changes to that same file, without an upload, browser or download step. It supports multiline body/cell answers, paragraph insertion and simple table creation. See [local editing](docs/local-file-editing.md). The separate remote MCP edits a hosted copy.
 
 ## Status
 
-The owner-only private MVP has been tested through upload, full supported-content reads, paragraph and table-cell edits, saving, previews, download and restore. Publisher identity, public policies and domain ownership are verified. Public plugin OAuth connection, actual multi-account checks, review and directory publication remain incomplete.
+The owner-only remote MVP has been tested through upload, full supported-content reads, paragraph and table-cell edits, saving, previews, download and restore. The remote 0.1.9 package is In review and Not published. The local 0.2.0 candidate passed real execution in an isolated folder without node_modules, same-file save/restore and independent record checks; it has not been installed or submitted to the directory.
 
 **A public source repository does not publish the plugin or grant access to hosted documents.** The Site URL is publicly reachable for domain verification; document operations still require sign-in and owner checks. Live public checks rejected anonymous requests and forged identity headers. Actual second-account installation and isolation remain untested. Codex Cloud verification covers fixed synthetic HWP flows; arbitrary forms and the complete attachment UI are not certified. Authentication refresh remains under investigation. See [MVP evidence](docs/mvp-status.md) and [public release preparation](docs/public-plugin-release.md).
 
-## Editing contract
+## Remote MCP editing contract
 
 - Read supported paragraphs and top-level table cells in unencrypted HWP 5.x. Follow paginated reads on one pinned version.
 - Check exact target IDs, full old text, the expected version and preservation before saving.
@@ -28,6 +28,7 @@ The remote path also supports validated empty-cell fills/clears and narrowly con
 | Directory | Responsibility |
 | --- | --- |
 | `plugins/hwp-easy/` | Public MCP plugin package draft |
+| `plugins/hwp-easy-local/` | Explicit local-editing skill candidate |
 | `probes/sites-runtime/` | Remote Worker, guards, D1/R2 storage and browser flows |
 | `src/one_hwp/` | Shared engine code, local Python MCP and preserved COM prototype |
 | `tests/` | Synthetic local engine, storage and MCP checks |
