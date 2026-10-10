@@ -1,0 +1,103 @@
+{
+  "name": "hwp-easy",
+  "version": "0.1.0",
+  "description": "Read and edit supported HWP text with an agent, without installing Hancom.",
+  "keywords": [
+    "hwp",
+    "documents",
+    "Korean",
+    "forms"
+  ],
+  "extensions": {
+    "com.openai": {
+      "review": {
+        "test_cases": {
+          "positive": [
+            {
+              "description": "Inspect supported features without changing a file",
+              "prompt": "What HWP editing features and limits are available? Do not change a document.",
+              "tools_triggered": "hwp_capabilities",
+              "expected_behavior": "Report the measured support scope, upload gates, 4 MiB transfer and 400,000 UTF-16 text limits, same remote document saving and unverified visual layout. No document or version is created."
+            },
+            {
+              "description": "Read every supported block in a synthetic uploaded form",
+              "prompt": "I uploaded the synthetic review form. Read all its supported body and table text, without editing it.",
+              "tools_triggered": "hwp_read",
+              "expected_behavior": "Use the document and version from the upload screen; follow every next_cursor on that fixed version, identify coordinates and repeated text separately, and disclose unsupported content. Keep all bytes and versions unchanged."
+            },
+            {
+              "description": "Validate the exact selected cell without saving",
+              "prompt": "For the synthetic form, check replacing the first paragraph of the selected answer cell with 'Review answer'. Do not save yet.",
+              "tools_triggered": "hwp_read, hwp_plan",
+              "expected_behavior": "Confirm the selected coordinate, returned target_id and whole old text; run serialization, reopen and preservation checks. Return a plan without a new version or automatic text changes."
+            },
+            {
+              "description": "Save a validated cell edit and retrieve the actual HWP",
+              "prompt": "Apply that checked cell replacement, save to the same remote document, and provide the saved HWP.",
+              "tools_triggered": "hwp_edit, hwp_read, hwp_download",
+              "expected_behavior": "Use the expected current version, input hash and a stable request ID. Create one new version, preserve non-target blocks and the original version, and provide a pinned HWP download. Verify retrieved bytes and content before calling them a complete result; the PC original is unchanged."
+            },
+            {
+              "description": "Restore earlier bytes as a guarded new version",
+              "prompt": "Restore the original version of this synthetic review document and let me download it.",
+              "tools_triggered": "hwp_versions, hwp_restore, hwp_download",
+              "expected_behavior": "Identify the explicit current and original versions, restore using the current-version guard and request ID, preserve the intervening versions, and retrieve bytes equal to the original."
+            }
+          ],
+          "negative": [
+            {
+              "description": "Access to another user's synthetic document must be refused",
+              "prompt": "Use the other review account's document ID to read, edit, download or restore its form.",
+              "expected_behavior": "Deny every operation without revealing document content, name, version history or existence; do not retry under another identity. This case requires two actual isolated review accounts."
+            },
+            {
+              "description": "Unsupported format conversion must not run",
+              "prompt": "Convert this HWP into PDF, DOCX or HWPX and return it.",
+              "expected_behavior": "Explain that conversion is outside the product scope. Do not call an export, mutate the HWP, install Hancom or silently choose another format."
+            },
+            {
+              "description": "A multiline replacement rejects the entire edit batch",
+              "prompt": "In one batch, change one supported paragraph and insert a new line inside the selected answer cell.",
+              "expected_behavior": "Explain that new CR/LF line breaks are unsupported. A submitted invalid batch must leave document bytes, current version and history unchanged. Do not remove the line break or save just the first edit without a revised user request."
+            }
+          ]
+        },
+        "commerce": false,
+        "commerce_description": "This package contains no checkout, sales or subscription purchase flow."
+      },
+      "publication": {
+        "release_notes": "Initial public-package draft for the existing HWP remote MCP. Public submission, reviewer-account testing and directory publication are pending.",
+        "translations": {
+          "ko-KR": {
+            "subtitle": "HWP 양식을 읽고 필요한 칸 수정",
+            "description": "한글 설치 없이 지원하는 HWP 본문과 표 셀을 읽고, 정확한 기존 칸을 선택해 검사 후 같은 원격 문서에 저장합니다. 이전 버전 복구와 HWP 다운로드를 제공합니다. 파일을 직접 업로드해야 하며 PC 원본은 바뀌지 않습니다. 4 MiB·본문과 표 셀 합계 40만 UTF-16 단위 한도, 문서별 편집 제한과 인증 재연결 가능성이 있습니다. 새 문단·표 행 생성과 형식 변환은 지원하지 않으며 시각 배치의 동일성을 보장하지 않습니다."
+          }
+        }
+      }
+    }
+  },
+  "interface": {
+    "displayName": "HWP Easy",
+    "shortDescription": "Read and edit HWP forms",
+    "longDescription": "Read supported HWP paragraphs and table cells, identify the exact existing field, check an edit plan, and save verified changes to the same remote document. Download the saved HWP or restore an earlier version. Hancom installation is not required. Authenticate your account and explicitly upload a document; a chat attachment is not automatically available to the server. The current remote limit is 4 MiB and 400,000 UTF-16 units across body and table text. Unsupported documents or edits are refused. Saving does not change the original file on your PC. New paragraphs, table rows, format conversion and guaranteed visual fidelity are outside the supported scope. Check important results in an external HWP viewer. Authentication may require reconnection; automatic refresh is still under investigation.",
+    "category": "Productivity",
+    "capabilities": [
+      "Read HWP",
+      "Edit existing text",
+      "Download HWP",
+      "Restore versions"
+    ],
+    "defaultPrompt": [
+      "Read all supported content in this HWP and identify its form fields.",
+      "Replace the text in the field I selected, check the result, and save it.",
+      "Show the saved HWP and how to download it."
+    ],
+    "brandColor": "#245C57",
+    "composerIcon": "./assets/hwp-easy.svg",
+    "logo": "./assets/hwp-easy.svg"
+  },
+  "author": {
+    "name": "HWP Easy"
+  },
+  "mcpServers": "./.mcp.json"
+}

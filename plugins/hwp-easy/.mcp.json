@@ -1,0 +1,15 @@
+{
+  "mcpServers": {
+    "hwp-easy": {
+      "url": "https://hwp-easy-runtime-probe.spark142857.chatgpt.site/mcp",
+      "extensions": {
+        "com.openai": {
+          "auth": {
+            "type": "oauth",
+            "resource": "https://hwp-easy-runtime-probe.spark142857.chatgpt.site/mcp"
+          }
+        }
+      }
+    }
+  }
+}
