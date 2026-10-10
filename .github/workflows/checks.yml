@@ -96,6 +96,8 @@ jobs:
         run: node scripts/check-recovery.mjs
       - name: Verify authenticated document tool and binary transfer contracts
         run: node scripts/check-host.mjs
+      - name: Verify text rejection guidance and exact multi-paragraph cell editing
+        run: node scripts/check-edit-text.mjs
       - name: Verify bounded mixed style replacements preserve raw anchors and stored versions
         run: node scripts/check-mixed-style.mjs
       - name: Verify language font selection preserves all definitions and stored versions

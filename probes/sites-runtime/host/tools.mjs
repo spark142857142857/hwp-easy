@@ -3,7 +3,8 @@ const hash = { type: 'string', pattern: '^[0-9a-f]{64}$' };
 const object = (properties, required = Object.keys(properties)) => ({ type: 'object', properties, required, additionalProperties: false });
 const version = { document_id: uuid, version_id: uuid };
 const operation = object({ target_id: { type: 'string', maxLength: 256 },
-  expected_old: { type: 'string', maxLength: 200000 }, new_text: { type: 'string', maxLength: 200000 } });
+  expected_old: { type: 'string', maxLength: 200000 }, new_text: { type: 'string', maxLength: 200000,
+    description: 'Exact requested replacement within an existing paragraph. New CR/LF line breaks, unsupported control characters and ill-formed Unicode are rejected; empty-cell fills also reject tabs. Do not strip, flatten, normalize or split the requested text without the user confirming the revised edit.' } });
 const edits = { expected_sha256: hash, operations: { type: 'array', items: operation, minItems: 1, maxItems: 100 } };
 const file = object({ download_url: { type: 'string', maxLength: 8192 }, file_id: { type: 'string', maxLength: 256 },
   mime_type: { type: 'string', maxLength: 256 }, file_name: { type: 'string', maxLength: 512 } }, ['download_url', 'file_id']);

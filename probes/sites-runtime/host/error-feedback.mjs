@@ -3,6 +3,7 @@ import { fileDescriptorOrigin, fileOriginRejectionDiagnostic } from './transfer.
 import { publicErrorCode } from './public-errors.mjs';
 import { bodyRepairAllocationDiagnostic } from '../guard/container.mjs';
 import { MAX_HOSTED_BODY_TEXT_CODE_UNITS } from '../guard/hosted-workload.mjs';
+import { editTextRejectionDiagnostic } from '../guard/edit-text.mjs';
 
 // Only errors made here carry diagnostics. Never serialize arbitrary error
 // properties: they can contain private document data or signed download URLs.
@@ -19,6 +20,27 @@ export function uploadDisabledError(file) {
 export function documentToolError(error, toolName) {
   const code = publicErrorCode(error);
   const result = { isError: true, content: [{ type: 'text', text: code }] };
+  const rejectedText = code === 'INVALID_OPERATION' ? editTextRejectionDiagnostic(error) : undefined;
+  if (rejectedText && ['hwp_plan', 'hwp_edit'].includes(toolName)) {
+    const messages = {
+      line_breaks: '현재 편집은 기존 문단 안의 텍스트 치환만 지원하며 새 줄바꿈이나 문단을 추가할 수 없습니다. 기존 셀에 여러 문단이 있다면 조회에서 각각의 대상을 확인하세요. 요청한 줄바꿈을 없애거나 공백으로 바꾸거나 임의로 다른 문단에 나누어 저장하지 마세요.',
+      control_characters: '입력에 현재 텍스트 치환으로 저장할 수 없는 제어 문자가 포함되어 있습니다. 해당 문자를 임의로 제거하거나 다른 문자로 바꾸지 말고 사용자에게 입력 내용을 확인해 달라고 요청하세요.',
+      ill_formed_unicode: '입력에 올바른 문자로 해석할 수 없는 유니코드가 포함되어 있습니다. 임의의 대체 문자로 바꾸거나 일부를 버리지 말고 사용자에게 입력 내용을 다시 확인해 달라고 요청하세요.',
+      empty_cell_tab: '기존 빈 셀 문단을 채우는 기능은 탭 입력을 지원하지 않습니다. 탭을 공백으로 바꾸거나 다른 칸으로 나누어 저장하지 말고 사용자에게 입력 방식을 확인하세요.',
+    };
+    const feedback = { stage: 'private-development', layout_verified: false,
+      data: { error: code, edit_diagnostic: { status: 'replacement_text_unsupported',
+        ...rejectedText, message_ko: messages[rejectedText.reason],
+        saved: false, file_changed: false, entire_operation_batch_rejected: true,
+        retry_same_request_recommended: false,
+        suggested_action: 'explain_text_limit_and_confirm_revised_intent',
+        automatic_text_normalization_allowed: false,
+        automatic_partial_save_allowed: false, unrequested_edits_allowed: false,
+      } } };
+    result.content.push({ type: 'text', text: JSON.stringify(feedback) });
+    result.structuredContent = feedback;
+    return result;
+  }
   const outcome = mutationOutcomeDiagnostic(error);
   if (outcome?.reason === code && (code === 'COMMIT_OUTCOME_UNKNOWN'
     ? ['hwp_import', 'hwp_edit', 'hwp_restore'].includes(toolName) : toolName === 'hwp_delete')) {

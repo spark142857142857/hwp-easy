@@ -19,6 +19,7 @@ import { describeEditability } from './editability.mjs';
 import { mixedStyleEdit } from '../../../src/one_hwp/mixed_style.mjs';
 import { mixedStyleProfiles, verifyMixedStylePreservation } from './mixed-style.mjs';
 import { paginationDiagnostic } from './pagination.mjs';
+import { EDIT_TEXT_CONSTRAINTS, validateEditText } from '../guard/edit-text.mjs';
 
 const fail = (code) => { throw new GuardError(code); };
 const copy = (value) => JSON.parse(JSON.stringify(value));
@@ -200,6 +201,7 @@ export function createDocumentEngine(HwpDocument, { readInspectionCache, hostedW
       preserved_controls: copy(preservedControls),
       unsupported: copy(unsupported), target_mapping_verified: mappingVerified,
       editability_summary: copy(editability.summary),
+      replacement_text_constraints: { ...EDIT_TEXT_CONSTRAINTS },
       warnings: [...inspection.warnings,
         ...(preservedControls.length ? ['Page-number controls are preserved as opaque bytes only; their host paragraphs are read-only.'] : []),
         ...(restrictions.size ? ['Some targets have unverified raw text/style layouts and are read-only; other targets still require serialization preflight.'] : []),
@@ -254,11 +256,11 @@ export function createDocumentEngine(HwpDocument, { readInspectionCache, hostedW
       const operations = options.operations;
       if (!Array.isArray(operations) || !operations.length || operations.length > limits.max_operations) fail('INVALID_OPERATIONS');
       const seen = new Set(); let count = 0;
-      const planned = operations.map((operation) => {
+      const planned = operations.map((operation, operationIndex) => {
         object(operation, ['target_id', 'expected_old', 'new_text']);
         if (Object.keys(operation).length !== 3 || typeof operation.target_id !== 'string'
-          || typeof operation.expected_old !== 'string' || typeof operation.new_text !== 'string'
-          || !operation.new_text.isWellFormed() || /[\r\n\u0000-\u0008\u000b-\u001f]/.test(operation.new_text)) fail('INVALID_OPERATION');
+          || typeof operation.expected_old !== 'string' || typeof operation.new_text !== 'string') fail('INVALID_OPERATION');
+        validateEditText(operation.new_text, operationIndex);
         const length = [...operation.new_text].length;
         count += length;
         if (length > limits.max_edit_chars || count > limits.max_new_chars) fail('EDIT_LIMIT_EXCEEDED');
@@ -269,7 +271,7 @@ export function createDocumentEngine(HwpDocument, { readInspectionCache, hostedW
         if (!block.editable || restrictions.has(block.id)
           || (!mixedProfiles.has(block.id) && !length && (block.kind === 'cell' && block.text ? !clearCellProfiles.has(block.id)
             : block.style.char_shape_ids[0] !== 0))) fail('TARGET_NOT_EDITABLE');
-        if (emptyCellProfiles.has(block.id) && operation.new_text.includes('\t')) fail('INVALID_OPERATION');
+        if (emptyCellProfiles.has(block.id)) validateEditText(operation.new_text, operationIndex, true);
         if (block.text !== operation.expected_old) fail('EXPECTED_OLD_MISMATCH');
         if (mixedProfiles.has(block.id) && !mixedStyleEdit(block.text, operation.new_text, block.style.char_runs)) {
           fail('MIXED_STYLE_EDIT_UNSUPPORTED');
