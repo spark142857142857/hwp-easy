@@ -8,9 +8,9 @@ HWP Easy combines the pinned `@rhwp/core` WASM engine with exact target selectio
 
 ## Status
 
-The owner-only private MVP has been tested through upload, full supported-content reads, paragraph and table-cell edits, saving, previews, download and restore. Public plugin distribution is in preparation: a package draft exists, but developer verification, actual multi-account checks, review and directory publication are incomplete.
+The owner-only private MVP has been tested through upload, full supported-content reads, paragraph and table-cell edits, saving, previews, download and restore. Publisher identity, public policies and domain ownership are verified. Public plugin OAuth connection, actual multi-account checks, review and directory publication remain incomplete.
 
-**A public source repository does not publish the plugin or grant access to hosted documents.** The hosted Site currently remains owner-only. Codex Cloud verification covers fixed synthetic HWP flows; arbitrary forms and the complete attachment UI are not certified. Authentication refresh remains under investigation. See [MVP evidence](docs/mvp-status.md) and [public release preparation](docs/public-plugin-release.md).
+**A public source repository does not publish the plugin or grant access to hosted documents.** The Site URL is publicly reachable for domain verification; document operations still require sign-in and owner checks. Live public checks rejected anonymous requests and forged identity headers. Actual second-account installation and isolation remain untested. Codex Cloud verification covers fixed synthetic HWP flows; arbitrary forms and the complete attachment UI are not certified. Authentication refresh remains under investigation. See [MVP evidence](docs/mvp-status.md) and [public release preparation](docs/public-plugin-release.md).
 
 ## Editing contract
 
