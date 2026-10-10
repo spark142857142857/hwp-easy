@@ -37,7 +37,7 @@ class PublicPluginPackageTests(unittest.TestCase):
         target = self.root / "draft.zip"
         report = packager.build(self.package, target, draft=True)
         self.assertEqual(report["public_publication"], "NOT_DONE")
-        self.assertIn("verified_publisher_display_name", report["missing_submission_metadata"])
+        self.assertIn("demo_recording_url", report["missing_submission_metadata"])
         with zipfile.ZipFile(target) as archive:
             self.assertEqual(set(archive.namelist()), set(packager.FILES))
             mcp = json.loads(archive.read(".mcp.json"))

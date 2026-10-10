@@ -9,6 +9,8 @@ HWP Easy의 현재 제품은 한글 없는 HWP 엔진과 에이전트 연결입�
 | [사용 안내](quick-start.md) | 비공개 연결의 업로드·요청·다운로드·복구·삭제 |
 | [MVP 상태](mvp-status.md) | 확인한 실제 흐름과 미검증 범위 |
 | [공개 플러그인 준비](public-plugin-release.md) | 누구나 설치하는 공개 배포의 남은 조건 |
+| [개인정보처리방침](privacy-policy.md) | 처리 정보·보관·삭제와 개인정보 문의 |
+| [이용약관](terms-of-service.md) | 제공 기능·문서 권한·저장과 이용 조건 |
 
 ## 개발하려는 사람
 
