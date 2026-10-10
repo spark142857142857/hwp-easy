@@ -11,12 +11,13 @@ const trackedSet = new Set(tracked);
 const errors = [];
 for (const file of tracked) {
   if (/^(?:docs\/local\/|testdocs\/|outputs\/|node_modules\/|dist\/|\.sites-runtime\/|\.work\/)/.test(file)
-    || /\.(?:hwp|hwpx|pdf|docx|whl|tgz|tar(?:\.gz)?|zip)$/i.test(file)
+    || /\.(?:hwp|hwpx|hwpbak|hwpbake|pdf|docx|whl|tgz|tar(?:\.gz)?|zip)$/i.test(file)
     || (/(?:^|\/)\.env(?:\.|$)/.test(file) && !/\.example$/.test(file))) {
     errors.push(`Unexpected tracked private/generated file: ${file}`);
   }
 }
 const ignored = ['docs/local/session.md', 'testdocs/example.hwp', 'outputs/result.hwp',
+  'private-backup.hwpbak', 'private-backup.hwpbake',
   '.env', '.env.local', 'release.tgz', 'release.tar.gz', '.sites-runtime/session.json', '.work/research.txt'];
 const found = git(['check-ignore', '--stdin'], ignored.join('\n') + '\n').trim().split(/\r?\n/);
 for (const file of ignored) if (!found.includes(file)) errors.push(`Missing ignore rule: ${file}`);

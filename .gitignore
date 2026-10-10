@@ -13,6 +13,8 @@ testdocs/
 docs/local/
 *.hwp
 *.hwpx
+*.hwpbak
+*.hwpbake
 *.pdf
 *.docx
 # Local credentials, runtime state and generated release archives.

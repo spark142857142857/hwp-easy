@@ -6,7 +6,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { createRequire } from 'node:module';
 import { pathToFileURL } from 'node:url';
-import { createHash } from 'node:crypto';
+import { createHash, randomBytes } from 'node:crypto';
 import { Miniflare, convertV4MiniflareOptions } from 'miniflare';
 import { HwpDocument, initSync } from '@rhwp/core';
 import { createDocumentEngine } from '../engine/document.mjs';
@@ -16,7 +16,7 @@ import { createDocumentService } from '../storage/service.mjs';
 import { authenticatedOwner } from '../host/transfer.mjs';
 import { applyTestMigrations } from './migrations.mjs';
 import { auditRecoverySnapshot, recoveryColumns, RecoveryAuditError } from './recovery-audit.mjs';
-import { createRecoveryBundle, readRecoveryBundle } from './recovery-bundle.mjs';
+import { createEncryptedRecoveryBundle, readEncryptedRecoveryBundle } from './encrypted-recovery-bundle.mjs';
 
 if (process.argv.length !== 2) throw Error('Synthetic recovery check accepts no arguments');
 const require = createRequire(import.meta.url);
@@ -127,14 +127,16 @@ try {
   await assert.rejects(() => auditRecoverySnapshot(wrongKey, { latestDeletions, readBlob: async()=>{ reads++; } }), auditCode('RECOVERY_METADATA_INCONSISTENT'));
   assert.equal(reads,0);
   checks.push('missing_corrupt_and_cross_document_blob_metadata_refused_before_recovery');
-  const bundle = await createRecoveryBundle(snapshot, { latestDeletions, readBlob: async key => blobs.get(key) });
-  const bundlePath = path.join(persist, 'synthetic.hwpbak');
+  const encryptionKey = randomBytes(32); // Ephemeral test key, never printed or written.
+  const bundle = await createEncryptedRecoveryBundle(snapshot, { encryptionKey, latestDeletions, readBlob: async key => blobs.get(key) });
+  const bundlePath = path.join(persist, 'synthetic.hwpbake');
   fs.writeFileSync(bundlePath, bundle.bytes, { flag: 'wx' });
   await source.dispose(); source = undefined; // Nothing below reads source storage.
   blobs.clear(); // Recovery must use the persisted bundle, not source byte memory.
-  const recoveryData = await readRecoveryBundle(fs.readFileSync(bundlePath), { latestDeletions });
+  const recoveryData = await readEncryptedRecoveryBundle(fs.readFileSync(bundlePath), { encryptionKey, latestDeletions });
   assert.deepEqual(recoveryData.snapshot, snapshot);
-  checks.push('private_bundle_persisted_and_reopened_after_source_runtime_and_blob_memory_discarded');
+  assert.equal(recoveryData.proof.authentication_verified_on_read, true);
+  checks.push('encrypted_bundle_persisted_and_authenticated_after_source_runtime_and_blob_memory_discarded');
   recovered = new Miniflare(options('recovered'));
   let recoveredDb = await recovered.getD1Database('DB'), recoveredBucket = await recovered.getR2Bucket('BUCKET');
   await applyTestMigrations(recoveredDb);
@@ -144,9 +146,10 @@ try {
   // This fixed synthetic test setup is NOT exposed as an operational importer.
   await auditRecoverySnapshot(recoveryData.snapshot, { latestDeletions, readBlob: recoveryData.readBlob });
   const corruptBundle = Buffer.from(bundle.bytes); corruptBundle[20] ^= 1;
-  await assert.rejects(() => readRecoveryBundle(corruptBundle, { latestDeletions }), code('RECOVERY_BUNDLE_CORRUPT'));
+  await assert.rejects(() => readEncryptedRecoveryBundle(corruptBundle, { encryptionKey, latestDeletions }), code('ENCRYPTED_RECOVERY_BUNDLE_AUTH_FAILED'));
+  await assert.rejects(() => readEncryptedRecoveryBundle(fs.readFileSync(bundlePath), { encryptionKey: randomBytes(32), latestDeletions }), code('ENCRYPTED_RECOVERY_BUNDLE_AUTH_FAILED'));
   assert.equal((await recoveredBucket.list()).objects.length, 0);
-  checks.push('corrupt_bundle_refused_while_new_recovery_store_remains_empty');
+  checks.push('corrupt_bundle_and_wrong_key_refused_while_new_recovery_store_remains_empty');
   for (const row of recoveryData.snapshot.tables.hwp_versions) {
     const result = await recoveredBucket.put(row.blob_key, await recoveryData.readBlob(row.blob_key), {
       onlyIf: { etagDoesNotMatch: '*' }, sha256: row.sha256, httpMetadata: { contentType: 'application/x-hwp' } });
@@ -209,7 +212,7 @@ try {
   checks.push('post_restart_recovery_audit_matches_capture_and_every_recorded_blob_hash');
   console.log(JSON.stringify({synthetic_recovery:'passed',checks,recovered_documents:2,recovered_versions:4,
     bundle_file_roundtrip_verified:true,bundle_bytes:bundle.bytes.length,source_blob_memory_cleared_before_recovery:true,
-    bundle_authenticated:false,bundle_encrypted:false,
+    bundle_authenticated_with_supplied_key:true,bundle_encrypted:true,key_custody_verified:false,
     completed_deletion_receipts:1,actual_local_workerd_D1_R2:true,source_runtime_disposed_before_recovery:true,
     independent_recovery_store_restarted:true,actual_OAuth_verified:false,operational_backup_export_verified:false,
     platform_backup_restore_verified:false,deletion_ledger_freshness_in_production_verified:false,

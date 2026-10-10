@@ -41,6 +41,8 @@ npm test
 
 `build.mjs`는 ESM·WASM·검증된 라이선스 고지를 `dist/server`에, migration을 `dist/.openai/drizzle`에 작성한다. pako 3.0.2는 bounded raw-DEFLATE runtime이다. cfb는 합성 fixture writer, Drizzle은 스키마/migration 생성, Miniflare·esbuild는 시험/빌드에만 사용한다. 이들은 배포 Worker의 별도 runtime 의존성이 아니다. [외부 구성요소 고지](../../THIRD_PARTY_NOTICES.md)
 
+복구 전용 검사는 선택적 AES-256-GCM 파일 암호화와 잘못된 키·변조 거부도 포함한다. 임시 키는 메모리에만 두고 암호화 파일을 기록한 뒤 원래 저장소를 닫아, 실제 재읽기 자료만으로 독립 로컬 저장소를 복원·재시작한다. 평문 복구 파일의 기존 읽기 계약은 별도 단위 검사로 유지한다. 암호화 helper는 호출자가 별도로 보관한 무작위 32바이트 키를 받는 라이브러리이며 사용자 암호 입력·키 보관·운영 내보내기·복원 명령은 제공하지 않는다. [암호화 파일과 검증 경계](../../docs/durable-storage.md#복구-파일의-선택적-암호화와-변조-확인)
+
 ### 개발용 Sites 배포 파일 포장
 
 기존 Sites 소스를 확인하고 빌드한 checkout에서 [package-site.mjs](scripts/package-site.mjs)를 실행한다. 아래 두 경로는 실제 helper와 새 출력 파일의 절대 경로로 바꾼다. Node.js 22 이상과 `tar`가 필요하다.
