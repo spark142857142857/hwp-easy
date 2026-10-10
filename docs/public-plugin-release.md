@@ -30,7 +30,27 @@ Worker에 포털이 요구한 고정 challenge의 GET/HEAD 응답과 익명 `/do
 
 실제 공개 접속의 19개 검사는 challenge의 정확한 plain-text 200·POST 405, 브라우저 로그인 안내, 익명 문서 목록·가짜 버전 다운로드·업로드·진단 거부, 신원 헤더 네 조합의 문서 목록·MCP 실행 거부와 OAuth 발견 응답을 포함한다. 개인 문서 ID나 인증 정보를 사용하지 않았다. 플랫폼은 익명 MCP 초기화·도구 목록에도 401과 protected-resource 발견 URL을 반환했다. 이 경로는 플랫폼 OAuth 보호가 적용된 결과이며 Worker 내부의 메타데이터 응답과 구분한다. 실제 두 OAuth 계정의 격리를 검증한 결과는 아니다. 배포 후 기존 계정의 읽기 전용 기능 조회는 성공했다.
 
-포털에서 **Domain verified**를 확인하고 새로고침 후 저장 상태도 확인했다. 사용자의 실제 Connect 조작에서는 `MCP details save failed: OAuth client ID is required when using pre-defined OAuth client credentials.`가 표시됐다. 현재 패키지에는 client 등록 설정이 없으며 포털이 pre-defined 방식으로 처리했다. 인증 서버의 OIDC metadata는 JSON으로 반환됐지만 CIMD 지원 표시와 DCR 등록 URL은 확인되지 않았다. [공식 등록 설정](https://developers.openai.com/plugins/build/plugins#configure-mcp-authentication)을 따라 공개용 client ID·등록 방식·callback·token endpoint 인증 방법을 확인해야 한다. Sites의 로그인 client ID를 MCP용으로 임의 재사용하거나 자동 등록 지원을 가정하지 않는다. 기존 비공개 연결은 동작하지만 공개용 연결은 미완료다.
+포털에서 **Domain verified**를 확인하고 새로고침 후 저장 상태도 확인했다. 최초 client 등록 설정이 없는 초안에서 사용자의 실제 Connect 조작은 `MCP details save failed: OAuth client ID is required when using pre-defined OAuth client credentials.`로 거부됐다. 인증 서버의 OIDC metadata는 JSON으로 반환됐지만 CIMD 지원 표시와 DCR 등록 URL은 확인되지 않았다. 기존 비공개 연결은 동작하지만 공개용 연결은 미완료다.
+
+### 저장된 client ID와 연결 저장 오류의 후속 조사
+
+Sites가 반환한 실제 `auth_client_id`를 확인했다. 플랫폼의 사이트 로그인 경로는 이 ID, 사이트의 `/callback`, S256을 사용해 302를 반환했다. 리디렉션은 따라가지 않았다. 이는 사이트 로그인에 쓰는 ID라는 근거이며, 공개 MCP 연결의 콜백 허용 목록이나 등록된 token endpoint 인증 방법을 확인한 결과는 아니다.
+
+[공식 등록 설정](https://developers.openai.com/plugins/build/plugins#configure-mcp-authentication)에 따라 별도 검사 ZIP에 `extensions.com.openai.auth.client`의 `mode=provided`와 확인한 `clientId`를 넣었다. 기존 Codex 형식 0.1.1과 공식 portable 형식 0.1.2를 같은 초안에 순서대로 업로드했고, 두 형식 모두 포털이 수락했다. 새로 불러온 MCP 설정에서도 ID가 보였다. 사용자는 **두 형식에서 모두 같은 client ID 필요 오류**를 확인했다. 현재 저장된 검사 초안은 portable 0.1.2이며 Domain verified / Authorization required / Not submitted / Not published 상태다. 인증 화면과 도구 스캔은 완료되지 않았다.
+
+portable 검사본은 root `plugin.json`·`mcp.json`과 명시적인 `streamable-http`를 사용했다. OAuth 설정은 0.1.1과 같고, Secret·scope·등록 방법을 추측해 추가하지 않았다. 선택 사항인 `tokenEndpointAuthMethod`를 생략한 것은 실제 등록 방법을 확인한 뜻이 아니다. 원래 `plugins/hwp-easy/`와 최종 패키징의 미완료 차단은 유지한다. 별도 검사본의 포털 수락은 Agent Plugins 기본 JSON Schema 통과나 공개 연결 성공을 인증하지 않는다.
+
+| 조사한 경로 | 실제 확인과 한계 |
+| --- | --- |
+| 저장·화면 캐시와 패키지 형식 | 다시 불러온 설정에 ID가 남았고 두 공식 형식에서 사용자가 같은 오류를 확인했다. 형식 변경으로 해결되지 않았다. |
+| 기존 Sites 등록 정보 | 실제 사이트 로그인 ID는 확인했지만 native 도구와 관리 화면에서 등록 콜백·token endpoint 인증 방법을 조회할 수 없었다. |
+| ChatGPT의 Plugins → 추가 → 사용자 지정 MCP 서버 → 고급 OAuth 설정 | 같은 주소의 발견이 성공했다. ID·Secret·인증 방식 입력란, 콜백 주소, OAuth/OIDC 주소와 범위가 표시됐다. `none`은 새 폼의 기본 선택값이며 기존 Sites 클라이언트의 등록 방법을 증명하지 않는다. 새 앱 생성·ID/Secret 입력·권한 승인은 하지 않고 폼을 닫았다. 공개 제출 초안으로 재연결하는 지원 경로는 확인되지 않았다. |
+| DCR·CIMD | 새 폼에서도 등록 URL 없음과 CIMD 지원 미표시로 사용할 수 없었다. 공급자 등록·메타데이터를 임의로 변경하지 않았다. |
+| 기존 Sites 플러그인의 관리 화면 | 비공개 개발용 연결과 계정은 유지됐다. 공개 제출에 필요한 등록 설정이나 디렉터리 게시 경로는 확인되지 않았다. [Sites 플러그인 공식 안내](https://help.openai.com/en/articles/20001547-hosting-a-plugin-with-chatgpt-sites)는 개인·Pro 계정의 Sites 플러그인을 다른 사용자에게 초대나 링크로 직접 공유하는 기능이 현재 지원되지 않는다고 명시한다. 사이트 공개와 플러그인 배포는 별도다. |
+
+2026년 10월 9일의 [동일 오류 제보](https://community.openai.com/t/plugin-dashboard-no-way-to-supply-a-pre-defined-oauth-client-id-for-a-zip-created-plugin-oauth-client-id-is-required-with-no-field-submission-blocked/1404710)는 ZIP으로 만든 공개 초안에 ID 입력란이 없고 같은 저장 오류가 난다고 보고한다. 이는 개발자의 직접 제보이며 해결책이나 플랫폼의 원인 확인은 아니다. 관련 [다른 MCP 생성 실패 논의](https://community.openai.com/t/custom-mcp-app-creation-fails-with-http-500-detail-request-timeout-before-any-request-reaches-mcp-server-both-secure-mcp-tunnel-and-public-https/1402909)에는 다른 생성 메뉴로 성공했다는 제보와 실패했다는 답변이 함께 있다. 해당 논의에서 지원팀이 확인한 것은 그 사례의 403이며 HWP Easy의 client ID 저장 오류와 같은 원인이라는 증거가 아니다.
+
+현재는 **포털의 저장된 설정과 실제 OAuth 연결 설정 사이의 반영 문제 가능성**을 조사하고 있다. 공급자가 ID를 거부했다거나 callback 불일치가 발생했다고 단정하지 않는다. 실제 등록 정보 또는 공식적으로 지원되는 연결 설정 경로가 필요하다. 사용자의 지시에 따라 이메일은 계속 보류하며, 이번 조사는 운영 배포·접근·사용자 문서를 변경하지 않았다.
 
 ## 공개 전에 완료할 항목
 
@@ -42,7 +62,7 @@ Worker에 포털이 요구한 고정 challenge의 GET/HEAD 응답과 익명 `/do
 | 일반 사용자 설치·인증·권한 철회 | 같은 플랫폼이 공급하는 OAuth를 유지한다. 실제 다른 사용자 계정으로 설치부터 파일 회수까지 검사하고 권한 철회 후 접근을 확인한다. 헤더 모의 검사는 별도다. |
 | 실제 두 사용자 격리 | 서로의 문서 ID·버전·다운로드·복구·삭제 접근을 거부하고 본인 문서는 동작해야 한다. 두 실제 OAuth 계정으로 검증한 증거가 필요하다. |
 | 심사 자료 | 전용 계정의 합성 데이터로 5+3 시나리오를 실행하고 접근 가능한 녹화 URL을 준비한다. 심사 계정 자격은 공개 ZIP과 Git에 넣지 않고 포털의 별도 보호된 입력에만 제공한다. |
-| MCP 연결·도메인 소유 확인 | 도메인 verified 완료. 공개용 연결은 pre-defined client ID 누락으로 중단됐다. 플랫폼이 지원하는 등록 설정을 확인한 뒤 다시 연결해야 하며 기존 연결의 등록 방식을 임의로 변경하지 않는다. |
+| MCP 연결·도메인 소유 확인 | 도메인 verified 완료. 실제 ID가 저장된 Codex·portable 검사 초안에서도 ID 필요 오류가 재현됐다. 등록 정보와 포털의 연결 설정 반영을 확인해야 한다. 기존 연결의 등록 방식을 임의로 변경하지 않는다. |
 | 인증 자동 갱신 | 기존 인증 지원 문의 조사 중. 현재 기능 조회 성공이나 1회 대기 성공으로 영구 해결을 선언하지 않는다. 공개 출시의 신뢰성 검토에 포함한다. |
 | 심사와 게시 | 포털에 초안을 생성했고 메타데이터와 도메인 검사를 완료했다. 심사 정보·공개용 OAuth 연결과 실제 다른 계정 검증이 남았다. 필수 검사와 정책 확인 뒤 신청하고, 승인된 버전을 게시하여 실제 다른 계정의 검색·설치까지 확인한다. |
 
