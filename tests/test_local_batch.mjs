@@ -3,6 +3,7 @@ import fs from 'node:fs';import path from 'node:path';import os from 'node:os';
 import {fixture} from './rhwp_fixtures.mjs';
 import {initializeLocal,runLocal} from '../src/one_hwp/local_runner.mjs';
 import {digest} from '../src/one_hwp/local_file.mjs';
+import {readHwp} from '../probes/sites-runtime/guard/container.mjs';
 initializeLocal(fs.readFileSync(new URL('../node_modules/@rhwp/core/rhwp_bg.wasm',import.meta.url)));
 function workspace(t,bytes=fixture()){
  const dir=fs.mkdtempSync(path.join(os.tmpdir(),'hwp-easy-batch-'));
@@ -12,6 +13,22 @@ function workspace(t,bytes=fixture()){
 }
 const op=(b,type,extra)=>({type,target_id:b.target_id,expected_old:b.text,...extra});
 const batch=(source,state,operations,action='edit',extra={})=>runLocal({action,source,expected_sha256:state.source_sha256,operations,...extra});
+
+for(const merged of [false,true])test(`moved ${merged?'merged':'plain'} table keeps picture identity through geometry, rotation and another-cell editing`,async t=>{
+ const {source,read,dir}=workspace(t,fixture({merged,paragraphs:['시작','중간','끝']})),initial=await read(),firstCell=initial.blocks.find(b=>b.kind==='cell');
+ const png=Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=','base64'),image=path.join(dir,'synthetic.png');fs.writeFileSync(image,png);
+ for(let i=0;i<2;i++){const current=await read(),cell=current.blocks.find(b=>b.id===firstCell.id);await batch(source,current,[op(cell,'insert_picture',{offset:0,width:7200,height:3600,image:{source:image,expected_sha256:digest(png)}})]);}
+ const state=await read(),cell=state.blocks.find(b=>b.id===firstCell.id),other=state.blocks.find(b=>b.kind==='cell'&&b.cell!==cell.cell),last=state.blocks.filter(b=>b.kind==='paragraph').at(-1),picked=state.pictures.find(p=>p.picture_index===1),before=fs.readFileSync(source),raw=readHwp(before),originalPicture=state.pictures.find(p=>p.picture_index===0),backupDir=path.join(dir,'.hwp-easy-backups'),backups=fs.readdirSync(backupDir).length;
+ const operations=[op(cell,'resize_table_columns',{widths:[16000,26000]}),op(cell,'move_table',{after_target_id:last.target_id,expected_after:last.text}),op(cell,'update_picture',{picture_index:1,expected_properties:picked.properties,props:{rotationAngle:90}}),op(cell,'format_cell',{props:{paddingLeft:400,applyInnerMargin:true,verticalAlign:0}}),op(other,'splice_text',{start:0,end:0,new_text:'옮긴 칸 '})];
+ assert.equal((await batch(source,state,operations,'plan')).saved,false);assert.deepEqual(fs.readFileSync(source),before);assert.equal(fs.readdirSync(backupDir).length,backups);
+ const saved=await batch(source,state,operations),after=await read(),afterRaw=readHwp(fs.readFileSync(source));assert.equal(saved.atomic_batch,true);assert.equal(saved.operation_count,5);assert.equal(fs.readdirSync(backupDir).length,backups+2);
+ assert.equal(after.tables[0].properties.tableWidth,42000);assert.equal(after.tables[0].cells.find(c=>c.cell===cell.cell).properties.paddingLeft,400);assert.ok(after.blocks.some(b=>b.text==='옮긴 칸 '+other.text));
+ assert.equal(after.pictures.length,2);assert.deepEqual(after.pictures.find(p=>p.picture_index===0).properties,originalPicture.properties);assert.equal(after.pictures.find(p=>p.picture_index===1).properties.rotationAngle,90);
+ for(const [key,value]of raw.streams)if(key.startsWith('BinData/'))assert.deepEqual(afterRaw.streams.get(key),value);
+ const moved=after.blocks.find(b=>b.target_id===after.pictures.find(p=>p.picture_index===1).target_id),now=fs.readFileSync(source),newBackups=fs.readdirSync(backupDir).length;
+ await assert.rejects(batch(source,after,[op(moved,'format_table',{props:{paddingLeft:200}}),op(moved,'update_picture',{picture_index:1,expected_properties:picked.properties,props:{rotationAngle:0}})]),/EXPECTED_PICTURE_MISMATCH/);assert.deepEqual(fs.readFileSync(source),now);assert.equal(fs.readdirSync(backupDir).length,newBackups);
+ await runLocal({action:'restore',source,expected_sha256:after.source_sha256,backup_id:saved.backup_id});assert.deepEqual(fs.readFileSync(source),before);
+});
 
 test('range, formatting, paragraph split and shifted table edits save once and restore exactly',async t=>{
  const {source,read,dir}=workspace(t),before=fs.readFileSync(source),state=await read(),body=state.blocks.find(b=>b.text==='중간 합성 문단'),cell=state.blocks.find(b=>b.text==='합성 답변 원문');
