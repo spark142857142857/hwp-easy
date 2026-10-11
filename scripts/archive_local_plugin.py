@@ -12,11 +12,12 @@ FILES = ("plugin.json", "build-manifest.json", f"{SKILL}/SKILL.md", f"{SKILL}/ag
          *(f"{SKILL}/scripts/{name}" for name in ("RHWP-LICENSE.txt", "RHWP-THIRD-PARTY-LICENSES.md", "PAKO-LICENSE.txt",
                                                   "PAKO-ZLIB-LICENSE.txt", "THIRD-PARTY-NOTICES.json")),
          *(f"licenses/{name}" for name in ("THIRD_PARTY_NOTICES.md", "RHWP-LICENSE.txt", "RHWP-THIRD-PARTY-LICENSES.md",
-                                           "PAKO-LICENSE.txt", "PAKO-ZLIB-LICENSE.txt")))
+                                           "PAKO-LICENSE.txt", "PAKO-ZLIB-LICENSE.txt", "CFB-LICENSE.txt")))
 manifest = json.loads((PACKAGE / "build-manifest.json").read_text(encoding="utf-8"))
 version = manifest["version"]
 assert len(version.split(".")) == 3 and all(part.isdecimal() for part in version.split("."))
 assert json.loads((PACKAGE / "plugin.json").read_text(encoding="utf-8"))["version"] == version
+assert hashlib.sha256((PACKAGE / 'licenses/CFB-LICENSE.txt').read_text(encoding='utf-8').replace('\r\n', '\n').encode()).hexdigest() == manifest['local_cfb_writer']['license_sha256_lf']
 DESTINATION = PACKAGE.parent / f"hwp-easy-local-{version}.zip"
 for filename, field in ((f"{SKILL}/scripts/local-runner.mjs", "runner_sha256"), (f"{SKILL}/scripts/rhwp_bg.wasm", "wasm_sha256")):
     assert hashlib.sha256((PACKAGE / filename).read_bytes()).hexdigest() == manifest[field]

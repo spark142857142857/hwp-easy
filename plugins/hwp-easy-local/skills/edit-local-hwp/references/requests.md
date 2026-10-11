@@ -175,3 +175,13 @@ Preview returns passive SVG in memory. Write a preview file only when useful and
 Successful saves return `saved_path`, `save_mode`, `selected_file_updated`, `output_sha256` and a `backup_id` for any replaced version. `file_location` is always the current execution environment; the runner does not infer a link between an attachment and the original PC path. Restoring creates another backup. The script lock prevents cooperating HWP Easy saves from overlapping; version checks detect ordinary external changes. Unrelated programs do not participate in that lock. A crash can leave a lock requiring deliberate inspection; never delete it merely to force a retry.
 
 This package edits the file in the **current execution environment**. In Codex Cloud, that is the Cloud file, not a automatically synchronized PC file. Local file access and public-directory acceptance are separate from package execution tests.
+
+## Complex character formatting (0.2.15)
+
+`format_text` also accepts a body paragraph, recursively mapped cell or explicit ClickHere field in a `complex_profile`. The same seven character properties above are supported. Field targets use the entire field value for `expected_old`, and `start`/`end` are relative to that value. Block targets use the whole block text and its code-point offsets. `blocks[].style.character_runs` reports whole-block ranges and model properties; subtract the field's returned `start` when comparing a field-relative selection. LF is eligible; tabs and ranges crossing field/table/drawing controls are refused. Formatting a field via its explicit ID avoids consuming its anchors.
+
+```json
+{"action":"edit","source":"<path>","expected_sha256":"<hash>","operations":[{"type":"format_text","target_id":"<field target ID>","expected_old":"<whole field value>","start":0,"end":4,"props":{"bold":true,"fontSize":1200,"fontFamily":"함초롬바탕"}}]}
+```
+
+The local formatter retains every original character definition, adds only requested derived definitions, and updates the selected UTF-16 runs (both halves of an emoji). Other runs/control slots retain their IDs. Existing fonts are reused; a new font is registered only when all seven language tables have equal counts and no partial match. Requested font changes apply to all language slots and do not install fonts. The selected line cache is invalidated. CFB allocation may be rebuilt for definition growth; independent readers verify the exact stream set and all other packed stream bytes before a same-file save. A repeated byte-identical format request creates no backup. This adds character formatting, not nested-table structure changes, field creation or external visual certification.

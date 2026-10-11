@@ -4,6 +4,7 @@ import {parseRecords,GuardError} from '../../probes/sites-runtime/guard/records.
 import {enforceRawTextBudget} from '../../probes/sites-runtime/guard/text-budget.mjs';
 import {imageSize} from './local_image.mjs';
 import {fail,view,equal,equalBytes,textTokens,rawShapes,spliceRawParagraph,publishRawBody,verifyRawOutput} from './local_complex_records.mjs';
+import {prepareComplexCharacterFormat,publishComplexCharacterFormat,verifyComplexCharacterFormat} from './local_complex_format.mjs';
 const idTarget=(id,version)=>`hwp5:${version}:${Buffer.from(id).toString('base64url')}`;
 export function hasLocalComplexContent(raw){
  for(const {section} of raw.profile.sections)for(const r of parseRecords(raw.streams.get(`BodyText/Section${section}`)))
@@ -42,10 +43,10 @@ function inspection(HwpDocument,bytes){return quiet(()=>{
      if(tokens.some(t=>t.text&&t.length===2&&b.unit_styles[t.unit]!==b.unit_styles[t.unit+1]))fail('COMPLEX_STYLE_UNVERIFIED');
      // Compare model shapes at every run boundary and midpoint. Exact raw runs
      // and definitions remain authoritative and are preserved across publication.
-     const visibleTokens=tokens.filter(t=>t.text),ids=visibleTokens.map(t=>b.unit_styles[t.unit]);
+     const visibleTokens=tokens.filter(t=>t.text),ids=visibleTokens.map(t=>b.unit_styles[t.unit]);b.character_runs=[];
      for(let start=0;start<ids.length;){let end=start+1;while(end<ids.length&&ids[end]===ids[start])end++;for(const pos of new Set([start,Math.floor((start+end-1)/2),end-1])){
-      const props=JSON.parse(b.cell_path.length?doc.getCellCharPropertiesAtByPath(section,b.paragraph,JSON.stringify(b.cell_path),pos):doc.getCharPropertiesAt(section,b.paragraph,pos));if(props.charShapeId!==ids[pos])fail('COMPLEX_STYLE_UNVERIFIED');}start=end;}
-    }catch(e){if(!(e instanceof GuardError))throw e;b.text_range_editable=false;delete b.unit_styles;}
+      const props=JSON.parse(b.cell_path.length?doc.getCellCharPropertiesAtByPath(section,b.paragraph,JSON.stringify(b.cell_path),pos):doc.getCharPropertiesAt(section,b.paragraph,pos));if(props.charShapeId!==ids[pos])fail('COMPLEX_STYLE_UNVERIFIED');if(pos===start)b.character_runs.push({start,end,properties:props});}start=end;}
+    }catch(e){if(!(e instanceof GuardError))throw e;b.text_range_editable=false;delete b.unit_styles;delete b.character_runs;}
    });
   }
   const fields=[];
@@ -78,7 +79,7 @@ function inspection(HwpDocument,bytes){return quiet(()=>{
  }finally{doc.free();}
 });}
 export function createLocalComplexSnapshot(HwpDocument,bytes,version){
- const state=inspection(HwpDocument,bytes),publicBlock=b=>{const {tokens,unit_styles,record_index,records_end,text_record,shape_record,raw_level,...rest}=b;return {...rest,target_id:idTarget(b.id,version),editable:b.text_range_editable&&tokens.every(t=>t.text||t.code===13),structural_editable:false,style:{profile:'complex_raw_preservation'}};};
+ const state=inspection(HwpDocument,bytes),publicBlock=b=>{const {tokens,unit_styles,character_runs,record_index,records_end,text_record,shape_record,raw_level,...rest}=b;return {...rest,target_id:idTarget(b.id,version),editable:b.text_range_editable&&tokens.every(t=>t.text||t.code===13),character_format_editable:b.text_range_editable,structural_editable:false,style:{profile:'complex_raw_preservation',character_runs:character_runs??[]}};};
  const publicFields=state.fields.map(f=>{const {from,to,...rest}=f;return {...rest,target_id:idTarget(f.id,version)};}),publicGroups=state.groups.map(g=>{const {record_index,...rest}=g;return {...rest,target_id:idTarget(g.id,version),pictures:g.pictures.map(p=>{const {record_index,...rest}=p;return rest;})};});
  return {source_sha256:version,read(options){
   if(options.expected_sha256!==version)fail('VERSION_CONFLICT');let {max_chars=8000,max_blocks=128,cursor}=options;
@@ -90,11 +91,17 @@ export function createLocalComplexSnapshot(HwpDocument,bytes,version){
  }};
 }
 export function editLocalComplex(HwpDocument,source,version,op){
- const schemas={splice_text:['start','end','new_text'],replace_text:['new_text'],set_field:['new_text'],move_picture_group:['expected_properties','props'],crop_group_picture:['picture_index','expected_properties','props']};
+ const schemas={splice_text:['start','end','new_text'],replace_text:['new_text'],set_field:['new_text'],format_text:['start','end','props'],move_picture_group:['expected_properties','props'],crop_group_picture:['picture_index','expected_properties','props']};
  if(!schemas[op.type]||!equal(Object.keys(op).sort(),['type','target_id','expected_old',...schemas[op.type]].sort()))fail('COMPLEX_OPERATION_UNSUPPORTED');
  if(typeof op.target_id!=='string'||!op.target_id.startsWith(`hwp5:${version}:`))fail('VERSION_CONFLICT');const encoded=op.target_id.slice(70),id=Buffer.from(encoded,'base64url').toString();if(Buffer.from(id).toString('base64url')!==encoded)fail('INVALID_TARGET');
  const before=inspection(HwpDocument,source),field=before.fields.find(f=>f.id===id),group=before.groups.find(g=>g.id===id),b=before.blocks.find(b=>b.id===(field?.block_id??group?.block_id??id));if(!b)fail('INVALID_TARGET');
  const expected=field?field.value:b.text;if(expected!==op.expected_old)fail('EXPECTED_OLD_MISMATCH');let records=before.recordSets.get(b.section),wanted=b.text;
+ if(op.type==='format_text'){
+  if(group)fail('TARGET_NOT_EDITABLE');const patch=prepareComplexCharacterFormat(before.raw,records,b,field,op);
+  if(patch.unchanged)return {bytes:source,content_verified:true,raw_preservation_verified:true,raw_preservation_scope:'unchanged_source',formatting_changed:false,layout_verified:false};
+  const bytes=publishComplexCharacterFormat(source,before.raw,b.section,patch),after=inspection(HwpDocument,bytes);verifyComplexCharacterFormat(before,after,b,patch);
+  return {bytes,content_verified:true,raw_preservation_verified:true,raw_preservation_scope:'exact_all_other_packed_streams_and_existing_definitions_except_requested_font_counts_and_selected_character_runs_line_cache',formatting_changed:true,text_range_changed:false,paragraph_count_changed:false,layout_verified:false};
+ }
  if(op.type==='set_field'||op.type==='splice_text'||op.type==='replace_text'){
   if(!b.text_range_editable||op.type==='set_field'&&!field?.editable||op.type!=='set_field'&&(field||group))fail('TARGET_NOT_EDITABLE');
   const start=field?.start??(op.type==='replace_text'?0:op.start),end=field?.end??(op.type==='replace_text'?[...b.text].length:op.end);
