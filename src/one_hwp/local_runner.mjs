@@ -53,7 +53,7 @@ export async function runLocal(request) {
     layout_verified:false,requires:'Node.js 22 or newer with local file permissions',max_input_bytes:4194304};
   const snapshot=readLocal(request.source,request.expected_sha256);
   if(request.action==='history')return localHistory(snapshot,request.limit);
-  if(request.action==='find')validateFind(request);
+  if(request.action==='find')validateFind(request,snapshot.sha256);
   const engine=createDocumentEngine(HwpDocument,{includeTableMetadata:request.action!=='find',plainStyleInspection:true});
   const document=await engine.open(snapshot.bytes),version=document.source_sha256;
   if(request.action==='find')return {...findLocalDocument(document,request),source:snapshot.source};

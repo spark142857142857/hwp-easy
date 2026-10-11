@@ -3,16 +3,23 @@ import {GuardError} from '../../probes/sites-runtime/guard/records.mjs';
 import {digest} from './local_file.mjs';
 const fail=code=>{throw new GuardError(code);};
 const positionKeys=['kind','section','paragraph','control','cell','cell_paragraph','row','column','row_span','column_span'];
-export function validateFind(options){
+export function validateFind(options,version){
   const {query,max_matches=50,cursor}=options;
   if(typeof query!=='string'||!query.length||query.length>256||!query.isWellFormed()||/[\u0000-\u001f]/.test(query))fail('INVALID_SEARCH_QUERY');
   if(!Number.isSafeInteger(max_matches)||max_matches<1||max_matches>200)fail('INVALID_SEARCH_LIMIT');
   if(cursor!==undefined&&(!cursor||Object.getPrototypeOf(cursor)!==Object.prototype
     ||JSON.stringify(Object.keys(cursor).sort())!==JSON.stringify(['sha256','query_sha256','block_index','offset'].sort())))fail('INVALID_SEARCH_CURSOR');
-  return {query,max_matches,cursor,query_sha256:digest(Buffer.from(query))};
+  const query_sha256=digest(Buffer.from(query));
+  if(cursor!==undefined){
+    if(typeof cursor.sha256!=='string'||!/^[0-9a-f]{64}$/.test(cursor.sha256))fail('INVALID_SEARCH_CURSOR');
+    if(version!==undefined&&cursor.sha256!==version)fail('CURSOR_VERSION_CONFLICT');
+    if(cursor.query_sha256!==query_sha256||!Number.isSafeInteger(cursor.block_index)||cursor.block_index<0
+      ||!Number.isSafeInteger(cursor.offset)||cursor.offset<0)fail('INVALID_SEARCH_CURSOR');
+  }
+  return {query,max_matches,cursor,query_sha256};
 }
 export function findLocalDocument(document,options){
-  const {query,max_matches,cursor,query_sha256}=validateFind(options),version=document.source_sha256,blocks=[];
+  const version=document.source_sha256,{query,max_matches,cursor,query_sha256}=validateFind(options,version),blocks=[];
   let pageCursor,base;
   do{
     const page=document.read({expected_sha256:version,max_chars:64000,max_blocks:128,...(pageCursor?{cursor:pageCursor}:{})});

@@ -22,7 +22,7 @@ for case in cases:
     assert atomic == separate
     assert blocks == other and cells == other_cells
     for step in case['steps']:
-        if step['type'] in ('splice_text', 'split_paragraph'):
+        if step['type'] in ('splice_text', 'split_paragraph', 'duplicate_paragraph', 'delete_paragraph'):
             text_reader.verify_case(folder, step, verify_merge=False)
         elif step['type'] in ('resize_table_columns', 'resize_table_rows', 'format_cell', 'format_table'):
             table_reader.verify_case(folder, step)

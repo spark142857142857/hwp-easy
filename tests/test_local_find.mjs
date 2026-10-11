@@ -1,5 +1,6 @@
 import test from 'node:test';import assert from 'node:assert/strict';import fs from 'node:fs';import os from 'node:os';import path from 'node:path';
 import {fixture} from './rhwp_fixtures.mjs';import {runLocal} from '../src/one_hwp/local_runner.mjs';import {digest} from '../src/one_hwp/local_file.mjs';
+import {findLocalDocument} from '../src/one_hwp/local_find.mjs';
 function setup(t,options){const dir=fs.mkdtempSync(path.join(os.tmpdir(),'hwp-easy-find-'));t.after(()=>{assert.equal(path.dirname(dir),os.tmpdir());assert.ok(path.basename(dir).startsWith('hwp-easy-find-'));fs.rmSync(dir,{recursive:true,force:true});});const source=path.join(dir,'selected.hwp');fs.writeFileSync(source,fixture(options));return {source,dir,expected_sha256:digest(fs.readFileSync(source))};}
 test('exact body/cell search returns code-point ranges with version-bound identities without writes',async t=>{const {source,dir,expected_sha256}=setup(t,{paragraphs:['앞','😀 답변 😀 답변','끝'],cells:[['제목','답변']]}),bytes=fs.readFileSync(source),stat=fs.statSync(source);const r=await runLocal({action:'find',source,expected_sha256,query:'답변'});assert.equal(r.returned_matches,3);assert.equal(r.complete,true);assert.deepEqual(r.matches.filter(m=>m.kind==='paragraph').map(m=>m.start),[2,7]);assert.equal(r.matches.find(m=>m.kind==='cell').start,0);assert.ok(r.matches.every(m=>m.end-m.start===2&&m.target_id.startsWith('hwp5:'+expected_sha256+':')));assert.deepEqual(fs.readFileSync(source),bytes);assert.equal(fs.statSync(source).mtimeMs,stat.mtimeMs);assert.equal(fs.existsSync(path.join(dir,'.hwp-easy-backups')),false);});
 test('search pagination gives each nonoverlapping occurrence once across blocks',async t=>{const {source,expected_sha256}=setup(t,{paragraphs:['aa aa','aaa aa','aa'],cells:[['aa','aa aa']]}),all=await runLocal({action:'find',source,expected_sha256,query:'aa'});let cursor,matches=[];do{const r=await runLocal({action:'find',source,expected_sha256,query:'aa',max_matches:2,...(cursor?{cursor}:{})});matches.push(...r.matches);cursor=r.next_cursor;}while(cursor);assert.deepEqual(matches,all.matches);assert.equal(matches.length,8);});
@@ -23,4 +24,9 @@ test('saved edits invalidate both the previous search version and previous searc
  const saved=await runLocal({action:'edit',source,expected_sha256,operations:[{type:'splice_text',target_id:b.target_id,expected_old:b.text,start:0,end:0,new_text:'새 '}]});const changed=fs.readFileSync(source);
  await assert.rejects(runLocal({action:'find',source,expected_sha256,query:'합성'}),/VERSION_CONFLICT/);
  await assert.rejects(runLocal({action:'find',source,expected_sha256:saved.output_sha256,query:'합성',cursor:found.next_cursor}),/CURSOR_VERSION_CONFLICT/);assert.deepEqual(fs.readFileSync(source),changed);
+});
+test('stale search cursors and mismatched queries are rejected before any document read',()=>{
+ const source_sha256='a'.repeat(64),document={source_sha256,read(){throw new Error('Expensive read must not start');}},cursor={sha256:'b'.repeat(64),query_sha256:digest(Buffer.from('needle')),block_index:0,offset:0};
+ assert.throws(()=>findLocalDocument(document,{query:'needle',cursor}),/CURSOR_VERSION_CONFLICT/);
+ assert.throws(()=>findLocalDocument(document,{query:'changed',cursor:{...cursor,sha256:source_sha256}}),/INVALID_SEARCH_CURSOR/);
 });
