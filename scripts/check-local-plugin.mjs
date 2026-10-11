@@ -99,6 +99,9 @@ try {
  apply(tableCell,'delete_picture',{expected_properties:picture.properties});
  fs.writeFileSync(path.join(reportDir,'synthetic-cell-removed.hwp'),fs.readFileSync(source));state=read();assert.equal(state.pictures.length,0);
  const preview=call({action:'preview',source,expected_sha256:state.source_sha256,page:0});assert.ok(preview.svg.startsWith('<svg'));
+ const history=call({action:'history',source,expected_sha256:state.source_sha256,limit:50});assert.equal(history.saved,false);
+ assert.ok(history.entries.some(e=>e.backup_id===edited.backup_id&&e.sha256===hash(original)&&e.backup_verified));
+ assert.ok(history.entries.every(e=>e.size_bytes>0&&typeof e.created_at==='string'));
  const restored=call({action:'restore',source,expected_sha256:state.source_sha256,backup_id:edited.backup_id});
  assert.deepEqual(fs.readFileSync(source),original);fs.writeFileSync(path.join(reportDir,'synthetic-original.hwp'),original);
  const report={status:'PASS',environment:process.platform,node:process.version,isolated_package_without_node_modules:true,

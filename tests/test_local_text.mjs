@@ -90,3 +90,31 @@ for(const operation of [{type:'splice_text',start:1,end:1,new_text:'new'}, {type
  const order=inspect(original).blocks.findIndex(b=>b.id===block.id),source=rewriteSyntheticBody(original,records=>{let ordinal=-1;return records.map(r=>{if(r.tag===66)ordinal++;if(ordinal===order&&r.tag===68){const payload=r.payload.slice();new DataView(payload.buffer).setUint32(8,2,true);return {...r,payload};}return r;});});
  const b=inspect(source).blocks.find(b=>b.id===block.id);assert.throws(()=>edit(source,b,operation),/TEXT_RECORD_MISMATCH/);
 });
+
+for(const kind of ['paragraph','cell'])for(const value of ['','짧은 😀','가😀나 ABC'])test(`duplicate plain ${kind} retains full text and styles ${JSON.stringify(value)}`,()=>{
+ let source=value==='가😀나 ABC'?mixed(kind):fixture({table:kind==='cell',paragraphs:['앞',value,'끝'],cells:[['질문',value]]});
+ const before=inspect(source),b=before.blocks.find(x=>x.kind===kind&&x.text===value&&(kind==='cell'||x.paragraph>0)),at=before.blocks.indexOf(b);
+ const out=edit(source,b,{type:'duplicate_paragraph'}),after=inspect(out.bytes);
+ assert.deepEqual(after.blocks.slice(at,at+2).map(x=>x.text),[value,value]);
+ assert.deepEqual(after.blocks[at].style,b.style);assert.deepEqual(after.blocks[at+1].style,b.style);
+ assert.deepEqual(after.blocks.slice(0,at).map(x=>x.text),before.blocks.slice(0,at).map(x=>x.text));
+ assert.deepEqual(after.blocks.slice(at+2).map(x=>x.text),before.blocks.slice(at+1).map(x=>x.text));
+ assert.equal(out.content_verified,true);assert.equal(out.raw_preservation_verified,true);
+});
+for(const kind of ['paragraph','cell'])test(`duplicate ${kind} tracks original identities through atomic edits and recovery`,async t=>{
+ const dir=fs.mkdtempSync(path.join(os.tmpdir(),'hwp-easy-duplicate-'));t.after(()=>{assert.equal(path.dirname(dir),os.tmpdir());assert.ok(path.basename(dir).startsWith('hwp-easy-duplicate-'));fs.rmSync(dir,{recursive:true,force:true});});
+ const source=path.join(dir,'same.hwp'),original=Buffer.from(mixed(kind));fs.writeFileSync(source,original);const state=await runLocal({action:'read',source,max_chars:64000}),b=state.blocks.find(x=>x.kind===kind&&x.text==='가😀나 ABC'),last=state.blocks.find(x=>x.text==='끝');
+ const request={source,expected_sha256:state.source_sha256,operations:[{type:'duplicate_paragraph',target_id:b.target_id,expected_old:b.text},{type:'splice_text',target_id:b.target_id,expected_old:b.text,start:0,end:0,new_text:'원본 '},{type:'splice_text',target_id:last.target_id,expected_old:last.text,start:0,end:0,new_text:'나중 '}]};
+ assert.equal((await runLocal({action:'plan',...request})).saved,false);assert.deepEqual(fs.readFileSync(source),original);
+ const saved=await runLocal({action:'edit',...request}),after=await runLocal({action:'read',source,max_chars:64000});assert.equal(saved.atomic_batch,true);
+ assert.ok(after.blocks.some(x=>x.kind===kind&&x.text==='원본 가😀나 ABC'));assert.ok(after.blocks.some(x=>x.kind===kind&&x.text==='가😀나 ABC'));assert.ok(after.blocks.some(x=>x.text==='나중 끝'));
+ await runLocal({action:'restore',source,expected_sha256:after.source_sha256,backup_id:saved.backup_id});assert.deepEqual(fs.readFileSync(source),original);
+});
+test('duplicating a section-control paragraph is refused before mutation',()=>{
+ const source=fixture({table:false,paragraphs:['첫 문단','둘째']}),b=inspect(source).blocks[0];assert.throws(()=>edit(source,b,{type:'duplicate_paragraph'}),/PARAGRAPH_TARGET_HAS_CONTROLS/);
+});
+test('duplicate rejects unexpected operation fields and stale expected text',()=>{
+ const source=mixed('paragraph'),b=inspect(source).blocks.find(x=>x.kind==='paragraph'&&x.text==='가😀나 ABC');
+ assert.throws(()=>edit(source,b,{type:'duplicate_paragraph',offset:1}),/INVALID_OPERATION/);
+ assert.throws(()=>edit(source,b,{type:'duplicate_paragraph',expected_old:'stale'}),/EXPECTED_OLD_MISMATCH/);
+});

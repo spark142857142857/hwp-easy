@@ -46,6 +46,20 @@ Change `action` to `edit` to save. `replace_text` with `\n` creates real paragra
 
 Paragraphs and tables are inserted **after** the selected body paragraph, including an empty paragraph. Structural targets require a uniform character style. Table creation inserts a rectangular table plus a following empty caret paragraph; maximum 50 rows/columns and 256 cells. New paragraphs: at most 100 and total 100,000 UTF-16 units. Supported structural operations can share a checked atomic batch. Verified page-number controls are preserved as opaque bytes; this does not make semantic reading complete.
 
+Duplicate a plain body/cell paragraph immediately after itself with `duplicate_paragraph`. It retains the complete text, mixed character runs and paragraph properties; empty paragraphs are supported. The new paragraph has its own verified engine instance value. Confirm the full old text; the source is limited to 100,000 UTF-16 units and cannot contain hidden controls, tabs or LF. Read again to select the newly created paragraph. The original target remains usable inside the current batch.
+
+```json
+{"action":"edit","source":"<selected path>","expected_sha256":"<hash>","operations":[{"type":"duplicate_paragraph","target_id":"<paragraph ID>","expected_old":"<whole old text>"}]}
+```
+
+`history` is read only: provide the selected path and current file hash to obtain up to 50 verified recovery entries (default 10). Each entry includes its backup ID, hash, size, recorded time, time source and whether it matches the current bytes. Other selected paths are excluded, and corrupt, missing or linked backup payloads are omitted. `more_available` means additional candidates were not checked/returned. The finite scan allows 2,048 directory entries and at most 100 payload checks. Old format-one metadata uses its file modification time; recorded dates can be changed locally and are not an immutable edit log. This operation creates no recovery directory and never restores automatically.
+
+```json
+{"action":"history","source":"<selected path>","expected_sha256":"<current hash>","limit":10}
+```
+
+Restore a chosen entry only for the user's requested undo/recovery. Restore verifies the selected path, current version and backup bytes, and preserves the replaced current version as another recovery copy. A recovery history listing is not a cursor-based chronological undo stack.
+
 Delete a plain body paragraph, or a cell paragraph after the first. A paragraph carrying section, page, table or other extended controls cannot be deleted. Merging requires the selected paragraph and its immediate predecessor to have matching paragraph styles; supported plain mixed character styles are retained. Text is concatenated without an added separator.
 
 ```json

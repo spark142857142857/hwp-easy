@@ -80,6 +80,15 @@ def verify_case(folder, case, verify_merge=True):
         assert [reader.canon(b) for b in before[:index] + before[index + 1:]] == [reader.canon(b) for b in after[:index] + after[index + 1:]]
         assert cells == new_cells
         changed = [after[index]]
+    elif case['type'] == 'duplicate_paragraph':
+        assert len(after) == len(before) + 1
+        changed = after[index:index + 2]
+        assert [b['text'] for b in changed] == [target['text'], target['text']]
+        assert all(shapes(b) == (prior, empty) for b in changed)
+        assert [reader.canon(b) for b in before[:index] + before[index + 1:]] == [reader.canon(b) for b in after[:index] + after[index + 2:]]
+        assert len(cells) == len(new_cells)
+        for left, right in zip(cells.values(), new_cells.values()):
+            assert left[2:] == right[2:]
     else:
         offset = case['offset']
         assert len(after) == len(before) + 1
@@ -101,7 +110,7 @@ def verify_case(folder, case, verify_merge=True):
             assert merged_cells == cells
     for current in changed:
         expected = reader.canon(target, (67, 68), ((0, 4), (12, 14)))
-        if (case['type'] == 'split_paragraph' or multiline) and current is not changed[0]:
+        if (case['type'] in ('split_paragraph', 'duplicate_paragraph') or multiline) and current is not changed[0]:
             expected = [(tag, level, payload[:18] + bytes(4) + payload[22:]) if tag == 66 else (tag, level, payload) for tag, level, payload in expected]
         assert expected == reader.canon(current, (67, 68), ((0, 4), (12, 14)))
     return True

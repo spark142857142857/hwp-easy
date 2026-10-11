@@ -24,15 +24,16 @@ function restore(doc,b,ids,emptyId){
 }
 export function prepareParagraphChange(doc,block,operation,records,previous){
   plain(block,records.get(block.id));
-  const splitting=operation.type==='split_paragraph',points=[...block.text],ids=modelCharacterIds(block,'PARAGRAPH_STYLE_MISMATCH');
+  const duplicating=operation.type==='duplicate_paragraph',splitting=operation.type==='split_paragraph'||duplicating,points=[...block.text],ids=modelCharacterIds(block,'PARAGRAPH_STYLE_MISMATCH');
+  if(duplicating&&block.text.length>100000)fail('EDIT_LIMIT_EXCEEDED');
   verifyPlainCharacterRuns(records.get(block.id),block.text,ids,charAt(doc,block,0).charShapeId);
   let specifications;
   if(splitting){
-    const offset=operation.offset;if(!Number.isSafeInteger(offset)||offset<0||offset>points.length)fail('INVALID_PARAGRAPH_OFFSET');
+    const offset=duplicating?points.length:operation.offset;if(!Number.isSafeInteger(offset)||offset<0||offset>points.length)fail('INVALID_PARAGRAPH_OFFSET');
     const first={block,text:points.slice(0,offset).join(''),ids:ids.slice(0,offset),emptyId:ids[Math.max(0,offset-1)]??charAt(doc,block,0).charShapeId};
     const secondBlock=structuredClone(block);if(block.kind==='paragraph')secondBlock.paragraph++;else secondBlock.cell_paragraph++;
     secondBlock.id=`s${secondBlock.section}:p${secondBlock.paragraph}`+(block.kind==='cell'?`:t${block.control}:c${block.cell}:p${secondBlock.cell_paragraph}`:'');
-    specifications=[first,{block:secondBlock,text:points.slice(offset).join(''),ids:ids.slice(offset),emptyId:ids[offset]??ids.at(-1)??first.emptyId}];
+    specifications=[first,{block:secondBlock,text:duplicating?block.text:points.slice(offset).join(''),ids:duplicating?ids.slice():ids.slice(offset),emptyId:duplicating?first.emptyId:ids[offset]??ids.at(-1)??first.emptyId}];
   }else{
     plain(previous,records.get(previous.id));
     const prior=modelCharacterIds(previous,'PARAGRAPH_STYLE_MISMATCH');
@@ -43,8 +44,13 @@ export function prepareParagraphChange(doc,block,operation,records,previous){
   }
   const checked=r=>{if(!JSON.parse(r).ok)fail('ENGINE_OPERATION_FAILED');};
   function apply(){
-    if(splitting)checked(block.kind==='paragraph'?doc.splitParagraph(block.section,block.paragraph,operation.offset)
-      :doc.splitParagraphInCell(block.section,block.paragraph,block.control,block.cell,block.cell_paragraph,operation.offset));
+    if(splitting){
+      const offset=duplicating?points.length:operation.offset;
+      checked(block.kind==='paragraph'?doc.splitParagraph(block.section,block.paragraph,offset)
+        :doc.splitParagraphInCell(block.section,block.paragraph,block.control,block.cell,block.cell_paragraph,offset));
+      if(duplicating&&block.text){const b=specifications[1].block;checked(b.kind==='paragraph'?doc.insertText(b.section,b.paragraph,0,block.text)
+        :doc.insertTextInCell(b.section,b.paragraph,b.control,b.cell,b.cell_paragraph,0,block.text));}
+    }
     else checked(block.kind==='paragraph'?doc.mergeParagraph(block.section,block.paragraph)
       :doc.mergeParagraphInCell(block.section,block.paragraph,block.control,block.cell,block.cell_paragraph));
     for(const s of specifications)restore(doc,s.block,s.ids,s.emptyId);

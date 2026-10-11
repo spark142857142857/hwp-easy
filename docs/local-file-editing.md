@@ -1,10 +1,18 @@
 # 로컬 HWP 직접 편집
 
+## 문단 복제와 로컬 복구 이력
+
+로컬 후보 **0.2.11**은 일반 본문·셀 문단을 바로 뒤에 복제하며, 전체 텍스트·혼합 글자 서식·문단 속성을 유지한다. 빈 문단도 지원하고 새 문단의 인스턴스 값과 셀의 문단 수를 검사한다. 첫 읽기의 원래 대상은 일괄 작업 안에서 추적하고 새 복사 문단은 다시 읽어 선택한다. 숨은 제어·기존 LF·탭이 없는 100,000 UTF-16 단위 이내의 대상에 적용한다.
+
+선택한 파일의 현재 해시로 이전 저장본을 읽기 전용 조회하는 `history`도 추가했다. 사본의 소속 경로·실제 바이트 해시를 확인하고, 다른 문서·손상·누락·링크된 사본은 반환하지 않는다. 기본 10개·최대 50개, 디렉터리 2,048개 항목과 실제 사본 100개 검사의 유한 범위를 사용한다. 조회는 폴더나 파일을 만들지 않으며 복구는 사용자 요청에 따라 별도로 수행한다. 기록 시각과 오래된 metadata 파일 수정 시각은 로컬에서 바뀔 수 있어 불변 기록이나 자동 undo stack으로 표현하지 않는다.
+
+문단 복제의 새 회귀 10개와 복구 이력 회귀 15개를 포함한 전체 로컬 회귀 258개가 통과했다. 분리 패키지의 텍스트·문단 40개와 세 `testdocs/` 복사본의 복제 5개도 무저장 계획·같은 파일 저장·정확한 복구 및 독립 Python/raw 서식 판독을 통과했다. 한글 2020의 합성 본문·셀 두 화면에서 복제된 혼합 서식과 표 경계를 확인했다. 모든 원본은 그대로이며 전체 쪽 배치 인증은 아니다.
+
 ## 긴 혼합 서식 문장의 처리
 
 로컬 후보 **0.2.10**은 원시 HWP의 전체 텍스트·서식 구간과 모델 좌표를 맞춘 뒤, 중복된 글자별 엔진 조회를 줄인다. 기존 글자마다의 UTF-16 서식 레코드 보존과 요청한 정의 변경 검사는 유지한다. 구간 경계·중간 모델 값이 다르거나 단순 텍스트 구조의 근거가 부족하면 기존 전체 검사로 돌아간다. 로컬 실행에서만 켜며 운영 원격 경로의 기본값과 검사·입력 한도는 유지한다.
 
-같은 합성 8만 자 삽입의 로컬 측정은 7,599ms에서 2,092ms로 줄었다. 4천·2만·8만 자 세 결과의 모든 decoded 스트림은 개선 전과 동일했다. 이 측정은 해당 PC의 합성 사례이며 일반 양식이나 운영 서버의 속도 보장은 아니다. 전체 로컬 회귀 233개, 공통 엔진 34개, 기존 보수적 스타일 검사 5개와 별도 증명/대체 경로 검사 5개가 통과했다. 분리 패키지의 본문·셀에 80,000 코드 포인트(80,825 UTF-16 단위)를 넣은 6개 사례는 이어 읽기의 정확한 조립, 서식 변경·분리·병합·무저장 계획·같은 파일 저장·복구와 독립 raw 판독을 통과했다. 세 실문서 복사본의 본문·셀 다섯 위치에는 2만 코드 포인트의 합성 답변을 넣고 서식 변경·분리·병합·정확한 복구 15개를 독립 raw 판독으로 확인했다.
+같은 합성 8만 자 삽입의 로컬 측정은 7,599ms에서 2,092ms로 줄었다. 4천·2만·8만 자 세 결과의 모든 decoded 스트림은 개선 전과 동일했다. 이 측정은 해당 PC의 합성 사례이며 일반 양식이나 운영 서버의 속도 보장은 아니다. 전체 로컬 회귀 233개, 공통 엔진 34개, 기존 보수적 스타일 검사 5개와 별도 증명/대체 경로 검사 5개가 통과했다. 분리 패키지의 본문·셀에 80,000 코드 포인트(80,825 UTF-16 단위)를 넣은 6개 사례는 이어 읽기의 정확한 조립, 서식 변경·분리·병합·무저장 계획·같은 파일 저장·복구와 독립 raw 판독을 통과했다. 세 실문서 복사본의 본문·셀 다섯 위치에는 2만 코드 포인트의 합성 답변을 넣고 서식 변경·분리·병합·정확한 복구 15개를 독립 raw 판독으로 확인했다. 한글 2020의 한 실문서 사본에서는 긴 답변의 파란 굵은 기울임 서식과 남은 검정 글자, 24쪽 결과 중 표시된 한 쪽을 확인했다. 모든 24쪽을 비교한 검사는 아니다.
 
 ## 문단과 표의 위치 이동
 
@@ -158,7 +166,7 @@
 개발자가 기존 두 npm lockfile 의존성을 준비한 뒤 실행하는 검사다:
 
 ```powershell
-node --test tests/test_local_runner.mjs tests/test_local_structure.mjs tests/test_local_advanced.mjs tests/test_local_extended.mjs tests/test_local_pictures.mjs tests/test_local_text.mjs tests/test_local_table_format.mjs tests/test_local_batch.mjs tests/test_local_move.mjs tests/test_local_style.mjs
+node --test tests/test_local_runner.mjs tests/test_local_structure.mjs tests/test_local_advanced.mjs tests/test_local_extended.mjs tests/test_local_pictures.mjs tests/test_local_text.mjs tests/test_local_table_format.mjs tests/test_local_batch.mjs tests/test_local_move.mjs tests/test_local_style.mjs tests/test_local_history.mjs
 node scripts/package_local_plugin.mjs
 node scripts/check-local-plugin.mjs
 python scripts/check-local-structure.py

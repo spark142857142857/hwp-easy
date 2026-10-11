@@ -8,6 +8,7 @@ export const digest = data => createHash('sha256').update(data).digest('hex');
 const MAX_BYTES = 4 * 1024 * 1024;
 const key = p => process.platform === 'win32' ? p.toLowerCase() : p;
 const hash = h => typeof h === 'string' && /^[0-9a-f]{64}$/.test(h);
+const backupId = id => typeof id === 'string' && /^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/.test(id);
 const identity = s => `${s.dev}:${s.ino}:${s.size}:${s.mtimeMs}:${s.ctimeMs}`;
 function safePath(value, { missing = false, hwp = true, directory = false } = {}) {
   if (typeof value !== 'string' || !path.isAbsolute(value) || value.includes('\0')
@@ -66,10 +67,14 @@ function backupDirectory(source) {
 }
 function privateRead(file, maxBytes) {
   safePath(file, { hwp: false });
+  const initial=fs.lstatSync(file);
   const fd = fs.openSync(file, fs.constants.O_RDONLY | (fs.constants.O_NOFOLLOW ?? 0));
   try {
-    if (fs.fstatSync(fd).size > maxBytes) fail('BACKUP_INVALID');
-    return fs.readFileSync(fd);
+    const before=fs.fstatSync(fd);
+    if(!before.isFile()||before.nlink!==1||identity(before)!==identity(initial)||before.size>maxBytes)fail('BACKUP_INVALID');
+    const bytes=fs.readFileSync(fd);
+    if(bytes.length>maxBytes||identity(before)!==identity(fs.fstatSync(fd))||identity(before)!==identity(fs.lstatSync(file)))fail('BACKUP_INVALID');
+    return bytes;
   } finally { fs.closeSync(fd); }
 }
 function backup(snapshot, directory) {
@@ -77,7 +82,7 @@ function backup(snapshot, directory) {
   writeExclusive(file, snapshot.bytes);
   if (digest(privateRead(file, MAX_BYTES)) !== snapshot.sha256) fail('BACKUP_INVALID');
   writeExclusive(path.join(directory, `${id}.json`), Buffer.from(JSON.stringify({
-    format: 1, source: key(snapshot.source), sha256: snapshot.sha256,
+    format: 1, source: key(snapshot.source), sha256: snapshot.sha256, created_utc: new Date().toISOString(),
   })));
   return id;
 }
@@ -134,10 +139,54 @@ export function saveLocal(snapshot, bytes, { output, expected_output_sha256 } = 
   }
 }
 export function restoreLocal(snapshot, backup_id) {
-  if (typeof backup_id !== 'string' || !/^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/.test(backup_id)) fail('BACKUP_INVALID');
+  if (!backupId(backup_id)) fail('BACKUP_INVALID');
   const directory = backupDirectory(snapshot.source);
   const metadata = JSON.parse(privateRead(path.join(directory, `${backup_id}.json`), 4096).toString('utf8'));
   const bytes = privateRead(path.join(directory, `${backup_id}.hwp`), MAX_BYTES);
   if (metadata.format !== 1 || metadata.source !== key(snapshot.source) || metadata.sha256 !== digest(bytes)) fail('BACKUP_INVALID');
   return { bytes, publish: () => saveLocal(snapshot, bytes) };
+}
+
+/** Inspect only this selected file's bounded recovery history; never creates a directory. */
+export function localHistory(snapshot, limit=10) {
+  if(!Number.isSafeInteger(limit)||limit<1||limit>50)fail('INVALID_HISTORY_LIMIT');
+  checkedCurrent(snapshot);
+  const directory=path.join(path.dirname(snapshot.source),'.hwp-easy-backups'),entries=[],candidates=[];
+  let omitted=0;
+  if(fs.existsSync(directory)){
+    safePath(directory,{hwp:false,directory:true});
+    // Iterate to a finite cap rather than allocate an unbounded directory listing.
+    const handle=fs.opendirSync(directory);let count=0;
+    try{for(let entry;(entry=handle.readSync());){
+      if(++count>2048)fail('HISTORY_LIMIT_EXCEEDED');
+      const id=entry.name.endsWith('.json')?entry.name.slice(0,-5):'';
+      if(!backupId(id))continue;
+      try{
+        const file=path.join(directory,entry.name),meta=JSON.parse(privateRead(file,4096).toString('utf8'));
+        if(meta?.source!==key(snapshot.source))continue;
+        if(meta.format!==1||!hash(meta.sha256)){omitted++;continue;}
+        const date=typeof meta.created_utc==='string'&&/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/.test(meta.created_utc)?Date.parse(meta.created_utc):NaN;
+        candidates.push({backup_id:id,sha256:meta.sha256,created_at:Number.isFinite(date)?new Date(date).toISOString():fs.statSync(file).mtime.toISOString(),
+          time_source:Number.isFinite(date)?'backup_metadata':'metadata_file_mtime'});
+      }catch(error){if(error instanceof GuardError||error instanceof SyntaxError||['ENOENT','EACCES','EPERM'].includes(error.code))continue;throw error;}
+    }}finally{handle.closeSync();}
+    candidates.sort((a,b)=>b.created_at.localeCompare(a.created_at)||a.backup_id.localeCompare(b.backup_id));
+    let inspected=0;
+    for(const candidate of candidates){
+      if(entries.length>=limit||inspected>=100)break;
+      inspected++;
+      try{
+        const bytes=privateRead(path.join(directory,`${candidate.backup_id}.hwp`),MAX_BYTES);
+        if(digest(bytes)!==candidate.sha256){omitted++;continue;}
+        entries.push({...candidate,size_bytes:bytes.length,backup_verified:true,matches_current:candidate.sha256===snapshot.sha256});
+      }catch(error){if(error instanceof GuardError||['ENOENT','EACCES','EPERM'].includes(error.code)){omitted++;continue;}throw error;}
+    }
+    checkedCurrent(snapshot);
+    return {source:snapshot.source,source_sha256:snapshot.sha256,entries,limit,more_available:inspected<candidates.length,
+      invalid_selected_backups_omitted:omitted,saved:false,persistence:'local_file',history_scope:'selected_path',
+      ordering:'recorded metadata time, or legacy metadata file mtime; not an immutable audit log'};
+  }
+  checkedCurrent(snapshot);
+  return {source:snapshot.source,source_sha256:snapshot.sha256,entries,limit,more_available:false,invalid_selected_backups_omitted:0,
+    saved:false,persistence:'local_file',history_scope:'selected_path'};
 }
