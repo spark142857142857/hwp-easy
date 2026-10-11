@@ -41,7 +41,7 @@ for(const kind of ['paragraph','cell'])test(`paragraph formatting changes exact 
  const b=inspect(out.bytes).blocks.find(b=>b.id===block.id);assert.equal(b.text,block.text);assert.equal(b.style.paragraph.marginLeft,1);assert.equal(b.style.paragraph.spacingAfter,2);
  assert.equal(b.style.paragraph.alignment,'right');assert.equal(out.raw_preservation_verified,true);
 });
-for(const extra of [{start:0,end:100,props:{bold:true}},{start:0,end:1,props:{fontFamily:'Unverified font'}},{start:0,end:1,props:{fontSize:0}},{start:0,end:1,props:{bold:'true'}}])test(`invalid format request ${JSON.stringify(extra)} remains unsaved`,()=>{
+for(const extra of [{start:0,end:100,props:{bold:true}},{start:0,end:1,props:{fontFamily:'Bad\nfont'}},{start:0,end:1,props:{fontSize:0}},{start:0,end:1,props:{bold:'true'}}])test(`invalid format request ${JSON.stringify(extra)} remains unsaved`,()=>{
  const bytes=fixture(),block=inspect(bytes).blocks.find(b=>b.text==='中간'||b.text==='중간 합성 문단');assert.throws(()=>edit(bytes,block,{type:'format_text',...extra}),/INVALID_FORMAT/);
 });
 for(const rows of [1,2])test(`split and merge ${rows}x2 preserves selected cell paragraphs and exact rectangle size`,()=>{

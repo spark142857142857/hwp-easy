@@ -1,6 +1,8 @@
 /** Requested formatting, with raw definition patches and complete non-target preservation. */
 import {GuardError,parseRecords} from '../../probes/sites-runtime/guard/records.mjs';
 import {canonicalRecord,textControlBytes} from '../../probes/sites-runtime/guard/preservation.mjs';
+// FACE_NAME default aliases from pinned npm source e8800c8, serializer/doc_info.rs (MIT).
+import fontDefaults from './font_defaults.json' with {type:'json'};
 const fail=code=>{throw new GuardError(code);};
 const equal=(a,b)=>JSON.stringify(a)===JSON.stringify(b);
 const bytesEqual=(a,b)=>a.length===b.length&&a.every((v,i)=>v===b[i]);
@@ -8,11 +10,12 @@ const view=b=>new DataView(b.buffer,b.byteOffset,b.byteLength);
 const groups=bytes=>{const result=new Map();for(const r of parseRecords(bytes)){if(!result.has(r.tag))result.set(r.tag,[]);result.get(r.tag).push(r);}return result;};
 export function prepareFormatChange(doc,raw,block,operation,records) {
  const character=operation.type==='format_text',props={...operation.props};
- const allowed=character?['bold','italic','underline','strikethrough','fontSize','textColor']
+ const allowed=character?['bold','italic','underline','strikethrough','fontSize','textColor','fontFamily']
   :['alignment','lineSpacing','marginLeft','marginRight','indent','spacingBefore','spacingAfter'];
  if(!operation.props||Object.getPrototypeOf(operation.props)!==Object.prototype||!Object.keys(props).length||Object.keys(props).some(k=>!allowed.includes(k)))fail('INVALID_FORMAT_PROPERTIES');
  for(const [key,value] of Object.entries(props)) {
   if(['bold','italic','underline','strikethrough'].includes(key)){if(typeof value!=='boolean')fail('INVALID_FORMAT_PROPERTIES');}
+  else if(key==='fontFamily'){if(typeof value!=='string'||!value.isWellFormed()||value.trim()!==value||!value.length||value.length>100||/[\u0000-\u001f,;"'\\]/.test(value))fail('INVALID_FORMAT_PROPERTIES');}
   else if(key==='textColor'){if(typeof value!=='string'||!/^#[0-9a-fA-F]{6}$/.test(value))fail('INVALID_FORMAT_PROPERTIES');props[key]=value.toLowerCase();}
   else if(key==='alignment'){if(!['justify','left','right','center'].includes(value))fail('INVALID_FORMAT_PROPERTIES');}
   else if(!Number.isSafeInteger(value)||value<(key==='fontSize'?100:key==='lineSpacing'?1:key==='indent'?-72000:0)||value>(key==='fontSize'?72000:720000))fail('INVALID_FORMAT_PROPERTIES');
@@ -20,6 +23,19 @@ export function prepareFormatChange(doc,raw,block,operation,records) {
  const count=[...block.text].length,start=character?operation.start:0,end=character?operation.end:count;
  if(character&&(!Number.isSafeInteger(start)||!Number.isSafeInteger(end)||start<0||end<=start||end>count||count>100000))fail('INVALID_FORMAT_RANGE');
  const defs=groups(raw.streams.get('DocInfo')),targetRecords=records.get(block.id);
+ let fontIds,fontGrowth=0;
+ const fontCounts=Array.from({length:7},(_,i)=>view(defs.get(17)[0].payload).getUint32(4+i*4,true));
+ const fonts=defs.get(19)??[],fontGroups=[];let fontOffset=0;
+ for(const n of fontCounts){fontGroups.push(fonts.slice(fontOffset,fontOffset+n));fontOffset+=n;}
+ if(Object.hasOwn(props,'fontFamily')){
+  if(fontOffset!==fonts.length||fontCounts.some(n=>!n||n>65534))fail('FONT_DEFINITION_PROFILE_UNSUPPORTED');
+  const names=fontGroups.map(list=>list.map(r=>{const n=view(r.payload).getUint16(1,true);if(3+n*2>r.payload.length)fail('FONT_DEFINITION_PROFILE_UNSUPPORTED');return new TextDecoder('utf-16le').decode(r.payload.subarray(3,3+n*2));}));
+  fontIds=names.map(list=>list.indexOf(props.fontFamily));
+  if(fontIds.some(id=>id<0)){
+   if(fontIds.some(id=>id>=0)||!fontCounts.every(n=>n===fontCounts[0]))fail('FONT_DEFINITION_PROFILE_UNSUPPORTED');
+   const id=doc.findOrCreateFontId(props.fontFamily);if(id!==fontCounts[0])fail('FONT_DEFINITION_PROFILE_UNSUPPORTED');fontIds=Array(7).fill(id);fontGrowth=1;
+  }
+ }
  if(character&&targetRecords.some(r=>r.tag===67&&!bytesEqual(textControlBytes(r.payload),new Uint8Array([13,0]))))fail('FORMAT_TARGET_HAS_CONTROLS');
  const charAt=(document,offset)=>JSON.parse(block.kind==='paragraph'?document.getCharPropertiesAt(block.section,block.paragraph,offset)
   :document.getCellCharPropertiesAt(block.section,block.paragraph,block.control,block.cell,block.cell_paragraph,offset));
@@ -33,6 +49,7 @@ export function prepareFormatChange(doc,raw,block,operation,records) {
   const v=view(result);
   if(character) {
    if(payload.length!==74)fail('CHAR_SHAPE_PROFILE_UNSUPPORTED');
+   if(fontIds)fontIds.forEach((id,i)=>v.setUint16(i*2,id,true));
    let flags=v.getUint32(46,true);
    for(const [key,mask] of [['italic',1],['bold',2],['underline',12],['strikethrough',0x180000]])if(Object.hasOwn(props,key))flags=flags&~mask|(props[key]?(key==='underline'?4:key==='strikethrough'?0x80000:mask):0);
    v.setUint32(46,flags,true);
@@ -47,7 +64,7 @@ export function prepareFormatChange(doc,raw,block,operation,records) {
  const shapeIds=character?[...new Set(prior.slice(start,end).map(p=>p.charShapeId))]:[];
  const permittedShapes=character?shapeIds.map(id=>expectedShape(defs.get(21)[id]?.payload??new Uint8Array()))
   :[expectedShape(defs.get(25)[originalParagraph.paraShapeId]?.payload??new Uint8Array())];
- function apply(){const value=JSON.stringify(props),checked=result=>{if(!JSON.parse(result).ok)fail('ENGINE_OPERATION_FAILED');};
+ function apply(){const engineProps={...props};if(fontIds){delete engineProps.fontFamily;engineProps.fontIds=fontIds;}const value=JSON.stringify(engineProps),checked=result=>{if(!JSON.parse(result).ok)fail('ENGINE_OPERATION_FAILED');};
   if(character){
    // The upstream range formatter clones its first style for the whole range.
    // Format each original run separately and reuse its checked resulting ID.
@@ -67,10 +84,13 @@ export function prepareFormatChange(doc,raw,block,operation,records) {
   if(!equal([...left.keys()],[...right.keys()]))fail('FORMAT_DEFINITION_MISMATCH');
   const growth=(right.get(tag)?.length??0)-(left.get(tag)?.length??0);
   if(growth<0||growth>Math.max(1,permittedShapes.length))fail('FORMAT_DEFINITION_MISMATCH');
-  for(const [kind,list] of left){const saved=right.get(kind);if(saved.length!==list.length+(kind===tag?growth:0))fail('FORMAT_DEFINITION_MISMATCH');
+  for(const [kind,list] of left){const saved=right.get(kind);if(saved.length!==list.length+(kind===tag?growth:kind===19?fontGrowth*7:0))fail('FORMAT_DEFINITION_MISMATCH');
+   if(kind===19&&fontGrowth){let offset=0;const name=Buffer.from(props.fontFamily,'utf16le'),alias=fontDefaults.find(([name])=>name===props.fontFamily)?.[1],fallback=alias?Buffer.from(alias,'utf16le'):null,newFont=new Uint8Array(3+name.length+(fallback?2+fallback.length:0));view(newFont).setUint16(1,props.fontFamily.length,true);newFont.set(name,3);if(fallback){newFont[0]=32;view(newFont).setUint16(3+name.length,alias.length,true);newFont.set(fallback,5+name.length);}
+    for(let lang=0;lang<7;lang++){for(const r of fontGroups[lang]){const s=saved[offset++];if(s.level!==r.level||!bytesEqual(r.payload,s.payload))fail('FORMAT_DEFINITION_MISMATCH');}const s=saved[offset++];if(s.level!==1||!bytesEqual(s.payload,newFont))fail('FORMAT_DEFINITION_MISMATCH');}continue;
+   }
    list.forEach((r,i)=>{const old=r.payload.slice(),now=saved[i].payload.slice();if(r.level!==saved[i].level)fail('FORMAT_DEFINITION_MISMATCH');
     if(kind===16){old.fill(0,14,26);now.fill(0,14,26);}
-    if(kind===17){const offset=character?36:52;if(view(now).getUint32(offset,true)!==view(old).getUint32(offset,true)+growth)fail('FORMAT_DEFINITION_MISMATCH');old.fill(0,offset,offset+4);now.fill(0,offset,offset+4);}
+    if(kind===17){const offset=character?36:52;if(view(now).getUint32(offset,true)!==view(old).getUint32(offset,true)+growth)fail('FORMAT_DEFINITION_MISMATCH');old.fill(0,offset,offset+4);now.fill(0,offset,offset+4);for(let lang=0;lang<7;lang++){const pos=4+lang*4;if(view(now).getUint32(pos,true)!==view(old).getUint32(pos,true)+fontGrowth)fail('FORMAT_DEFINITION_MISMATCH');old.fill(0,pos,pos+4);now.fill(0,pos,pos+4);}}
     if(!bytesEqual(old,now))fail('FORMAT_DEFINITION_MISMATCH');
    });
   }
@@ -84,7 +104,7 @@ export function prepareFormatChange(doc,raw,block,operation,records) {
    if(!equal(block.style.paragraph,saved.style.paragraph))fail('FORMAT_CONTENT_MISMATCH');
    for(let i=0;i<count;i++) {
     const wanted=structuredClone(prior[i]),actual=charAt(reopened,i);delete wanted.charShapeId;const actualId=actual.charShapeId;delete actual.charShapeId;
-    if(i>=start&&i<end){Object.assign(wanted,props);if(Object.hasOwn(props,'underline'))wanted.underlineType=props.underline?'Bottom':'None';}
+    if(i>=start&&i<end){Object.assign(wanted,props);if(fontIds)wanted.fontFamilies=Array(7).fill(props.fontFamily);if(Object.hasOwn(props,'underline'))wanted.underlineType=props.underline?'Bottom':'None';}
     if(!equal(wanted,actual))fail('FORMAT_CONTENT_MISMATCH');
     const expected=i>=start&&i<end?expectedShape(defs.get(21)[prior[i].charShapeId].payload):defs.get(21)[prior[i].charShapeId].payload;
     if(!bytesEqual(expected,afterDefs.get(21)[actualId]?.payload??new Uint8Array()))fail('FORMAT_DEFINITION_MISMATCH');

@@ -59,11 +59,13 @@ test('row deletion requires matching contents and refuses deleting the last row'
  const oneRow=fixture({cells:[['한 행','값']]}),targetCell=inspect(oneRow).blocks.find(b=>b.kind==='cell');
  assert.throws(()=>edit(oneRow,targetCell,{type:'delete_table_row',index:0,expected_cells:[['한 행'],['값']]}),/INVALID_TABLE_DIMENSIONS/);
 });
-test('existing merged cells cannot be flattened by a row insertion',()=>{
+test('row insertion preserves existing horizontal merged cells',()=>{
  const document=openDocument(fixture());let bytes;
  try {assert.equal(JSON.parse(document.mergeTableCells(0,1,0,0,0,0,1)).ok,true);bytes=document.exportHwp();}finally{document.free();}
- const block=inspect(bytes).blocks.find(b=>b.kind==='cell');
- assert.throws(()=>edit(bytes,block,{type:'insert_table_row',index:1,texts:['새 칸','값']}),/RECTANGULAR_TABLE_REQUIRED/);
+ const before=inspect(bytes),block=before.blocks.find(b=>b.kind==='cell');
+ const out=edit(bytes,block,{type:'insert_table_row',index:1,texts:['새 칸','값']}),after=inspect(out.bytes);
+ assert.equal(after.tables[0].cells[0].colSpan,2);assert.deepEqual(after.tables[0].cells[0],before.tables[0].cells[0]);
+ assert.equal(after.tables[0].dimensions.rowCount,3);assert.ok(after.blocks.some(b=>b.text==='새 칸'));assert.equal(out.raw_preservation_verified,true);
 });
 test('merging distinct uniform character styles is refused without changing either paragraph',()=>{
  const document=openDocument(fixture({table:false}));let bytes;

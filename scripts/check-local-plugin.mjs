@@ -7,6 +7,7 @@ import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { createHash } from 'node:crypto';
 import { fixture } from '../tests/rhwp_fixtures.mjs';
+import {deflateSync} from 'node:zlib';
 const root=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'..');
 const built=path.join(root,'outputs/local-plugin-20261011/hwp-easy-local');
 const temporary=fs.mkdtempSync(path.join(os.tmpdir(),'hwp-easy-package-test-'));
@@ -76,6 +77,27 @@ try {
  state=read();picture=state.pictures[0];
  const removed=apply(b=>b.kind==='paragraph'&&b.text==='중간 합성 문단','delete_picture',{expected_properties:picture.properties});assert.equal(removed.retained_unused_image_data,true);
  fs.writeFileSync(path.join(reportDir,'synthetic-delete-picture.hwp'),fs.readFileSync(source));state=read();assert.equal(state.pictures.length,0);
+ apply(answer,'format_text',{start:0,end:2,props:{fontFamily:'맑은 고딕'}});
+ fs.writeFileSync(path.join(reportDir,'synthetic-font-family.hwp'),fs.readFileSync(source));
+ apply(tableCell,'merge_table_cells',{range:{top:0,left:0,bottom:0,right:1},expected_cells:[['제목','새 표'],['']]});
+ fs.writeFileSync(path.join(reportDir,'synthetic-merged-axis-before.hwp'),fs.readFileSync(source));
+ for(const [type,index] of [['insert_table_row',1],['insert_table_column',1],['delete_table_row',1],['delete_table_column',1]]){
+  state=read();const anchor=state.blocks.find(tableCell),cells=state.blocks.filter(b=>b.kind==='cell'&&b.paragraph===anchor.paragraph&&b.control===anchor.control),rowAxis=type.endsWith('_row'),adding=type.startsWith('insert_');
+  const grouped=[];for(const b of cells){let c=grouped.find(c=>c.cell===b.cell);if(!c){c={...b,texts:[]};grouped.push(c);}c.texts.push(b.text);}
+  const rows=Math.max(...grouped.map(c=>c.row+c.row_span)),cols=Math.max(...grouped.map(c=>c.column+c.column_span));
+  const extra=adding?{texts:Array(rowAxis?cols:rows).fill('')}:{expected_cells:grouped.filter(c=>rowAxis?c.row<=index&&index<c.row+c.row_span:c.column<=index&&index<c.column+c.column_span).map(c=>c.texts)};
+  apply(tableCell,type,{index,...extra});fs.writeFileSync(path.join(reportDir,`synthetic-merged-${type}.hwp`),fs.readFileSync(source));
+ }
+ apply(tableCell,'insert_picture',{offset:1,width:7200,height:3600,image:{source:image,expected_sha256:hash(png)}});
+ fs.writeFileSync(path.join(reportDir,'synthetic-cell-picture.hwp'),fs.readFileSync(source));state=read();picture=state.pictures[0];assert.equal(picture.format,'cell_picture');assert.equal(picture.properties.treatAsChar,true);
+ const chunk=(name,data)=>{const b=Buffer.alloc(12+data.length);b.writeUInt32BE(data.length);b.write(name,4);data.copy(b,8);let crc=0xffffffff;for(const n of b.subarray(4,-4)){crc^=n;for(let i=0;i<8;i++)crc=crc>>>1^((crc&1)?0xedb88320:0);}b.writeUInt32BE((crc^0xffffffff)>>>0,b.length-4);return b;},ihdr=Buffer.alloc(13);ihdr.writeUInt32BE(2);ihdr.writeUInt32BE(3,4);ihdr[8]=8;ihdr[9]=6;
+ const replacement=Buffer.concat([Buffer.from([137,80,78,71,13,10,26,10]),chunk('IHDR',ihdr),chunk('IDAT',deflateSync(Buffer.alloc(27))),chunk('IEND',Buffer.alloc(0))]),replacementFile=path.join(temporary,'replacement.png');fs.writeFileSync(replacementFile,replacement);fs.writeFileSync(path.join(reportDir,'synthetic-replacement.png'),replacement);
+ apply(tableCell,'replace_picture',{expected_properties:picture.properties,image:{source:replacementFile,expected_sha256:hash(replacement)}});
+ fs.writeFileSync(path.join(reportDir,'synthetic-cell-replaced.hwp'),fs.readFileSync(source));state=read();picture=state.pictures[0];
+ apply(tableCell,'update_picture',{expected_properties:picture.properties,props:{width:6000,height:3000}});
+ fs.writeFileSync(path.join(reportDir,'synthetic-cell-resized.hwp'),fs.readFileSync(source));state=read();picture=state.pictures[0];
+ apply(tableCell,'delete_picture',{expected_properties:picture.properties});
+ fs.writeFileSync(path.join(reportDir,'synthetic-cell-removed.hwp'),fs.readFileSync(source));state=read();assert.equal(state.pictures.length,0);
  const preview=call({action:'preview',source,expected_sha256:state.source_sha256,page:0});assert.ok(preview.svg.startsWith('<svg'));
  const restored=call({action:'restore',source,expected_sha256:state.source_sha256,backup_id:edited.backup_id});
  assert.deepEqual(fs.readFileSync(source),original);fs.writeFileSync(path.join(reportDir,'synthetic-original.hwp'),original);
@@ -86,6 +108,8 @@ try {
    paragraph_merge_and_delete_saved_and_reopened:true,table_row_column_insert_and_delete_saved_and_reopened:true,
    format_text_and_paragraph_saved_and_reopened:true,merged_cell_split_merge_saved_and_reopened:true,
    body_png_insert_resize_move_delete_saved_and_reopened:true,
+   merged_rows_columns_saved_and_reopened:true,font_family_saved_and_reopened:true,
+   cell_png_insert_replace_resize_delete_saved_and_reopened:true,
    restore_exact_original_bytes:true,backup_count:fs.readdirSync(path.join(temporary,'.hwp-easy-backups')).filter(p=>p.endsWith('.hwp')).length,
    original_sha256:hash(original),multiline_sha256:hash(multiline),structure_sha256:hash(withTable),layout_verified:false,
    publication:'NOT_DONE',global_codex_configuration_changed:false};

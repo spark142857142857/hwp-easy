@@ -19,3 +19,11 @@ export function packStructuralBodyRepairs(candidate,afterRaw,patches) {
  }
  return replaceBodyStreamsWithMiniTailAdjustment(candidate,replacements);
 }
+// Local object relocation may add a missing empty PARA_TEXT envelope. The
+// bounded CFB writer verifies every other packed stream and allocation; the
+// caller must subsequently prove complete raw/model preservation.
+export function packLocalBodyRewrite(candidate,afterRaw,bodies){
+ const replacements=new Map(),compressed=view(afterRaw.streams.get('FileHeader')).getUint32(36,true)&1;
+ for(const [name,body] of bodies){if(!name.startsWith('BodyText/Section')||!afterRaw.streams.has(name)||!body.length||body.length>2000000)throw new GuardError('BODY_REPAIR_INVALID');replacements.set(name,compressed?deflateRaw(body,{level:9}):body);}
+ return replaceBodyStreamsWithMiniTailAdjustment(candidate,replacements).bytes;
+}

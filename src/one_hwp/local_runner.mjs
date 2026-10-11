@@ -35,12 +35,13 @@ export async function runLocal(request) {
     read:true,preview:true,edit:true,restore:true,new_paragraphs:true,multiline_body_and_cells:true,new_simple_tables:true,
     delete_paragraphs:true,merge_adjacent_paragraphs:true,
     insert_delete_table_rows_columns:true,
+    insert_delete_merged_table_rows_columns:true,font_family_change:true,
     split_merge_table_cells:true,format_text:true,format_paragraph:true,
-    pictures:{insert:'local PNG, body paragraph',update:'size and position',delete:true,delete_cleans_unused_embedded_data:false},
+    pictures:{insert:'local PNG, body paragraph or top-level table cell',replace:'local PNG, retain frame size and position',update:'size and position',delete:true,delete_cleans_unused_embedded_data:false},
     edit_profiles:{existing_text:'guarded paragraph/cell replacement; constrained mixed styles',
-      structure:'uniform-style targets; paragraphs, simple table rows/columns and verified cell split/merge; opaque page numbers and supported body pictures preserved',
-      formatting:'selected plain character ranges; size/color/decorations and paragraph alignment/spacing; exact raw definition patches',
-      pictures:'one supported picture per plain body paragraph; local PNG insertion and existing picture size/position/removal'},
+      structure:'uniform-style targets; paragraphs, simple or merged table rows/columns and verified cell split/merge; opaque page numbers and supported pictures preserved',
+      formatting:'selected plain character ranges; font family/size/color/decorations and paragraph alignment/spacing; exact raw definition patches',
+      pictures:'one supported picture per plain body paragraph or top-level cell paragraph; local PNG insertion/replacement and existing picture size/position/removal'},
     layout_verified:false,requires:'Node.js 22 or newer with local file permissions',max_input_bytes:4194304};
   const snapshot=readLocal(request.source,request.expected_sha256),engine=createDocumentEngine(HwpDocument);
   const document=await engine.open(snapshot.bytes),version=document.source_sha256;
@@ -72,7 +73,7 @@ export async function runLocal(request) {
   let candidate;
   if(structural) {
     if(request.operations.length!==1)fail('STRUCTURAL_EDIT_REQUIRES_ONE_OPERATION');
-    candidate=['insert_picture','update_picture','delete_picture'].includes(request.operations[0]?.type)
+    candidate=['insert_picture','update_picture','delete_picture','replace_picture'].includes(request.operations[0]?.type)
       ?pictureEdit(HwpDocument,snapshot.bytes,version,request.operations[0])
       :structuralEdit(HwpDocument,snapshot.bytes,version,request.operations[0]);
   } else {

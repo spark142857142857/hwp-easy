@@ -10,6 +10,7 @@ import { pageNumberPreservationProfile } from '../../probes/sites-runtime/guard/
 import { prepareTableChange } from './local_table.mjs';
 import { prepareFormatChange } from './local_format.mjs';
 import { prepareMergedTableChange } from './local_merged_table.mjs';
+import { prepareMergedAxisChange } from './local_merged_axis.mjs';
 import {pictureProfile} from './local_picture.mjs';
 
 const fail = (code) => { throw new GuardError(code); };
@@ -150,6 +151,7 @@ function cellHeaders(raw) {
 function matchedCellHeaders(beforeRaw, afterRaw, translate, newHost, cellChange) {
   const left = cellHeaders(beforeRaw).filter(r=>!cellChange||cellChange.header(r)!==null),right = cellHeaders(afterRaw).filter(r=>!(newHost
     && r.section===newHost.section && r.host===newHost.paragraph));
+  if(cellChange?.orderHeaders){const ordered=cellChange.orderHeaders(left);left.splice(0,left.length,...ordered);}
   if(cellChange) {
     const fresh=cellChange.freshCoordinates;
     for(let i=right.length-1;i>=0;i--)if(cellChange.inTable(right[i])&&fresh.has(`${view(right[i].payload).getUint16(10,true)}:${view(right[i].payload).getUint16(8,true)}`))right.splice(i,1);
@@ -251,7 +253,8 @@ export function structuralEdit(HwpDocument, source, hash, operation) {
     const formatChange=formatting?prepareFormatChange(doc,raw,block,operation,sourceRecords):null;
     const tableChange=['split_table_cell','merge_table_cells'].includes(operation.type)
       ?prepareMergedTableChange(before,block,operation,sourceRecords)
-      :operation.type.includes('_table_')?prepareTableChange(before,block,operation,sourceRecords,text):null;
+      :operation.type.includes('_table_')?(before.tables.find(t=>t.section===block.section&&t.paragraph===block.paragraph&&t.control===block.control)?.cells.some(c=>c.rowSpan>1||c.colSpan>1)
+       ?prepareMergedAxisChange:prepareTableChange)(before,block,operation,sourceRecords,text):null;
     const removing = ['delete_paragraph','merge_paragraph'].includes(operation.type);
     let previous;
     if(removing) {
