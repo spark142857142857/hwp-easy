@@ -30,7 +30,7 @@ export function readLocal(value, expected) {
   return readSnapshot(value,expected,true);
 }
 export function readImageLocal(value,expected) {
-  if(typeof value!=='string'||path.extname(value).toLowerCase()!=='.png'||!hash(expected))fail('INVALID_IMAGE_FILE');
+  if(typeof value!=='string'||!['.png','.jpg','.jpeg'].includes(path.extname(value).toLowerCase())||!hash(expected))fail('INVALID_IMAGE_FILE');
   const snapshot=readSnapshot(value,expected,false);
   if(snapshot.bytes.length>1048576)fail('IMAGE_LIMIT_EXCEEDED');
   return snapshot;

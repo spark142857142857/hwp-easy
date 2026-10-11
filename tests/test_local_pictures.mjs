@@ -1,0 +1,43 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import fs from 'node:fs';import os from 'node:os';import path from 'node:path';
+import {HwpDocument} from '@rhwp/core';
+import {fixture} from './rhwp_fixtures.mjs';
+import {runLocal} from '../src/one_hwp/local_runner.mjs';
+import {digest} from '../src/one_hwp/local_file.mjs';
+import {imageSize} from '../src/one_hwp/local_image.mjs';
+import {readHwp} from '../probes/sites-runtime/guard/container.mjs';
+import {parseRecords} from '../probes/sites-runtime/guard/records.mjs';
+import {baselineJpeg,progressiveJpeg} from './local_image_fixtures.mjs';
+const png=Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=','base64');
+export function pictureWorkspace(t,bytes=fixture()) {const dir=fs.mkdtempSync(path.join(os.tmpdir(),'hwp-easy-pictures-'));t.after(()=>{assert.equal(path.dirname(dir),os.tmpdir());assert.ok(path.basename(dir).startsWith('hwp-easy-pictures-'));fs.rmSync(dir,{recursive:true,force:true});});
+ const source=path.join(dir,'양식 with spaces.hwp');fs.writeFileSync(source,bytes);const images=[['first.png',png],['second.jpg',baselineJpeg],['third.jpeg',progressiveJpeg]].map(([name,bytes])=>{const source=path.join(dir,name);fs.writeFileSync(source,bytes);return {source,expected_sha256:digest(bytes)};});return {dir,source,images};}
+const objects=bytes=>[...parseRecords(readHwp(bytes).streams.get('BodyText/Section0'))].filter(r=>[76,85].includes(r.tag)||r.tag===71&&Buffer.from(r.payload.subarray(0,4)).toString()===' osg').map(r=>({tag:r.tag,level:r.level,bytes:Buffer.from(r.payload)}));
+for(const kind of ['paragraph','cell'])for(const empty of [false,true])test(`multiple PNG/JPEG pictures, crop/rotate/replace/delete and exact recovery in ${kind}, empty=${empty}`,async t=>{
+ const original=fixture({table:kind==='cell',paragraphs:['앞',empty?'':'가😀나 그림 위치','끝'],cells:[['질문',empty?'':'가😀나 그림 위치']]}),{source,images}=pictureWorkspace(t,original),read=()=>runLocal({action:'read',source,max_chars:64000});let state=await read(),block=state.blocks.find(b=>b.kind===kind&&b.text===(empty?'':'가😀나 그림 위치')),first;
+ const edit=async op=>{state=await read();const b=state.blocks.find(b=>b.id===block.id);const request={source,expected_sha256:state.source_sha256,operations:[{target_id:b.target_id,expected_old:b.text,...op}]};const before=fs.readFileSync(source);assert.equal((await runLocal({action:'plan',...request})).saved,false);assert.deepEqual(fs.readFileSync(source),before);const result=await runLocal({action:'edit',...request});assert.equal(result.saved_path,source);assert.equal(result.raw_preservation_verified,true);state=await read();return result;};
+ for(let i=0;i<3;i++){const result=await edit({type:'insert_picture',offset:empty?0:i===1?0:2,image:images[i],width:7200,height:3600});first??=result;assert.equal(state.pictures.length,i+1);assert.deepEqual(state.pictures.map(p=>p.picture_index),Array.from({length:i+1},(_,i)=>i));}
+ const request=op=>{const b=state.blocks.find(b=>b.id===block.id);return {action:'edit',source,expected_sha256:state.source_sha256,operations:[{target_id:b.target_id,expected_old:b.text,...op}]};};
+ await assert.rejects(runLocal(request({type:'delete_picture',expected_properties:state.pictures[1].properties})),/PICTURE_INDEX_REQUIRED/);
+ const baseline=fs.readFileSync(source);const preserved=objects(baseline).filter((_,i)=>i<3||i>=6);const update=async props=>{const p=state.pictures[1];await edit({type:'update_picture',picture_index:1,expected_properties:p.properties,props});assert.deepEqual(objects(fs.readFileSync(source)).filter((_,i)=>i<3||i>=6),preserved);};
+ const p=state.pictures[1];await assert.rejects(runLocal(request({type:'update_picture',picture_index:1,expected_properties:p.properties,props:{cropLeft:p.properties.sourceWidth}})),/INVALID_PICTURE_CROP/);assert.deepEqual(fs.readFileSync(source),baseline);
+ await update({cropLeft:10,cropTop:10,cropRight:15,cropBottom:15});assert.equal(state.pictures[1].properties.cropRight,15);await update({cropLeft:0,cropTop:0,cropRight:0,cropBottom:0});
+ for(const angle of [90,180,270,34,-45,359,0]){await update({rotationAngle:angle});assert.equal(state.pictures[1].properties.rotationAngle,angle);const values=state.pictures[1].properties;assert.ok(values.width>0&&values.height>0);}
+ const selected=state.pictures[1];await edit({type:'replace_picture',picture_index:1,expected_properties:selected.properties,image:images[1]});assert.equal(state.pictures.length,3);assert.equal(state.pictures[1].properties.sourceWidth,4800);assert.equal(state.pictures[1].properties.cropRight,0);
+ await edit({type:'delete_picture',picture_index:1,expected_properties:state.pictures[1].properties});assert.equal(state.pictures.length,2);assert.deepEqual(objects(fs.readFileSync(source)),preserved);
+ await runLocal({action:'restore',source,expected_sha256:state.source_sha256,backup_id:first.backup_id});assert.deepEqual(fs.readFileSync(source),original);
+});
+for(const [name,bytes] of [['baseline',baselineJpeg],['progressive',progressiveJpeg]])test(`${name} JPEG dimensions and invalid envelope rejection`,()=>{assert.deepEqual(imageSize(bytes),{width:64,height:40,extension:'jpg'});assert.throws(()=>imageSize(bytes.subarray(0,-1)),/INVALID_JPEG/);assert.throws(()=>imageSize(Buffer.concat([bytes,Buffer.from([0])])),/INVALID_JPEG/);assert.throws(()=>imageSize(bytes,'image.png'),/IMAGE_EXTENSION_MISMATCH/);});
+test('rotated JPEG resizing, combined crop/rotation and replacement preserve the selected frame and other pictures',async t=>{
+ const {source,images}=pictureWorkspace(t);let state=await runLocal({action:'read',source,max_chars:64000}),block=state.blocks.find(b=>b.text==='중간 합성 문단');
+ const edit=async op=>{state=await runLocal({action:'read',source,max_chars:64000});const b=state.blocks.find(b=>b.id===block.id);await runLocal({action:'edit',source,expected_sha256:state.source_sha256,operations:[{target_id:b.target_id,expected_old:b.text,...op}]});state=await runLocal({action:'read',source,max_chars:64000});};
+ for(const image of images.slice(0,2))await edit({type:'insert_picture',offset:0,image,width:7200,height:3600});
+ const other=objects(fs.readFileSync(source)).slice(0,3),update=async props=>edit({type:'update_picture',picture_index:1,expected_properties:state.pictures[1].properties,props});
+ await update({rotationAngle:-45,cropLeft:75,cropTop:75,cropRight:150,cropBottom:150});assert.equal(state.pictures[1].properties.rotationAngle,-45);assert.equal(state.pictures[1].properties.cropRight,150);
+ await update({width:10000,height:5000,horzOffset:200,vertOffset:-100});assert.equal(state.pictures[1].properties.width,10000);assert.equal(state.pictures[1].properties.height,5000);assert.equal(state.pictures[1].properties.rotationAngle,-45);
+ const before=state.pictures[1].properties;await edit({type:'replace_picture',picture_index:1,expected_properties:before,image:images[0]});const after=state.pictures[1].properties;
+ for(const key of ['width','height','horzOffset','vertOffset','rotationAngle'])assert.equal(after[key],before[key]);assert.equal(after.cropLeft,0);assert.equal(after.cropRight,0);assert.equal(after.sourceWidth,75);assert.deepEqual(objects(fs.readFileSync(source)).slice(0,3),other);
+});
+test('picture number, stale expected properties and negative crop cannot change a selected file',async t=>{const {source,images}=pictureWorkspace(t),before=await runLocal({action:'read',source,max_chars:64000}),b=before.blocks.find(b=>b.text==='중간 합성 문단');await runLocal({action:'edit',source,expected_sha256:before.source_sha256,operations:[{type:'insert_picture',target_id:b.target_id,expected_old:b.text,offset:0,image:images[1],width:7200,height:3600}]});const state=await runLocal({action:'read',source,max_chars:64000}),p=state.pictures[0],bytes=fs.readFileSync(source),base={type:'update_picture',target_id:p.target_id,expected_old:b.text,picture_index:0,expected_properties:p.properties,props:{cropLeft:-1}};
+ for(const [change,error] of [[{},/INVALID_PICTURE_PROPERTIES/],[{picture_index:1},/PICTURE_TARGET_REQUIRED/],[{picture_index:0.5},/PICTURE_TARGET_REQUIRED/],[{expected_properties:{...p.properties,width:1}},/EXPECTED_PICTURE_MISMATCH/],[{props:{rotationAngle:360}},/INVALID_PICTURE_PROPERTIES/]])await assert.rejects(runLocal({action:'edit',source,expected_sha256:state.source_sha256,operations:[{...base,...change}]}),error);assert.deepEqual(fs.readFileSync(source),bytes);
+});

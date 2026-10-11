@@ -48,11 +48,13 @@ jobs:
         run: node probes/sites-runtime/scripts/check-python-guard.mjs
       - name: Verify local same-file edits, structural changes and isolated plugin runtime
         run: |
-          node --test tests/test_local_runner.mjs tests/test_local_structure.mjs tests/test_local_advanced.mjs tests/test_local_extended.mjs
+          node --test tests/test_local_runner.mjs tests/test_local_structure.mjs tests/test_local_advanced.mjs tests/test_local_extended.mjs tests/test_local_pictures.mjs
           node scripts/package_local_plugin.mjs
           node scripts/check-local-plugin.mjs
           python scripts/check-local-structure.py
           python scripts/check-local-advanced.py
+          node scripts/check-local-pictures.mjs
+          python scripts/check-local-pictures.py
       - name: Run regressions and real HWP MCP flows without Hancom
         env:
           HWP_EASY_NATIVE_TESTS: '1'

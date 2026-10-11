@@ -1,6 +1,6 @@
 /** Pack independently proven local structural metadata repairs. No model edits. */
 import {deflateRaw} from 'pako';
-import {readCfb,replaceBodyStreamsWithMiniTailAdjustment} from '../guard/container.mjs';
+import {readCfb,replaceBodyStreamsWithMiniTailAdjustment,replaceLocalBodyWithMiniRootGrowth} from '../guard/container.mjs';
 import {GuardError} from '../guard/records.mjs';
 const view=bytes=>new DataView(bytes.buffer,bytes.byteOffset,bytes.byteLength);
 export function packStructuralBodyRepairs(candidate,afterRaw,patches) {
@@ -23,7 +23,10 @@ export function packStructuralBodyRepairs(candidate,afterRaw,patches) {
 // bounded CFB writer verifies every other packed stream and allocation; the
 // caller must subsequently prove complete raw/model preservation.
 export function packLocalBodyRewrite(candidate,afterRaw,bodies){
- const replacements=new Map(),compressed=view(afterRaw.streams.get('FileHeader')).getUint32(36,true)&1;
- for(const [name,body] of bodies){if(!name.startsWith('BodyText/Section')||!afterRaw.streams.has(name)||!body.length||body.length>2000000)throw new GuardError('BODY_REPAIR_INVALID');replacements.set(name,compressed?deflateRaw(body,{level:9}):body);}
- return replaceBodyStreamsWithMiniTailAdjustment(candidate,replacements).bytes;
+ const replacements=new Map(),compressed=view(afterRaw.streams.get('FileHeader')).getUint32(36,true)&1,packed=readCfb(candidate);
+ for(const [name,body] of bodies){if(!name.startsWith('BodyText/Section')||!afterRaw.streams.has(name)||!body.length||body.length>2000000)throw new GuardError('BODY_REPAIR_INVALID');let bytes=compressed?deflateRaw(body,{level:9}):body;
+  // BodyText permits zero padding after its DEFLATE end. A shorter rewrite
+  // can retain the exact allocation, without releasing unrelated sectors.
+  if(compressed&&bytes.length<packed.get(name).length){const padded=new Uint8Array(packed.get(name).length);padded.set(bytes);bytes=padded;}replacements.set(name,bytes);}
+ return replaceLocalBodyWithMiniRootGrowth(candidate,replacements).bytes;
 }

@@ -1,7 +1,7 @@
 {
   "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
   "name": "hwp-easy-local",
-  "version": "0.2.3",
+  "version": "0.2.4",
   "description": "Read and edit a selected local HWP, saving verified changes to the same file.",
   "author": { "name": "원석 유" },
   "homepage": "https://github.com/spark142857142857/hwp-easy",
@@ -11,7 +11,7 @@
       "interface": {
         "displayName": "HWP Easy Local",
         "shortDescription": "Edit your selected HWP in place",
-        "longDescription": "Read a selected local HWP and save checked edits to the same file. Supports multiline answers, paragraph and table changes, supported cell split/merge, character/paragraph formatting and body picture insertion, resizing, movement and removal. Runs in an agent environment with local filesystem and Node.js access and retains private recovery copies. No document upload, external browser or HWP Easy account is needed. This is a local development candidate, separate from the remote package under directory review.",
+        "longDescription": "Read a selected local HWP and save checked edits to the same file. Supports multiline answers, paragraph and merged-table changes, font formatting and multiple PNG/JPEG pictures in body or cell paragraphs, including replacement, resizing, cropping, rotation and removal. Runs in an agent environment with local filesystem and Node.js access and retains private recovery copies. No document upload, external browser or HWP Easy account is needed. This is a local development candidate, separate from the remote package under directory review.",
         "category": "Productivity",
         "capabilities": ["Read local HWP", "Save to the same file", "Edit paragraphs", "Edit simple tables", "Restore previous bytes"],
         "websiteURL": "https://github.com/spark142857142857/hwp-easy",

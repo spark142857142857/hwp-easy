@@ -37,11 +37,11 @@ export async function runLocal(request) {
     insert_delete_table_rows_columns:true,
     insert_delete_merged_table_rows_columns:true,font_family_change:true,
     split_merge_table_cells:true,format_text:true,format_paragraph:true,
-    pictures:{insert:'local PNG, body paragraph or top-level table cell',replace:'local PNG, retain frame size and position',update:'size and position',delete:true,delete_cleans_unused_embedded_data:false},
+    pictures:{insert:'local PNG/JPEG, body paragraph or top-level table cell',replace:'local PNG/JPEG, retain frame size and position',update:'size, position, four-edge crop and integer-degree rotation',multiple_per_paragraph:32,picture_index_required_when_multiple:true,delete:true,delete_cleans_unused_embedded_data:false},
     edit_profiles:{existing_text:'guarded paragraph/cell replacement; constrained mixed styles',
       structure:'uniform-style targets; paragraphs, simple or merged table rows/columns and verified cell split/merge; opaque page numbers and supported pictures preserved',
       formatting:'selected plain character ranges; font family/size/color/decorations and paragraph alignment/spacing; exact raw definition patches',
-      pictures:'one supported picture per plain body paragraph or top-level cell paragraph; local PNG insertion/replacement and existing picture size/position/removal'},
+      pictures:'up to 32 supported pictures per plain body paragraph or top-level cell paragraph; selected local PNG/JPEG insertion/replacement, size/position/crop/rotation/removal'},
     layout_verified:false,requires:'Node.js 22 or newer with local file permissions',max_input_bytes:4194304};
   const snapshot=readLocal(request.source,request.expected_sha256),engine=createDocumentEngine(HwpDocument);
   const document=await engine.open(snapshot.bytes),version=document.source_sha256;

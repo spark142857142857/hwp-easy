@@ -223,6 +223,7 @@ function parseCfb(input, options = {}, captureLayout = false) {
   }
   for (let index = 1; index < entries.length; index++) if (entries[index] && !visited.has(index)) fail('directory_invalid');
   return { streams, layouts, miniLayout: captureLayout ? {
+    sectorSize, fatIds, rootIds, miniIds,
     rootSize: root.size, rootCapacity: rootIds.length * sectorSize,
     rootSizeOffset: (directoryIds[0] + 1) * sectorSize + 120,
     sectorOffset: (id) => (rootIds[Math.floor(id * 64 / sectorSize)] + 1) * sectorSize + id * 64 % sectorSize,
@@ -233,6 +234,40 @@ function parseCfb(input, options = {}, captureLayout = false) {
 
 export function readCfb(input, options = {}) {
   return parseCfb(input, options).streams;
+}
+
+/** Local-only bounded fallback: append one body mini sector, extending the
+ * root/miniFAT chains by at most one sector each when their capacity is full.
+ * Existing FAT capacity, directory trees and other stream allocations stay.
+ */
+export function replaceLocalBodyWithMiniRootGrowth(input,replacements) {
+  let originalFailure;
+  try { return replaceBodyStreamsWithMiniTailAdjustment(input,replacements); }
+  catch(error){if(!bodyRepairAllocationDiagnostic(error))throw error;originalFailure=error;}
+  const reject=()=>{throw originalFailure;};
+  if(!(replacements instanceof Map)||replacements.size!==1)reject();
+  const {streams,layouts,miniLayout:m}=parseCfb(input,{},true),[name,bytes]=[...replacements][0],layout=layouts.get(name),source=streams.get(name);
+  if(!/^BodyText\/Section(?:0|[1-9]\d*)$/.test(name)||!(bytes instanceof Uint8Array))fail('BODY_REPAIR_INVALID');
+  if(!source||layout.unit!==64||bytes.length>=4096||Math.ceil(bytes.length/64)!==layout.locations.length+1||m.rootSize%64||!m.rootIds.length||!m.miniIds.length)reject();
+  const v=new DataView(input.buffer,input.byteOffset,input.byteLength),id=m.rootSize/64,sectorCount=input.length/m.sectorSize-1,rootGrowth=m.rootSize+64>m.rootCapacity,miniGrowth=id*4+4>m.miniIds.length*m.sectorSize;
+  const appendCount=Number(rootGrowth)+Number(miniGrowth);
+  if(!appendCount||input.length+appendCount*m.sectorSize>defaults.maxDocumentBytes||sectorCount+appendCount>m.fatIds.length*m.sectorSize/4||v.getUint32(m.rootSizeOffset+4,true)!==0||v.getUint32(layout.sizeOffset+4,true)!==0)reject();
+  const fatOffset=sid=>(m.fatIds[Math.floor(sid/(m.sectorSize/4))]+1)*m.sectorSize+(sid%(m.sectorSize/4))*4;
+  for(let sid=sectorCount;sid<sectorCount+appendCount;sid++)if(v.getUint32(fatOffset(sid),true)!==FREE)reject();
+  const output=new Uint8Array(input.length+appendCount*m.sectorSize);output.set(input);const out=new DataView(output.buffer),allowed=new Uint8Array(output.length);allowed.fill(1,input.length);
+  const write=(offset,value)=>{allowed.fill(1,offset,offset+4);out.setUint32(offset,value,true);};let nextSid=sectorCount,miniIds=[...m.miniIds],rootIds=[...m.rootIds];
+  if(miniGrowth){const sid=nextSid++;miniIds.push(sid);output.fill(255,(sid+1)*m.sectorSize,(sid+2)*m.sectorSize);write(fatOffset(m.miniIds.at(-1)),sid);write(fatOffset(sid),END);write(64,miniIds.length);}
+  if(rootGrowth){const sid=nextSid++;rootIds.push(sid);write(fatOffset(m.rootIds.at(-1)),sid);write(fatOffset(sid),END);}
+  const miniOffset=n=>(miniIds[Math.floor(n*4/m.sectorSize)]+1)*m.sectorSize+(n*4%m.sectorSize),oldTail=layout.miniSectorIds.at(-1),tailOffset=(rootIds[Math.floor(id*64/m.sectorSize)]+1)*m.sectorSize+id*64%m.sectorSize;
+  if(out.getUint32(miniOffset(id),true)!==FREE||out.getUint32(miniOffset(oldTail),true)!==END||output.subarray(tailOffset,tailOffset+64).some(n=>n!==0))reject();
+  write(miniOffset(oldTail),id);write(miniOffset(id),END);write(m.rootSizeOffset,m.rootSize+64);write(layout.sizeOffset,bytes.length);
+  [...layout.locations,tailOffset].forEach((offset,index)=>{allowed.fill(1,offset,offset+64);output.fill(0,offset,offset+64);output.set(bytes.subarray(index*64,(index+1)*64),offset);});
+  if(input.some((n,i)=>n!==output[i]&&!allowed[i]))fail('BODY_REPAIR_INVALID');
+  const checked=parseCfb(output,{},true);
+  if(streams.size!==checked.streams.size||[...streams].some(([key,value])=>!equal(replacements.get(key)??value,checked.streams.get(key)??[])))fail('BODY_REPAIR_INVALID');
+  for(const [key,old] of layouts){const actual=checked.layouts.get(key),locations=key===name?[...old.locations,tailOffset]:old.locations;if(!actual||actual.unit!==old.unit||actual.sizeOffset!==old.sizeOffset||!equal(locations,actual.locations))fail('BODY_REPAIR_INVALID');}
+  if(checked.miniLayout.rootSize!==m.rootSize+64||checked.miniLayout.rootCapacity!==m.rootCapacity+Number(rootGrowth)*m.sectorSize)fail('BODY_REPAIR_INVALID');
+  return {bytes:output,body_mini_sector_growth:1,local_root_sector_growth:Number(rootGrowth),local_minifat_sector_growth:Number(miniGrowth)};
 }
 
 /**
