@@ -89,6 +89,28 @@
 
 교체는 자르기 범위와 저장된 원본 이미지 크기를 모두 새 raster 크기로 갱신하며 틀·회전·선택하지 않은 그림을 보존한다. 검증 사본과 익명 집계는 ignored `outputs/picture-edit-20261011/real-copy-cases-4/`에 보관한다. 원시 변환 행렬은 [고정 RHWP serializer](https://github.com/edwardkim/rhwp/blob/e8800c8def63449808a4092798442652ed460552/src/serializer/control.rs)의 형식을 따르며, JPEG framing은 [ITU-T T.81](https://www.w3.org/Graphics/JPEG/itu-t81.pdf)을 참고했다. 그룹 개체·캡션·그림을 포함한 셀의 구조 변경을 일반 지원으로 확대하지 않는다.
 
+### 한글 2020 화면 확인과 셀 그림 크기 보완
+
+로컬 후보 **0.2.5**는 한글 2020의 실제 화면 비교에서 발견한 셀 그림 크기 오류를 수정했다. 셀에 인라인 그림을 저장할 때 공통 헤더 속성을 `1`로 설정해 절대 폭·높이 기준이 사라졌고, 한글은 크기를 종이 비율로 해석해 그림을 납작하게 표시했다. 인라인 비트와 절대 크기 기준을 함께 유지하는 `0x000a0001`로 보완했다. 이 값은 [한컴 HWP 5.0 형식 revision 1.3](https://cdn.hancom.com/link/docs/%ED%95%9C%EA%B8%80%EB%AC%B8%EC%84%9C%ED%8C%8C%EC%9D%BC%ED%98%95%EC%8B%9D_5.0_revision1.3.pdf)의 공통 개체 속성 표 70에 따른다. 본문·셀 그림의 폭/높이 기준을 회귀와 독립 Python 판독에서 함께 검사한다.
+
+수정한 실제 분리 패키지로 세 `testdocs/` 복사본의 **50/50**, 독립 Python/Pillow **50/50**, 합성 그림 **20/20**과 로컬 회귀 **105/105**를 다시 통과했다. 기존 분리 패키지의 연속 편집·29개 복구 사본·독립 구조 및 고급 편집 검사도 통과했다. 수정 코드 `e538bc7`의 [Linux·Windows CI 네 작업](https://github.com/spark142857142857/hwp-easy/actions/runs/38110386470)은 모두 성공했다.
+
+한글 2020의 **100% 배율**에서 수정 패키지가 저장한 다음 **13개 화면**을 직접 비교했다. 본문 그림은 같은 로컬 패키지의 위치 변경으로 서로 떨어뜨린 비교 사본을 사용했고, 셀 그림은 인라인 배치 그대로 확인했다. 문서 번호는 개인 파일 이름을 대신한 익명 식별자다.
+
+| 문서·대상 | 직접 확인한 화면 | 결과 |
+| --- | --- | --- |
+| 문서 01 본문 | 여러 그림 중 가운데 JPEG의 34도 회전 | 1/1 |
+| 문서 01 넓은 표 셀 | 여러 그림의 나란한 배치와 가운데 JPEG의 34도 회전 | 1/1 |
+| 문서 02 본문 | 여러 그림 중 가운데 JPEG의 34도 회전 | 1/1 |
+| 문서 02 좁은 표 셀 | 기준 배치, 네 방향 자르기·해제, 90도/34도/0도 회전 | 6/6 |
+| 문서 03 본문 | 기준 배치, 네 방향 자르기, 90도/34도 회전 | 4/4 |
+
+선택한 JPEG만 잘리거나 회전했고 나머지 PNG·점진 JPEG의 틀과 방향이 유지됐다. 자르기는 표시 틀을 유지했고 해제하면 전체 패턴이 다시 보였다. 90도와 34도 회전은 중심과 전체 모서리를 확인했으며 0도로 되돌리면 수평 틀이 복원됐다. 본문 그림은 서로 겹치지 않았고, 넓은 셀은 나란히, 좁은 셀은 여러 줄로 표시됐다. 좁은 셀은 그림을 수용하며 행 높이가 늘고 한 문서는 1쪽에서 2쪽으로 재배치됐다. 보이는 인접 칸 경계는 정렬을 유지했다.
+
+그림·화면·개인 문서는 공개하거나 업로드하지 않았다. 화면 비교 중 한글에서 파일을 저장하지 않았고, 검사 후 세 원본과 비교 파일의 바이트를 다시 확인했다. 양식 두 개의 원래 버전 헤더에 대한 한글 2020 상위 버전 안내는 별도 관측이며 헤더를 바꿔 숨기지 않았다. 13건은 지정한 그림 영역의 관찰이고, 모든 50개 작업의 화면 검사나 전체 페이지·글꼴·인쇄·임의의 기존 이미지 배치 인증이 아니다. 그룹 그림·캡션·그림을 포함한 셀의 표 구조 변경은 후속 범위다.
+
+검증 사본은 ignored `outputs/picture-edit-20261011/real-copy-cases-5/`, 추가 비교 사본·로컬 화면·관찰 기록은 `outputs/picture-viewer-20261011/`에 보관한다. 개인 문서 자료를 제외한 로컬 실행 패키지는 `hwp-easy-local-0.2.5.zip`으로 준비했다. 운영 Sites·전역 설치·심사 중인 원격 0.1.9에는 반영하지 않았다.
+
 ## 개발·패키징
 
 소스 실행기: [local_runner.mjs](../src/one_hwp/local_runner.mjs). 복구 가능한 저장: [local_file.mjs](../src/one_hwp/local_file.mjs). 구조 변경 검사: [local_structure.mjs](../src/one_hwp/local_structure.mjs). 직사각형 표 변경: [local_table.mjs](../src/one_hwp/local_table.mjs). 병합 셀: [local_merged_table.mjs](../src/one_hwp/local_merged_table.mjs). 병합 표 행·열: [local_merged_axis.mjs](../src/one_hwp/local_merged_axis.mjs). 서식: [local_format.mjs](../src/one_hwp/local_format.mjs). 그림: [local_picture.mjs](../src/one_hwp/local_picture.mjs), [셀 그림 저장](../src/one_hwp/local_cell_picture.mjs).
