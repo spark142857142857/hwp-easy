@@ -109,9 +109,10 @@ export function mapRawTargets(decoded, blocks) {
   return mapping;
 }
 
-export function createDocumentEngine(HwpDocument, { readInspectionCache, hostedWorkloadBudget = false, uniformStyleInspection = true } = {}) {
+export function createDocumentEngine(HwpDocument, { readInspectionCache, hostedWorkloadBudget = false, uniformStyleInspection = true, includeTableMetadata = false } = {}) {
   if (typeof hostedWorkloadBudget !== 'boolean') fail('INVALID_ARGUMENTS');
   if (typeof uniformStyleInspection !== 'boolean') fail('INVALID_ARGUMENTS');
+  if (typeof includeTableMetadata !== 'boolean') fail('INVALID_ARGUMENTS');
   const api = createEngineApi(HwpDocument, { mixedStyleSameLength: true, languageFontSelection: true,
     ...(uniformStyleInspection ? { uniformStyleProofs(bytes, blocks) {
       const decoded = readHwp(bytes);
@@ -190,6 +191,7 @@ export function createDocumentEngine(HwpDocument, { readInspectionCache, hostedW
       restrictions, emptyCellProfiles, clearCellProfiles, mixedProfiles });
     const base = () => ({ source_sha256: version, scope: 'supported_paragraph_and_cell_blocks',
       supported_blocks: inspection.blocks.length, table_count: inspection.tables.length,
+      ...(includeTableMetadata ? { tables: copy(inspection.tables), table_metadata_complete: true } : {}),
       coordinate_system: { index_base: 0,
         index_fields: ['section', 'paragraph', 'control', 'cell', 'cell_paragraph', 'row', 'column'],
         span_fields_are_counts: ['row_span', 'column_span'],

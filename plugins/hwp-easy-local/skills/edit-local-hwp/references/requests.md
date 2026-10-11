@@ -16,6 +16,18 @@ Pass returned `source_sha256` and `next_cursor` to continue. Each block includes
 
 `structural_editable` identifies a uniform-style structural candidate, including a target with existing LF line breaks. It still requires serialization preflight. `editable` retains the existing nonstructural engine profile.
 
+`text_range_editable` identifies a plain-text range candidate, including mixed character styles and empty paragraphs. Preflight still checks raw controls. Use `splice_text` to insert (`start == end`), delete (empty `new_text`) or replace a range of Unicode code points. An emoji counts as one point. Retained characters keep their exact styles; replacement inherits the first removed character, and pure insertion inherits the left neighbour (the first character at paragraph start). This operation does not insert control characters or newlines.
+
+```json
+{"action":"edit","source":"<path>","expected_sha256":"<hash>","operations":[{"type":"splice_text","target_id":"<ID>","expected_old":"<whole text>","start":2,"end":4,"new_text":"Longer replacement"}]}
+```
+
+Split a plain body/cell paragraph at a code-point offset while retaining mixed character runs on both sides. `offset` can be zero or the paragraph length, producing an empty paragraph. Adjacent plain mixed-style paragraphs can be merged when their paragraph properties match. Extended controls are refused for these mixed-style boundary operations.
+
+```json
+{"action":"edit","source":"<path>","expected_sha256":"<hash>","operations":[{"type":"split_paragraph","target_id":"<ID>","expected_old":"<whole text>","offset":3}]}
+```
+
 ```json
 {"action":"plan","source":"<selected path>","expected_sha256":"<read hash>","operations":[{"type":"replace_text","target_id":"<returned target ID>","expected_old":"<whole old text>","new_text":"New answer"}]}
 ```
@@ -32,7 +44,7 @@ Change `action` to `edit` to save. `replace_text` with `\n` creates real paragra
 
 Paragraphs and tables are inserted **after** the selected body paragraph, including an empty paragraph. Structural targets require a uniform character style. Table creation inserts a rectangular table plus a following empty caret paragraph; maximum 50 rows/columns and 256 cells. New paragraphs: at most 100 and total 100,000 UTF-16 units. Structural operations cannot share a batch. Verified page-number controls are preserved as opaque bytes; this does not make semantic reading complete.
 
-Delete a plain body paragraph, or a cell paragraph after the first. A paragraph carrying section, page, table or other extended controls cannot be deleted. Merging requires the selected paragraph and its immediate predecessor to have matching paragraph/character styles. Text is concatenated without an added separator.
+Delete a plain body paragraph, or a cell paragraph after the first. A paragraph carrying section, page, table or other extended controls cannot be deleted. Merging requires the selected paragraph and its immediate predecessor to have matching paragraph styles; supported plain mixed character styles are retained. Text is concatenated without an added separator.
 
 ```json
 {"action":"edit","source":"<selected path>","expected_sha256":"<hash>","operations":[{"type":"delete_paragraph","target_id":"<paragraph ID>","expected_old":"<whole old text>"}]}
@@ -71,6 +83,20 @@ Formatting operations run one at a time and leave text unchanged. `format_text` 
 ```
 
 `format_paragraph` properties: `alignment` (`justify`, `left`, `right`, `center`), `lineSpacing` (existing spacing type retained), `marginLeft`, `marginRight`, `indent`, `spacingBefore`, `spacingAfter`. Numeric properties use the engine's raw HWP units; model margins/indent are reported divided by 150 and spacing by 75, rounded to one decimal. Nonnegative numeric values have a 720000 ceiling, indent also permits down to -72000. This operation can target a supported body/cell paragraph without changing its character runs.
+
+`read` returns complete `tables` with `table_metadata_complete=true`, table dimensions and properties, and each cell's coordinates, spans, properties and paragraph IDs. The remote engine does not enable this local metadata option by default.
+
+`resize_table_columns` takes `widths` for every grid column; `resize_table_rows` takes `heights` for every grid row. Entries are integer HWP units, 100–720000, with a sum of at most 720000. Choose an actual cell target and its full expected text. Merged cells receive the sum across their span. Stored heights are minimum geometry; content can expand a rendered row. Metadata changes preserve text, pictures, raw definition streams and opaque header tails.
+
+```json
+{"action":"edit","source":"<path>","expected_sha256":"<hash>","operations":[{"type":"resize_table_columns","target_id":"<cell ID>","expected_old":"<cell text>","widths":[12000,30000]}]}
+```
+
+`format_cell` takes `props`: `paddingLeft`, `paddingRight`, `paddingTop`, `paddingBottom` (integer 0–65535), `applyInnerMargin` (boolean), `verticalAlign` (0 top, 1 center, 2 bottom). `format_table` accepts the four paddings and `cellSpacing` with the same integer bounds. Units are raw HWP units, 100 per point. All paragraphs of the selected cell share its metadata; cell pictures are preserved. Arbitrary nested tables and overlapping/incomplete grids are refused.
+
+```json
+{"action":"edit","source":"<path>","expected_sha256":"<hash>","operations":[{"type":"format_cell","target_id":"<cell ID>","expected_old":"<cell text>","props":{"verticalAlign":1,"applyInnerMargin":true,"paddingLeft":400,"paddingTop":200}}]}
+```
 
 ```json
 {"action":"edit","source":"<path>","expected_sha256":"<hash>","operations":[{"type":"format_paragraph","target_id":"<ID>","expected_old":"<whole text>","props":{"alignment":"center","lineSpacing":180}}]}

@@ -12,6 +12,8 @@ import { prepareFormatChange } from './local_format.mjs';
 import { prepareMergedTableChange } from './local_merged_table.mjs';
 import { prepareMergedAxisChange } from './local_merged_axis.mjs';
 import {pictureProfile} from './local_picture.mjs';
+import {prepareTextSplice} from './local_text.mjs';
+import {prepareParagraphChange} from './local_paragraph.mjs';
 
 const fail = (code) => { throw new GuardError(code); };
 const equal = (a, b) => JSON.stringify(a) === JSON.stringify(b);
@@ -222,7 +224,9 @@ export function verifyListCounts(raw, model) {
 
 export function structuralEdit(HwpDocument, source, hash, operation) {
   const formatting=['format_text','format_paragraph'].includes(operation?.type);
-  const api = createEngineApi(HwpDocument,{existingLineBreaksEditable:true,mixedStyleSameLength:formatting}), raw = readHwp(source), doc = api.openDocument(source);
+  const splicing=operation?.type==='splice_text';
+  const paragraphBoundary=['split_paragraph','merge_paragraph'].includes(operation?.type);
+  const api = createEngineApi(HwpDocument,{existingLineBreaksEditable:true,mixedStyleSameLength:formatting||splicing||paragraphBoundary}), raw = readHwp(source), doc = api.openDocument(source);
   try {
     const before = api.inspectDocument(doc, source);
     mapRawTargets(raw, before.blocks);
@@ -231,6 +235,8 @@ export function structuralEdit(HwpDocument, source, hash, operation) {
     if (!operation || typeof operation !== 'object' || Array.isArray(operation)) fail('INVALID_OPERATION');
     const schemas = {
       replace_text: ['type', 'target_id', 'expected_old', 'new_text'],
+      splice_text: ['type','target_id','expected_old','start','end','new_text'],
+      split_paragraph: ['type','target_id','expected_old','offset'],
       insert_paragraphs: ['type', 'target_id', 'expected_old', 'paragraphs'],
       create_table: ['type', 'target_id', 'expected_old', 'cells'],
       delete_paragraph: ['type', 'target_id', 'expected_old'],
@@ -247,10 +253,11 @@ export function structuralEdit(HwpDocument, source, hash, operation) {
     const schema = schemas[operation.type];
     if (!schema || !equal(Object.keys(operation).sort(), [...schema].sort())) fail('INVALID_OPERATION');
     const id = rawId(operation.target_id, hash), block = before.blocks.find(b => b.id === id);
-    if (!block || !block.editable || !formatting&&block.style.char_shape_ids.length !== 1) fail('TARGET_NOT_EDITABLE');
+    if (!block || !block.editable || !formatting&&!splicing&&!paragraphBoundary&&block.style.char_shape_ids.length !== 1) fail('TARGET_NOT_EDITABLE');
     if (operation.expected_old !== block.text) fail('EXPECTED_OLD_MISMATCH');
     const sourceRecords = recordsByBlock(raw, before);
     const formatChange=formatting?prepareFormatChange(doc,raw,block,operation,sourceRecords):null;
+    const textChange=splicing?prepareTextSplice(doc,block,operation,sourceRecords.get(id)):null;
     const tableChange=['split_table_cell','merge_table_cells'].includes(operation.type)
       ?prepareMergedTableChange(before,block,operation,sourceRecords)
       :operation.type.includes('_table_')?(before.tables.find(t=>t.section===block.section&&t.paragraph===block.paragraph&&t.control===block.control)?.cells.some(c=>c.rowSpan>1||c.colSpan>1)
@@ -269,12 +276,15 @@ export function structuralEdit(HwpDocument, source, hash, operation) {
       if(operation.type==='merge_paragraph') {
         if(!previous || rawId(operation.previous_target_id,hash)!==previous.id
           || operation.expected_previous!==previous.text)fail('PREVIOUS_PARAGRAPH_MISMATCH');
-        if(!previous.editable || previous.style.char_shape_ids.length!==1
-          || !equal(previous.style.char_shape_ids,block.style.char_shape_ids)
+        if(!previous.editable
           || !equal(previous.style.paragraph,block.style.paragraph))fail('MERGE_STYLE_MISMATCH');
         text(previous.text+block.text);
       } else if(block.kind==='cell' && !previous)fail('CELL_FIRST_PARAGRAPH_DELETE_UNSUPPORTED');
     }
+    const paragraphChange=operation.type==='split_paragraph'||operation.type==='merge_paragraph'
+      &&(block.style.char_shape_ids.length!==1||previous.style.char_shape_ids.length!==1
+        ||!equal(block.style.char_shape_ids,previous.style.char_shape_ids))
+      ?prepareParagraphChange(doc,block,operation,sourceRecords,previous):null;
     // Structural targets cannot carry hidden controls, range tags or binary objects.
     if (block.kind==='cell' && sourceRecords.get(id).some(r => ![66, 67, 68, 69, 72].includes(r.tag))) fail('STRUCTURAL_TARGET_HAS_CONTROLS');
     const shape = block.style.char_shape_ids[0];
@@ -283,7 +293,7 @@ export function structuralEdit(HwpDocument, source, hash, operation) {
     if (lines && (!Array.isArray(lines) || !lines.length || lines.length > 100
       || lines.some(line => text(line).includes('\n')) || lines.reduce((n, s) => n + s.length, 0) > 100000)) fail('INVALID_PARAGRAPHS');
     let added = 0, tableAdded = false, tableHost;
-    if (!formatting&&!tableChange && !['replace_text','delete_paragraph','merge_paragraph'].includes(operation.type) && block.kind !== 'paragraph') fail('BODY_PARAGRAPH_REQUIRED');
+    if (!formatting&&!splicing&&!paragraphBoundary&&!tableChange && !['replace_text','delete_paragraph','merge_paragraph'].includes(operation.type) && block.kind !== 'paragraph') fail('BODY_PARAGRAPH_REQUIRED');
     const replace = (position, oldText, value) => {
       const count = [...value].length;
       if (block.kind === 'paragraph') {
@@ -299,6 +309,8 @@ export function structuralEdit(HwpDocument, source, hash, operation) {
       ? doc.splitParagraph(block.section, position, offset)
       : doc.splitParagraphInCell(block.section, block.paragraph, block.control, block.cell, position, offset));
     if(formatChange)formatChange.apply();
+    else if(textChange)textChange.apply();
+    else if(paragraphChange){paragraphChange.apply();added=operation.type==='split_paragraph'?1:-1;}
     else if(tableChange)tableChange.apply(doc);
     else if(removing) {
       const position=block.kind==='cell'?block.cell_paragraph:block.paragraph;
@@ -393,6 +405,18 @@ export function structuralEdit(HwpDocument, source, hash, operation) {
         formatChange.verifyRecords(sourceRecords.get(old.id),savedRecords.get(expected.id),savedRaw);
         continue;
       }
+      if(textChange&&old.id===id) {
+        const check=api.openDocument(output);
+        try{textChange.verifyBlock(saved,check);}finally{check.free();}
+        textChange.verifyRecords(sourceRecords.get(old.id),savedRecords.get(expected.id));
+        continue;
+      }
+      if(paragraphChange&&old.id===(operation.type==='split_paragraph'?id:previous.id)) {
+        const check=api.openDocument(output);
+        try{paragraphChange.verifyBlock(saved,check);}finally{check.free();}
+        paragraphChange.verifyRecords(sourceRecords.get(old.id),savedRecords.get(expected.id));
+        continue;
+      }
       const merged=operation.type==='merge_paragraph' && old.id===previous.id;
       const changed=old.id===id&&operation.type==='replace_text'||merged;
       if (changed) expected=expectedEditedBlock(expected,merged?previous.text+block.text:lines[0],true);
@@ -401,8 +425,13 @@ export function structuralEdit(HwpDocument, source, hash, operation) {
       else compareRecords(sourceRecords.get(old.id), savedRecords.get(expected.id), changed);
     }
     const inserted = after.blocks.filter(b => !originalIds.has(b.id));
-    if(formatChange) {
+    if(formatChange||textChange) {
       if(inserted.length||after.blocks.length!==before.blocks.length)fail('FORMAT_CONTENT_MISMATCH');
+    } else if(operation.type==='split_paragraph') {
+      if(inserted.length!==1||after.blocks.length!==before.blocks.length+1)fail('PARAGRAPH_CONTENT_MISMATCH');
+      const check=api.openDocument(output);
+      try{paragraphChange.verifyBlock(inserted[0],check,1);}finally{check.free();}
+      paragraphChange.verifyRecords(sourceRecords.get(id),savedRecords.get(inserted[0].id),1);
     } else if(tableChange) {
       tableChange.verifyTable(after,inserted,savedRecords);
       for(const fresh of inserted)if(savedRecords.get(fresh.id).some(r=>![66,67,68,69,72].includes(r.tag)))fail('INSERTED_PARAGRAPH_HAS_CONTROLS');
@@ -453,6 +482,6 @@ export function structuralEdit(HwpDocument, source, hash, operation) {
     return { bytes: output, content_verified: true, raw_preservation_verified: true,
       raw_preservation_scope: 'existing_blocks_and_streams_with_explicit_structure_changes',
       restored_cell_list_words:repaired.restored_cell_list_words,
-      structure_changed: !formatting, formatting_changed:formatting, layout_verified: false };
+      structure_changed: !formatting&&!splicing, formatting_changed:formatting, text_range_changed:splicing, layout_verified: false };
   } finally { doc.free(); }
 }

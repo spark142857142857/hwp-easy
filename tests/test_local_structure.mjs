@@ -67,11 +67,11 @@ test('row insertion preserves existing horizontal merged cells',()=>{
  assert.equal(after.tables[0].cells[0].colSpan,2);assert.deepEqual(after.tables[0].cells[0],before.tables[0].cells[0]);
  assert.equal(after.tables[0].dimensions.rowCount,3);assert.ok(after.blocks.some(b=>b.text==='새 칸'));assert.equal(out.raw_preservation_verified,true);
 });
-test('merging distinct uniform character styles is refused without changing either paragraph',()=>{
+test('merging distinct styles into a paragraph carrying section controls is refused',()=>{
  const document=openDocument(fixture({table:false}));let bytes;
  try {assert.equal(JSON.parse(document.applyCharFormat(0,1,0,[...'중간 합성 문단'].length,JSON.stringify({bold:true}))).ok,true);bytes=document.exportHwp();}finally{document.free();}
  const before=inspect(bytes),block=before.blocks[1];
- assert.throws(()=>edit(bytes,block,{type:'merge_paragraph',previous_target_id:target(bytes,before.blocks[0]),expected_previous:before.blocks[0].text}),/MERGE_STYLE_MISMATCH/);
+ assert.throws(()=>edit(bytes,block,{type:'merge_paragraph',previous_target_id:target(bytes,before.blocks[0]),expected_previous:before.blocks[0].text}),/PARAGRAPH_TARGET_HAS_CONTROLS/);
 });
 for(const corruption of ['cell_padding','table_width'])test(`table insertion refuses unintended ${corruption} change`,()=>{
  const bytes=fixture(),hash=createHash('sha256').update(bytes).digest('hex'),block=inspect(bytes).blocks.find(b=>b.kind==='cell');

@@ -17,6 +17,16 @@ function replacement(read,old,new_text) {
  const block=read.blocks.find(b=>b.text===old);assert.ok(block);
  return {type:'replace_text',target_id:block.target_id,expected_old:block.text,new_text};
 }
+
+test('local read reports full detached table geometry on every cursor',async t=>{
+ const {source}=workspace(t),read=await runLocal({action:'read',source,max_chars:4,max_blocks:1});
+ assert.equal(read.table_metadata_complete,true);assert.equal(read.tables.length,read.table_count);
+ const dimensions=structuredClone(read.tables[0].dimensions);
+ assert.ok(read.tables[0].cells.every(c=>c.paragraph_ids.length>0&&Number.isInteger(c.rowSpan)));
+ read.tables[0].dimensions.rowCount=999;
+ const next=await runLocal({action:'read',source,expected_sha256:read.source_sha256,cursor:read.next_cursor,max_chars:4,max_blocks:1});
+ assert.deepEqual(next.tables[0].dimensions,dimensions);
+});
 test('local edit overwrites selected path, preserves recovery and restores exact bytes',async t=>{
  const {source}=workspace(t),original=fs.readFileSync(source),read=await runLocal({action:'read',source,max_chars:64000});
  const operations=[replacement(read,'중간 합성 문단','로컬 저장 확인'),replacement(read,'합성 답변 원문','직접 수정한 답변')];
