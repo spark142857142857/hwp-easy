@@ -26,7 +26,7 @@ export async function applyLocalOperation(HwpDocument,bytes,version,operation){
   if(operation.type==='replace_text'&&!readHwp(bytes).profile.unsupported.some(x=>[76,85].includes(x.record_tag))
     &&![operation.new_text,operation.expected_old].some(value=>typeof value==='string'&&value.includes('\n'))){
     if(Object.keys(operation).some(k=>!['type','target_id','expected_old','new_text'].includes(k)))fail('INVALID_ARGUMENTS');
-    const document=await createDocumentEngine(HwpDocument).open(bytes),{type,...replacement}=operation;
+    const document=await createDocumentEngine(HwpDocument,{plainStyleInspection:true}).open(bytes),{type,...replacement}=operation;
     return document.edit({expected_sha256:version,operations:[replacement]});
   }
   return structuralEdit(HwpDocument,bytes,version,operation);

@@ -4,6 +4,7 @@
  */
 import { createEngineApi } from '../../../src/one_hwp/rhwp_api.mjs';
 import { rawUniformStyleProofs } from './uniform-style.mjs';
+import {rawPlainStyleProofs} from './plain-style.mjs';
 import { readHwp } from '../guard/container.mjs';
 import { GuardError, parseRecords } from '../guard/records.mjs';
 import { verifyPreservation } from '../guard/preservation.mjs';
@@ -109,11 +110,13 @@ export function mapRawTargets(decoded, blocks) {
   return mapping;
 }
 
-export function createDocumentEngine(HwpDocument, { readInspectionCache, hostedWorkloadBudget = false, uniformStyleInspection = true, includeTableMetadata = false } = {}) {
+export function createDocumentEngine(HwpDocument, { readInspectionCache, hostedWorkloadBudget = false, uniformStyleInspection = true, plainStyleInspection = false, includeTableMetadata = false } = {}) {
   if (typeof hostedWorkloadBudget !== 'boolean') fail('INVALID_ARGUMENTS');
   if (typeof uniformStyleInspection !== 'boolean') fail('INVALID_ARGUMENTS');
   if (typeof includeTableMetadata !== 'boolean') fail('INVALID_ARGUMENTS');
+  if (typeof plainStyleInspection !== 'boolean') fail('INVALID_ARGUMENTS');
   const api = createEngineApi(HwpDocument, { mixedStyleSameLength: true, languageFontSelection: true,
+    ...(plainStyleInspection?{plainStyleProofs(bytes,blocks){const decoded=readHwp(bytes);let mapping;try{mapping=mapRawTargets(decoded,blocks);}catch(error){if(error instanceof GuardError&&error.code==='TARGET_MAPPING_UNVERIFIED')return undefined;throw error;}return rawPlainStyleProofs(decoded,blocks,mapping);}}:{}),
     ...(uniformStyleInspection ? { uniformStyleProofs(bytes, blocks) {
       const decoded = readHwp(bytes);
       let mapping;

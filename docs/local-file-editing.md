@@ -1,5 +1,11 @@
 # 로컬 HWP 직접 편집
 
+## 긴 혼합 서식 문장의 처리
+
+로컬 후보 **0.2.10**은 원시 HWP의 전체 텍스트·서식 구간과 모델 좌표를 맞춘 뒤, 중복된 글자별 엔진 조회를 줄인다. 기존 글자마다의 UTF-16 서식 레코드 보존과 요청한 정의 변경 검사는 유지한다. 구간 경계·중간 모델 값이 다르거나 단순 텍스트 구조의 근거가 부족하면 기존 전체 검사로 돌아간다. 로컬 실행에서만 켜며 운영 원격 경로의 기본값과 검사·입력 한도는 유지한다.
+
+같은 합성 8만 자 삽입의 로컬 측정은 7,599ms에서 2,092ms로 줄었다. 4천·2만·8만 자 세 결과의 모든 decoded 스트림은 개선 전과 동일했다. 이 측정은 해당 PC의 합성 사례이며 일반 양식이나 운영 서버의 속도 보장은 아니다. 전체 로컬 회귀 233개, 공통 엔진 34개, 기존 보수적 스타일 검사 5개와 별도 증명/대체 경로 검사 5개가 통과했다. 분리 패키지의 본문·셀에 80,000 코드 포인트(80,825 UTF-16 단위)를 넣은 6개 사례는 이어 읽기의 정확한 조립, 서식 변경·분리·병합·무저장 계획·같은 파일 저장·복구와 독립 raw 판독을 통과했다. 세 실문서 복사본의 본문·셀 다섯 위치에는 2만 코드 포인트의 합성 답변을 넣고 서식 변경·분리·병합·정확한 복구 15개를 독립 raw 판독으로 확인했다.
+
 ## 문단과 표의 위치 이동
 
 로컬 후보 **0.2.9**는 일반 본문 문단과 지원 표 전체를 같은 구역의 본문 문단 뒤로 옮긴다. 혼합 글자 서식, 표의 병합·셀 내용·크기와 지원 셀 그림을 전체 raw 그룹으로 보존한다. 처음 읽은 원래 대상과 이동 기준 ID를 한 묶음 안에서도 추적하므로, 옮긴 문단·칸을 이어서 수정할 수 있다. 이미 원하는 위치이면 바이트·수정 시각·복구 파일을 바꾸지 않는다.
@@ -152,7 +158,7 @@
 개발자가 기존 두 npm lockfile 의존성을 준비한 뒤 실행하는 검사다:
 
 ```powershell
-node --test tests/test_local_runner.mjs tests/test_local_structure.mjs tests/test_local_advanced.mjs tests/test_local_extended.mjs tests/test_local_pictures.mjs tests/test_local_text.mjs tests/test_local_table_format.mjs
+node --test tests/test_local_runner.mjs tests/test_local_structure.mjs tests/test_local_advanced.mjs tests/test_local_extended.mjs tests/test_local_pictures.mjs tests/test_local_text.mjs tests/test_local_table_format.mjs tests/test_local_batch.mjs tests/test_local_move.mjs tests/test_local_style.mjs
 node scripts/package_local_plugin.mjs
 node scripts/check-local-plugin.mjs
 python scripts/check-local-structure.py
@@ -165,6 +171,10 @@ node scripts/check-local-table-format.mjs
 python scripts/check-local-table-format.py
 node scripts/check-local-batch.mjs
 python scripts/check-local-batch.py
+node scripts/check-local-move.mjs
+python scripts/check-local-move.py
+node scripts/check-local-long-text.mjs
+python scripts/check-local-long-text.py
 python scripts/archive_local_plugin.py
 ```
 

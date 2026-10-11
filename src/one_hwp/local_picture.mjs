@@ -1,7 +1,7 @@
 /** Selected body/cell pictures, with exact non-target raw and binary preservation. */
 import {GuardError,parseRecords} from '../../probes/sites-runtime/guard/records.mjs';
 import {readHwp,inflateBoundedRaw} from '../../probes/sites-runtime/guard/container.mjs';
-import {createEngineApi} from './rhwp_api.mjs';
+import {createLocalEngineApi as createEngineApi} from './local_api.mjs';
 import {readImageLocal} from './local_file.mjs';
 import {structuralProfileSupported,recordsByBlock,compareRecords,verifyCellHeaders,verifyListCounts} from './local_structure.mjs';
 import {cellPicturePath} from './local_cell_picture.mjs';

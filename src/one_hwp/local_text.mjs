@@ -1,6 +1,7 @@
 /** Range insertion/deletion with explicit preservation of every retained style. */
 import {GuardError} from '../../probes/sites-runtime/guard/records.mjs';
 import {canonicalRecord,textControlBytes} from '../../probes/sites-runtime/guard/preservation.mjs';
+import {modelCharacterIds,verifyModelCharacterIds} from './local_character_runs.mjs';
 const fail=code=>{throw new GuardError(code);};
 const equal=(a,b)=>JSON.stringify(a)===JSON.stringify(b);
 const bytesEqual=(a,b)=>a.length===b.length&&a.every((v,i)=>v===b[i]);
@@ -11,7 +12,7 @@ export function verifyPlainCharacterRuns(records,text,ids,emptyShape){
   const v=view(runs[0].payload),anchors=[];
   for(let i=0;i<runs[0].payload.length;i+=8)anchors.push({position:v.getUint32(i,true),shape:v.getUint32(i+4,true)});
   if(!anchors.length||anchors[0].position!==0||anchors.some((a,i)=>i&&a.position<=anchors[i-1].position))fail('TEXT_RECORD_MISMATCH');
-  let offset=0,point=0;for(const ch of text){for(let unit=0;unit<ch.length;unit++)if(anchors.findLast(a=>a.position<=offset+unit)?.shape!==ids[point])fail('TEXT_RECORD_MISMATCH');offset+=ch.length;point++;}
+  let offset=0,point=0,at=0;for(const ch of text){for(let unit=0;unit<ch.length;unit++){while(at+1<anchors.length&&anchors[at+1].position<=offset+unit)at++;if(anchors[at].shape!==ids[point])fail('TEXT_RECORD_MISMATCH');}offset+=ch.length;point++;}
   if(anchors.some(a=>a.position>offset)||!ids.length&&anchors.some(a=>a.shape!==emptyShape))fail('TEXT_RECORD_MISMATCH');
 }
 export function prepareTextSplice(doc,block,operation,records) {
@@ -26,7 +27,7 @@ export function prepareTextSplice(doc,block,operation,records) {
   const charAt=(document,offset)=>JSON.parse(block.kind==='paragraph'
     ?document.getCharPropertiesAt(block.section,block.paragraph,offset)
     :document.getCellCharPropertiesAt(block.section,block.paragraph,block.control,block.cell,block.cell_paragraph,offset));
-  const prior=points.map((_,i)=>charAt(doc,i).charShapeId),emptyShape=charAt(doc,0).charShapeId;
+  const prior=modelCharacterIds(block),emptyShape=charAt(doc,0).charShapeId;
   verifyPlainCharacterRuns(records,block.text,prior,emptyShape);
   // Replacement inherits the first removed character. Pure insertion inherits
   // the left neighbour, or the first character at the beginning of a paragraph.
@@ -51,7 +52,7 @@ export function prepareTextSplice(doc,block,operation,records) {
     const old=structuredClone(block),now=structuredClone(saved);old.text=wanted;
     delete old.style;delete now.style;delete old.editable;delete now.editable;
     if(!equal(old,now)||!equal(block.style.paragraph,saved.style.paragraph))fail('TEXT_CONTENT_MISMATCH');
-    for(let i=0;i<expected.length;i++)if(charAt(reopened,i).charShapeId!==expected[i])fail('TEXT_STYLE_MISMATCH');
+    verifyModelCharacterIds(saved,expected,emptyShape);
   }
   function verifyRecords(left,right){
     const controls=list=>{const r=list.filter(r=>r.tag===67);if(r.length>1)fail('TEXT_RECORD_MISMATCH');return r.length?textControlBytes(r[0].payload):new Uint8Array([13,0]);};

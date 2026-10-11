@@ -2,6 +2,7 @@
 import {GuardError} from '../../probes/sites-runtime/guard/records.mjs';
 import {canonicalRecord,textControlBytes} from '../../probes/sites-runtime/guard/preservation.mjs';
 import {verifyPlainCharacterRuns} from './local_text.mjs';
+import {modelCharacterIds,verifyModelCharacterIds} from './local_character_runs.mjs';
 const fail=code=>{throw new GuardError(code);},equal=(a,b)=>JSON.stringify(a)===JSON.stringify(b);
 const bytesEqual=(a,b)=>a.length===b.length&&a.every((v,i)=>v===b[i]),view=b=>new DataView(b.buffer,b.byteOffset,b.byteLength);
 export function prepareMultilineSplice(doc,block,op,records){
@@ -13,7 +14,7 @@ export function prepareMultilineSplice(doc,block,op,records){
  if(records.some(r=>![66,67,68,69,72].includes(r.tag))||records.filter(r=>r.tag===67).some(r=>{const c=textControlBytes(r.payload);return c.length!==2||view(c).getUint16(0,true)!==13;}))fail('TEXT_TARGET_HAS_CONTROLS');
  const properties=(document,b,offset)=>JSON.parse(b.kind==='paragraph'?document.getCharPropertiesAt(b.section,b.paragraph,offset)
    :document.getCellCharPropertiesAt(b.section,b.paragraph,b.control,b.cell,b.cell_paragraph,offset));
- const prior=points.map((_,i)=>properties(doc,block,i).charShapeId),emptyId=properties(doc,block,0).charShapeId;
+ const prior=modelCharacterIds(block),emptyId=properties(doc,block,0).charShapeId;
  verifyPlainCharacterRuns(records,block.text,prior,emptyId);
  const inherited=start<end?prior[start]:prior[Math.max(0,start-1)]??emptyId;
  const specifications=parts.map((part,index)=>{
@@ -40,8 +41,7 @@ export function prepareMultilineSplice(doc,block,op,records){
   const s=specifications[index],old=structuredClone(s.block),now=structuredClone(saved);old.text=s.text;
   delete old.style;delete now.style;delete old.editable;delete now.editable;
   if(!equal(old,now)||!equal(s.block.style.paragraph,saved.style.paragraph))fail('TEXT_CONTENT_MISMATCH');
-  if(!s.ids.length&&properties(reopened,saved,0).charShapeId!==s.emptyId)fail('TEXT_STYLE_MISMATCH');
-  for(let i=0;i<s.ids.length;i++)if(properties(reopened,saved,i).charShapeId!==s.ids[i])fail('TEXT_STYLE_MISMATCH');
+  verifyModelCharacterIds(saved,s.ids,s.emptyId);
  }
  function verifyRecords(left,right,index=0){
   const s=specifications[index],normalize=(list,original=false)=>list.filter(r=>![67,68,69,72].includes(r.tag)).map(r=>{

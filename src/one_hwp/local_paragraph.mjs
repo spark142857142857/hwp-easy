@@ -3,6 +3,7 @@ import {GuardError} from '../../probes/sites-runtime/guard/records.mjs';
 import {canonicalRecord,textControlBytes} from '../../probes/sites-runtime/guard/preservation.mjs';
 import {verifyPlainCharacterRuns} from './local_text.mjs';
 import {MAX_MIXED_STYLE_RUNS} from './mixed_style.mjs';
+import {modelCharacterIds,verifyModelCharacterIds} from './local_character_runs.mjs';
 const fail=code=>{throw new GuardError(code);};
 const equal=(a,b)=>JSON.stringify(a)===JSON.stringify(b);
 const bytesEqual=(a,b)=>a.length===b.length&&a.every((v,i)=>v===b[i]);
@@ -23,7 +24,7 @@ function restore(doc,b,ids,emptyId){
 }
 export function prepareParagraphChange(doc,block,operation,records,previous){
   plain(block,records.get(block.id));
-  const splitting=operation.type==='split_paragraph',points=[...block.text],ids=points.map((_,i)=>charAt(doc,block,i).charShapeId);
+  const splitting=operation.type==='split_paragraph',points=[...block.text],ids=modelCharacterIds(block,'PARAGRAPH_STYLE_MISMATCH');
   verifyPlainCharacterRuns(records.get(block.id),block.text,ids,charAt(doc,block,0).charShapeId);
   let specifications;
   if(splitting){
@@ -34,7 +35,7 @@ export function prepareParagraphChange(doc,block,operation,records,previous){
     specifications=[first,{block:secondBlock,text:points.slice(offset).join(''),ids:ids.slice(offset),emptyId:ids[offset]??ids.at(-1)??first.emptyId}];
   }else{
     plain(previous,records.get(previous.id));
-    const prior=[...previous.text].map((_,i)=>charAt(doc,previous,i).charShapeId);
+    const prior=modelCharacterIds(previous,'PARAGRAPH_STYLE_MISMATCH');
     verifyPlainCharacterRuns(records.get(previous.id),previous.text,prior,charAt(doc,previous,0).charShapeId);
     if(previous.text.length+block.text.length>100000)fail('EDIT_LIMIT_EXCEEDED');
     specifications=[{block:previous,text:previous.text+block.text,ids:prior.concat(ids),emptyId:charAt(doc,previous,0).charShapeId}];
@@ -52,8 +53,7 @@ export function prepareParagraphChange(doc,block,operation,records,previous){
     const s=specifications[index],old=structuredClone(s.block),now=structuredClone(saved);old.text=s.text;
     delete old.style;delete now.style;delete old.editable;delete now.editable;
     if(!equal(old,now)||!equal(s.block.style.paragraph,saved.style.paragraph))fail('PARAGRAPH_CONTENT_MISMATCH');
-    if(!s.ids.length&&charAt(reopened,saved,0).charShapeId!==s.emptyId)fail('PARAGRAPH_STYLE_MISMATCH');
-    for(let i=0;i<s.ids.length;i++)if(charAt(reopened,saved,i).charShapeId!==s.ids[i])fail('PARAGRAPH_STYLE_MISMATCH');
+    verifyModelCharacterIds(saved,s.ids,s.emptyId,'PARAGRAPH_STYLE_MISMATCH');
   }
   function verifyRecords(left,right,index=0){
     const s=specifications[index],normalize=(list,original=false)=>list.filter(r=>![67,68,69,72].includes(r.tag)).map(r=>{

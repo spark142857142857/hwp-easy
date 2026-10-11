@@ -1,6 +1,8 @@
 /** Requested formatting, with raw definition patches and complete non-target preservation. */
 import {GuardError,parseRecords} from '../../probes/sites-runtime/guard/records.mjs';
 import {canonicalRecord,textControlBytes} from '../../probes/sites-runtime/guard/preservation.mjs';
+import {modelCharacterIds} from './local_character_runs.mjs';
+import {verifyPlainCharacterRuns} from './local_text.mjs';
 // FACE_NAME default aliases from pinned npm source e8800c8, serializer/doc_info.rs (MIT).
 import fontDefaults from './font_defaults.json' with {type:'json'};
 const fail=code=>{throw new GuardError(code);};
@@ -39,7 +41,14 @@ export function prepareFormatChange(doc,raw,block,operation,records) {
  if(character&&targetRecords.some(r=>r.tag===67&&!bytesEqual(textControlBytes(r.payload),new Uint8Array([13,0]))))fail('FORMAT_TARGET_HAS_CONTROLS');
  const charAt=(document,offset)=>JSON.parse(block.kind==='paragraph'?document.getCharPropertiesAt(block.section,block.paragraph,offset)
   :document.getCellCharPropertiesAt(block.section,block.paragraph,block.control,block.cell,block.cell_paragraph,offset));
- const prior=character?Array.from({length:count},(_,i)=>charAt(doc,i)):undefined;
+ const priorIds=character?modelCharacterIds(block,'FORMAT_CONTENT_MISMATCH'):undefined;
+ if(character)verifyPlainCharacterRuns(targetRecords,block.text,priorIds,block.style.char_shape_ids[0]);
+ const samplePositions=new Set();
+ if(character){
+  if(count<=2048)for(let i=0;i<count;i++)samplePositions.add(i);
+  else for(let from=0;from<count;){let to=from+1;const changed=from>=start&&from<end;while(to<count&&priorIds[to]===priorIds[from]&&(to>=start&&to<end)===changed)to++;for(const i of [from,Math.floor((from+to-1)/2),to-1])samplePositions.add(i);from=to;}
+ }
+ const priorProperties=new Map([...samplePositions].map(i=>[i,charAt(doc,i)]));
  const originalParagraph=block.style.paragraph;
  function expectedShape(payload) {
   // New PARA_SHAPE records from a 54-byte source use the writer's 58-byte
@@ -61,15 +70,17 @@ export function prepareFormatChange(doc,raw,block,operation,records) {
    for(const [key,offset] of [['marginLeft',4],['marginRight',8],['indent',12],['spacingBefore',16],['spacingAfter',20],['lineSpacing',24]])if(Object.hasOwn(props,key))v.setInt32(offset,props[key],true);
   }return result;
  }
- const shapeIds=character?[...new Set(prior.slice(start,end).map(p=>p.charShapeId))]:[];
+ const shapeIds=character?[...new Set(priorIds.slice(start,end))]:[];
  const permittedShapes=character?shapeIds.map(id=>expectedShape(defs.get(21)[id]?.payload??new Uint8Array()))
   :[expectedShape(defs.get(25)[originalParagraph.paraShapeId]?.payload??new Uint8Array())];
+ const expectedShapes=new Map();
+ const expectedFor=(id,changed)=>{const key=`${id}:${changed}`;if(!expectedShapes.has(key)){const original=defs.get(21)[id]?.payload;if(!original)fail('FORMAT_DEFINITION_MISMATCH');expectedShapes.set(key,changed?expectedShape(original):original);}return expectedShapes.get(key);};
  function apply(){const engineProps={...props};if(fontIds){delete engineProps.fontFamily;engineProps.fontIds=fontIds;}const value=JSON.stringify(engineProps),checked=result=>{if(!JSON.parse(result).ok)fail('ENGINE_OPERATION_FAILED');};
   if(character){
    // The upstream range formatter clones its first style for the whole range.
    // Format each original run separately and reuse its checked resulting ID.
    const cache=new Map();let from=start;
-   while(from<end){const originalId=prior[from].charShapeId;let to=from+1;while(to<end&&prior[to].charShapeId===originalId)to++;
+   while(from<end){const originalId=priorIds[from];let to=from+1;while(to<end&&priorIds[to]===originalId)to++;
     if(cache.has(originalId))checked(block.kind==='paragraph'?doc.setCharShapeId(block.section,block.paragraph,from,to,cache.get(originalId))
      :doc.setCharShapeIdInCell(block.section,block.paragraph,block.control,block.cell,block.cell_paragraph,from,to,cache.get(originalId)));
     else{checked(block.kind==='paragraph'?doc.applyCharFormat(block.section,block.paragraph,from,to,value)
@@ -102,12 +113,15 @@ export function prepareFormatChange(doc,raw,block,operation,records) {
   const afterDefs=groups(savedRaw.streams.get('DocInfo'));
   if(character) {
    if(!equal(block.style.paragraph,saved.style.paragraph))fail('FORMAT_CONTENT_MISMATCH');
-   for(let i=0;i<count;i++) {
-    const wanted=structuredClone(prior[i]),actual=charAt(reopened,i);delete wanted.charShapeId;const actualId=actual.charShapeId;delete actual.charShapeId;
+   const afterIds=modelCharacterIds(saved,'FORMAT_CONTENT_MISMATCH');
+   for(const [i,original] of priorProperties) {
+    const wanted=structuredClone(original),actual=charAt(reopened,i);delete wanted.charShapeId;delete actual.charShapeId;
     if(i>=start&&i<end){Object.assign(wanted,props);if(fontIds)wanted.fontFamilies=Array(7).fill(props.fontFamily);if(Object.hasOwn(props,'underline'))wanted.underlineType=props.underline?'Bottom':'None';}
     if(!equal(wanted,actual))fail('FORMAT_CONTENT_MISMATCH');
-    const expected=i>=start&&i<end?expectedShape(defs.get(21)[prior[i].charShapeId].payload):defs.get(21)[prior[i].charShapeId].payload;
-    if(!bytesEqual(expected,afterDefs.get(21)[actualId]?.payload??new Uint8Array()))fail('FORMAT_DEFINITION_MISMATCH');
+   }
+   for(let i=0;i<count;i++){
+    const expected=expectedFor(priorIds[i],i>=start&&i<end);
+    if(!bytesEqual(expected,afterDefs.get(21)[afterIds[i]]?.payload??new Uint8Array()))fail('FORMAT_DEFINITION_MISMATCH');
    }
   } else {
    const wanted={...block.style.paragraph,...props},actual={...saved.style.paragraph};delete wanted.paraShapeId;delete actual.paraShapeId;
@@ -138,7 +152,7 @@ export function prepareFormatChange(doc,raw,block,operation,records) {
    // Check both surrogate units, and permit a trailing terminator run only.
    let offset=0,point=0;
    for(const ch of block.text) {
-    const expected=point>=start&&point<end?expectedShape(defs.get(21)[prior[point].charShapeId].payload):defs.get(21)[prior[point].charShapeId].payload;
+    const expected=expectedFor(priorIds[point],point>=start&&point<end);
     for(let unit=0;unit<ch.length;unit++) {
      const anchor=anchors.findLast(a=>a.position<=offset+unit);
      if(!bytesEqual(expected,definitions[anchor.shape]?.payload??new Uint8Array()))fail('FORMAT_RECORD_MISMATCH');

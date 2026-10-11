@@ -1,5 +1,5 @@
 /** Table geometry and cell layout through exact, bounded raw metadata patches. */
-import {createEngineApi} from './rhwp_api.mjs';
+import {createLocalEngineApi as createEngineApi} from './local_api.mjs';
 import {readHwp} from '../../probes/sites-runtime/guard/container.mjs';
 import {GuardError} from '../../probes/sites-runtime/guard/records.mjs';
 import {packLocalBodyRewrite} from '../../probes/sites-runtime/engine/structural-body-repair.mjs';

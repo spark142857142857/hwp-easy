@@ -13,7 +13,7 @@ jobs:
     runs-on: ${{ matrix.os }}
     # The isolated package checks start a bounded process per edit. Windows
     # needs additional time for the expanded text, table and batch coverage.
-    timeout-minutes: 10
+    timeout-minutes: 12
     strategy:
       fail-fast: false
       matrix:
@@ -50,7 +50,7 @@ jobs:
         run: node probes/sites-runtime/scripts/check-python-guard.mjs
       - name: Verify local same-file edits, structural changes and isolated plugin runtime
         run: |
-          node --test tests/test_local_runner.mjs tests/test_local_structure.mjs tests/test_local_advanced.mjs tests/test_local_extended.mjs tests/test_local_pictures.mjs tests/test_local_text.mjs tests/test_local_table_format.mjs tests/test_local_batch.mjs tests/test_local_move.mjs
+          node --test tests/test_local_runner.mjs tests/test_local_structure.mjs tests/test_local_advanced.mjs tests/test_local_extended.mjs tests/test_local_pictures.mjs tests/test_local_text.mjs tests/test_local_table_format.mjs tests/test_local_batch.mjs tests/test_local_move.mjs tests/test_local_style.mjs
           node scripts/package_local_plugin.mjs
           node scripts/check-local-plugin.mjs
           python scripts/check-local-structure.py
@@ -65,6 +65,8 @@ jobs:
           python scripts/check-local-batch.py
           node scripts/check-local-move.mjs
           python scripts/check-local-move.py
+          node scripts/check-local-long-text.mjs
+          python scripts/check-local-long-text.py
       - name: Run regressions and real HWP MCP flows without Hancom
         env:
           HWP_EASY_NATIVE_TESTS: '1'

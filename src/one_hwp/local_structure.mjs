@@ -1,5 +1,5 @@
 /** Local structural edits. Kept separate from the submitted remote text profile. */
-import { createEngineApi } from './rhwp_api.mjs';
+import {createLocalEngineApi as createEngineApi} from './local_api.mjs';
 import { readHwp } from '../../probes/sites-runtime/guard/container.mjs';
 import { GuardError, parseRecords } from '../../probes/sites-runtime/guard/records.mjs';
 import { canonicalRecord, textControlBytes } from '../../probes/sites-runtime/guard/preservation.mjs';

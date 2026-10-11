@@ -1,5 +1,5 @@
 /** Reorder complete body groups without rewriting their content or definitions. */
-import {createEngineApi} from './rhwp_api.mjs';
+import {createLocalEngineApi as createEngineApi} from './local_api.mjs';
 import {readHwp} from '../../probes/sites-runtime/guard/container.mjs';
 import {GuardError,parseRecords} from '../../probes/sites-runtime/guard/records.mjs';
 import {packLocalBodyRewrite} from '../../probes/sites-runtime/engine/structural-body-repair.mjs';

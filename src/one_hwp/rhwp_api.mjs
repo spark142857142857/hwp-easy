@@ -1,7 +1,7 @@
 /** Host-free pinned-engine operations shared by Node and browser ESM adapters. */
 import { MAX_MIXED_STYLE_RUNS, mixedStyleEdit } from './mixed_style.mjs';
 import { expectedEditedBlock } from './text_font_selection.mjs';
-export function createEngineApi(HwpDocument, { mixedStyleSameLength = false, languageFontSelection = false, uniformStyleProofs, existingLineBreaksEditable = false } = {}) {
+export function createEngineApi(HwpDocument, { mixedStyleSameLength = false, languageFontSelection = false, uniformStyleProofs, plainStyleProofs, existingLineBreaksEditable = false } = {}) {
   // Internal host opt-in: callers must independently prove exact raw style
   // anchors before/after saving. The local adapter retains its default profile.
   if (typeof mixedStyleSameLength !== 'boolean') throw new Error('Invalid mixed style profile');
@@ -12,6 +12,7 @@ export function createEngineApi(HwpDocument, { mixedStyleSameLength = false, lan
   // transitions and all existing/new raw records before publishing bytes.
   if (typeof existingLineBreaksEditable !== 'boolean') throw new Error('Invalid structural line break profile');
   if (uniformStyleProofs !== undefined && typeof uniformStyleProofs !== 'function') throw new Error('Invalid uniform style proof provider');
+  if (plainStyleProofs !== undefined && typeof plainStyleProofs !== 'function') throw new Error('Invalid plain style proof provider');
   const EDIT_LIMIT = 100_000;
   const json = (value) => JSON.parse(value);
   const checked = (value) => {
@@ -53,7 +54,7 @@ export function createEngineApi(HwpDocument, { mixedStyleSameLength = false, lan
     return false;
   }
 
-  function formatProfile(document, block, budget, provenShapeId) {
+  function formatProfile(document, block, budget, provenShapeId, provenRuns) {
     const paragraph = json(block.kind === 'paragraph'
       ? document.getParaPropertiesAt(block.section, block.paragraph)
       : document.getCellParaPropertiesAt(block.section, block.paragraph, block.control,
@@ -66,6 +67,17 @@ export function createEngineApi(HwpDocument, { mixedStyleSameLength = false, lan
     budget.remaining -= cost;
     const ids = new Set();
     const first = charProperties(document, block, 0);
+    // Local opt-in backed by complete raw text and shape anchors. Check the
+    // reopened model at each run's boundaries and midpoint; complete raw
+    // before/after preservation still proves every retained UTF-16 unit.
+    if(count>2048&&Array.isArray(provenRuns)&&provenRuns.length>0&&provenRuns.length<=MAX_MIXED_STYLE_RUNS
+      &&provenRuns.every((r,i)=>Number.isSafeInteger(r.start)&&Number.isSafeInteger(r.end)&&r.start===(i?provenRuns[i-1].end:0)
+        &&r.end>r.start&&r.end<=count&&Number.isSafeInteger(r.char_shape_id)&&r.char_shape_id>=0)
+      &&provenRuns.at(-1).end===count
+      &&provenRuns.every(r=>[r.start,Math.floor((r.start+r.end-1)/2),r.end-1].every(offset=>charProperties(document,block,offset).charShapeId===r.char_shape_id))){
+      const ids=[...new Set(provenRuns.map(r=>r.char_shape_id))].sort((a,b)=>a-b);
+      return {paragraph,char_shape_ids:ids,...(ids.length===1?{char:first}:mixedStyleSameLength?{char_runs:provenRuns.map(r=>({...r}))}:{})};
+    }
     // Internal host proof: one plain-text raw paragraph and one shape anchor,
     // matched against the complete ordered model from these exact bytes. Query
     // representative model IDs too; uncertainty keeps the original full scan.
@@ -167,9 +179,12 @@ export function createEngineApi(HwpDocument, { mixedStyleSameLength = false, lan
     const proofs = uniformStyleProofs && sourceBytes instanceof Uint8Array
       ? uniformStyleProofs(new Uint8Array(sourceBytes), JSON.parse(JSON.stringify(blocks))) : undefined;
     if (proofs !== undefined && !(proofs instanceof Map)) throw new Error('Invalid uniform style proofs');
+    const plainProofs=plainStyleProofs&&sourceBytes instanceof Uint8Array
+      ?plainStyleProofs(new Uint8Array(sourceBytes),JSON.parse(JSON.stringify(blocks))):undefined;
+    if(plainProofs!==undefined&&!(plainProofs instanceof Map))throw new Error('Invalid plain style proofs');
     // Retain the original cells-first style budget order and response fields.
     for (const block of styleOrder) {
-      block.style = formatProfile(document, block, budget, proofs?.get(block.id));
+      block.style = formatProfile(document, block, budget, proofs?.get(block.id),plainProofs?.get(block.id));
       block.editable = (block.kind === 'cell' || (!cellBlocks.has(block.id)
         && !controls.some((control) => control.ctrlId === 'pgnp' && control.list === 0 && control.para === block.paragraph)))
         && !block.style.profile

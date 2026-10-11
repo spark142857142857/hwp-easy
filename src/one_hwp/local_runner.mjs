@@ -4,7 +4,7 @@ import { fileURLToPath } from 'node:url';
 import { spawnSync } from 'node:child_process';
 import { HwpDocument, initSync } from '@rhwp/core';
 import { createDocumentEngine } from '../../probes/sites-runtime/engine/document.mjs';
-import { createEngineApi } from './rhwp_api.mjs';
+import {createLocalEngineApi as createEngineApi} from './local_api.mjs';
 import { preservableStructuralProfile } from './local_structure.mjs';
 import {localPictures} from './local_picture.mjs';
 import {editLocalBatch} from './local_batch.mjs';
@@ -48,7 +48,7 @@ export async function runLocal(request) {
       table_layout:'plain or merged tables: column widths, stored row heights, cell padding/vertical alignment and table padding/spacing; text and pictures preserved',
       pictures:'up to 32 supported pictures per plain body paragraph or top-level cell paragraph; selected local PNG/JPEG insertion/replacement, size/position/crop/rotation/removal'},
     layout_verified:false,requires:'Node.js 22 or newer with local file permissions',max_input_bytes:4194304};
-  const snapshot=readLocal(request.source,request.expected_sha256),engine=createDocumentEngine(HwpDocument,{includeTableMetadata:true});
+  const snapshot=readLocal(request.source,request.expected_sha256),engine=createDocumentEngine(HwpDocument,{includeTableMetadata:true,plainStyleInspection:true});
   const document=await engine.open(snapshot.bytes),version=document.source_sha256;
   if(request.action==='read') {
     const result=document.read({expected_sha256:version,...Object.fromEntries(['cursor','max_chars','max_blocks'].filter(k=>Object.hasOwn(request,k)).map(k=>[k,request[k]]))});
