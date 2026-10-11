@@ -1,5 +1,17 @@
 # Agent request format
 
+Complex local documents return raw-order target IDs, recursive `cell_path` (each entry: `controlIndex`, `cellIndex`, `cellParaIndex`), `fields`, and `picture_groups`. All IDs remain tied to the source hash. Repeated names require the exact field ID; `expected_old` is the field value for `set_field`, and the full host block text for group operations. `replace_text`/`splice_text` on mapped ordinary or nested cell text preserve controls and mixed raw styles, but reject ranges consuming anchors, multiline values or other control codes. No-op field/text edits leave bytes, timestamps and recovery storage unchanged. The complex profile does not accept paragraph/table structure changes or new formatting definitions.
+
+```json
+{"action":"edit","source":"<path>","expected_sha256":"<hash>","operations":[{"type":"set_field","target_id":"<returned field target>","expected_old":"<old field value>","new_text":"New value"}]}
+```
+
+```json
+{"action":"edit","source":"<path>","expected_sha256":"<hash>","operations":[{"type":"move_picture_group","target_id":"<returned group target>","expected_old":"<whole host text>","expected_properties":{"width":7200,"height":3600,"horzOffset":0,"vertOffset":0},"props":{"horzOffset":500,"vertOffset":200}}]}
+```
+
+For `crop_group_picture`, use its group's target ID and the returned zero-based leaf `picture_index`. `expected_properties` is that child's full properties excluding `picture_index`: `sourceWidth`, `sourceHeight`, `cropLeft`, `cropTop`, `cropRight`, `cropBottom`. `props` contains one or more of the crop amounts, in original-image HWP units (75 per source pixel). The crop must leave a positive width and height. Group transformations and sibling image bytes are retained. Group resize/rotation and child image replacement are refused.
+
 `move_paragraph` moves a plain body paragraph, and `move_table` moves the complete table selected by an actual cell target. Both take `target_id`, `expected_old`, `after_target_id` (a body paragraph in the same section) and `expected_after` (its full text). The first body group and tables grouped with section settings there stay in place. Styles, cell geometry and supported cell pictures travel as complete raw groups. Moving a group already immediately after its anchor is unchanged. No-op same-file edits return `saved:false, unchanged:true, save_required:false`; explicit Save As still writes the requested result.
 
 Invoke the bundled `scripts/local-runner.mjs` with `--request <absolute JSON file>`. All responses are JSON: `{ "ok": true, "result": {...} }` or `{ "ok": false, "error": "FIXED_CODE", "save_confirmed": false }`. Process timeout is 60 seconds. Inputs and saved outputs are limited to 4 MiB; normal model limits still apply. The runner performs no network requests.
