@@ -87,7 +87,7 @@
 
 로컬 회귀 **105개**, CFB v3/v4의 공간 경계·잘못된 할당 거부 검사 5개, 공통 엔진 34개·가드 회귀, Python 284개(4개 제외)가 통과했다. node_modules 없는 분리 패키지의 합성 그림 연속 작업 **20건**, 기존 연속 편집·복구, 독립 기존 그림/서식 18건과 구조 검사도 통과했다. 이번 그림 20건과 실문서 사본 50건은 Python/Pillow로 합성 raster 디코딩과 크기까지 별도 확인했다. 회귀는 빈 셀·이모지·음수/임의 각도, 회전 후 크기 변경·교체, 다른 그림 보존, 오래된 속성·번호 누락·범위 초과 자르기와 손상 JPEG의 저장 전 거부를 포함한다. 외부 한글 프로그램의 그림 배치 확인은 남아 있다.
 
-검증 사본과 익명 집계는 ignored `outputs/picture-edit-20261011/real-copy-cases-3/`에 보관한다. 원시 변환 행렬은 [고정 RHWP serializer](https://github.com/edwardkim/rhwp/blob/e8800c8def63449808a4092798442652ed460552/src/serializer/control.rs)의 형식을 따르며, JPEG framing은 [ITU-T T.81](https://www.w3.org/Graphics/JPEG/itu-t81.pdf)을 참고했다. 그룹 개체·캡션·그림을 포함한 셀의 구조 변경을 일반 지원으로 확대하지 않는다.
+교체는 자르기 범위와 저장된 원본 이미지 크기를 모두 새 raster 크기로 갱신하며 틀·회전·선택하지 않은 그림을 보존한다. 검증 사본과 익명 집계는 ignored `outputs/picture-edit-20261011/real-copy-cases-4/`에 보관한다. 원시 변환 행렬은 [고정 RHWP serializer](https://github.com/edwardkim/rhwp/blob/e8800c8def63449808a4092798442652ed460552/src/serializer/control.rs)의 형식을 따르며, JPEG framing은 [ITU-T T.81](https://www.w3.org/Graphics/JPEG/itu-t81.pdf)을 참고했다. 그룹 개체·캡션·그림을 포함한 셀의 구조 변경을 일반 지원으로 확대하지 않는다.
 
 ## 개발·패키징
 

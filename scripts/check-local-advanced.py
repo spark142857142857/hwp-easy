@@ -383,6 +383,7 @@ def verify_case(before_file, after_file, meta):
                 if tag == 85:
                     struct.pack_into('<4i', wanted, 44, 0, 0, width * 75, height * 75)
                     struct.pack_into('<H', wanted, 71, image_id)
+                    struct.pack_into('<II', wanted, 82, width * 75, height * 75)
                 assert (tag, level, bytes(wanted)) == (new_tag, new_level, payload)
         elif op == 'update_picture':
             assert len(object_records(target)) == len(object_records(current)) == 3

@@ -147,6 +147,7 @@ def verify_case(before_file, after_file, meta):
         if op == 'replace_picture':
             struct.pack_into('<H', picture, 71, image_id)
             struct.pack_into('<4i', picture, 44, 0, 0, width * 75, height * 75)
+            struct.pack_into('<II', picture, 82, width * 75, height * 75)
         else:
             props = meta['props']
             old_width, old_height = struct.unpack_from('<II', header, 16)
