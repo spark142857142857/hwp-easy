@@ -80,6 +80,15 @@ def verify_case(folder, case, verify_merge=True):
         assert [reader.canon(b) for b in before[:index] + before[index + 1:]] == [reader.canon(b) for b in after[:index] + after[index + 1:]]
         assert cells == new_cells
         changed = [after[index]]
+    elif case['type'] == 'delete_paragraph':
+        assert len(after) == len(before) - 1
+        retained = before[:index] + before[index + 1:]
+        assert [reader.canon(b) for b in retained] == [reader.canon(b) for b in after]
+        assert [shapes(b) for b in retained] == [shapes(b) for b in after]
+        assert len(cells) == len(new_cells)
+        for left, right in zip(cells.values(), new_cells.values()):
+            assert left[2:] == right[2:]
+        changed = []
     elif case['type'] == 'duplicate_paragraph':
         assert len(after) == len(before) + 1
         changed = after[index:index + 2]

@@ -11,6 +11,7 @@ import {editLocalBatch} from './local_batch.mjs';
 import { readHwp } from '../../probes/sites-runtime/guard/container.mjs';
 import { readLocal, saveLocal, restoreLocal, localHistory } from './local_file.mjs';
 import { GuardError } from '../../probes/sites-runtime/guard/records.mjs';
+import {findLocalDocument,validateFind} from './local_find.mjs';
 
 let initialized = false;
 export function initializeLocal(wasmBytes) { if (!initialized) { initSync({module:wasmBytes}); initialized=true; } }
@@ -28,13 +29,14 @@ export async function runLocal(request) {
     edit: ['action','source','expected_sha256','operations','output','expected_output_sha256'],
     restore: ['action','source','expected_sha256','backup_id'],
     history: ['action','source','expected_sha256','limit'],
+    find: ['action','source','expected_sha256','query','max_matches','cursor'],
   };
   const schema=schemas[request?.action];
   if(!schema)fail('INVALID_ACTION');
   object(request,schema,request.action==='capabilities'?['action']:request.action==='read'?['action','source']:['action','source','expected_sha256']);
   if(request.action==='capabilities')return {engine:'@rhwp/core',engine_version:'0.8.6',transport:'local_execution',
     save_default:'same_file',selected_file_updated:true,file_location:'current_execution_environment',uploads_required:false,web_browser_required:false,
-    read:true,preview:true,edit:true,restore:true,local_recovery_history:true,new_paragraphs:true,multiline_body_and_cells:true,new_simple_tables:true,
+    read:true,preview:true,edit:true,restore:true,find:true,local_recovery_history:true,new_paragraphs:true,multiline_body_and_cells:true,new_simple_tables:true,
     delete_paragraphs:true,merge_adjacent_paragraphs:true,split_paragraph:true,splice_text:true,mixed_style_multiline_insertion:true,
     move_body_paragraphs:true,move_complete_tables:true,duplicate_plain_body_and_cell_paragraphs:true,
     insert_delete_table_rows_columns:true,
@@ -51,8 +53,10 @@ export async function runLocal(request) {
     layout_verified:false,requires:'Node.js 22 or newer with local file permissions',max_input_bytes:4194304};
   const snapshot=readLocal(request.source,request.expected_sha256);
   if(request.action==='history')return localHistory(snapshot,request.limit);
-  const engine=createDocumentEngine(HwpDocument,{includeTableMetadata:true,plainStyleInspection:true});
+  if(request.action==='find')validateFind(request);
+  const engine=createDocumentEngine(HwpDocument,{includeTableMetadata:request.action!=='find',plainStyleInspection:true});
   const document=await engine.open(snapshot.bytes),version=document.source_sha256;
+  if(request.action==='find')return {...findLocalDocument(document,request),source:snapshot.source};
   if(request.action==='read') {
     const result=document.read({expected_sha256:version,...Object.fromEntries(['cursor','max_chars','max_blocks'].filter(k=>Object.hasOwn(request,k)).map(k=>[k,request[k]]))});
     let structural;

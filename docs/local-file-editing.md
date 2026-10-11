@@ -1,5 +1,13 @@
 # 로컬 HWP 직접 편집
 
+## 본문·셀 문구 찾기와 혼합 문단 삭제
+
+로컬 후보 **0.2.12**는 본문·표 셀의 문구를 정확한 대소문자·문자열로 찾아 버전별 대상 ID, 코드 포인트 범위와 짧은 문맥을 반환한다. 이모지와 내부 읽기 조각 경계를 넘는 문구도 실제 범위로 찾는다. 기본 50개·최대 200개 결과를 같은 해시·검색어의 cursor로 이어 받을 수 있다. 검색은 저장하지 않으며 본문·셀 밖의 지원하지 않는 개체는 별도로 보고한다. 문단·셀을 가로지르는 검색, 정규식과 Unicode 정규화 검색은 포함하지 않는다. 수정은 전체 대상 텍스트를 다시 읽고 기존 계획·저장 검사를 사용한다.
+
+다른 서식이 섞인 일반 문단을 삭제할 때 불필요한 단일 서식 제한도 제거했다. 본문과 셀의 두 번째 이후 문단에서 요청한 문단만 제거하고, 남은 문단의 모든 서식·raw 레코드·셀 수를 비교한다. 첫 셀 문단과 숨은 제어가 있는 문단의 삭제 제한은 유지한다.
+
+검색 회귀 17개와 혼합 삭제 회귀 2개를 포함한 전체 로컬 회귀 277개가 통과했다. 분리 패키지의 텍스트·문단 42개와 검색→범위 수정→저장→복구 4개 및 세 `testdocs/` 복사본의 검색·수정 5개를 독립 Python/raw 판독했다. 검색의 모든 페이지를 한 번 조회한 결과와 비교하고, 파일의 바이트·수정 시각이 그대로임을 확인했다. 혼합 삭제도 실문서 복사본 다섯 위치에서 정확한 복구와 남은 문단의 모든 raw 바이트·서식 보존을 독립 판독했다. 원본은 변경하거나 전송하지 않았다. Windows의 이전 CI는 긴 글 검사에서 전체 12분 job 제한으로 중단됐다. Linux·Windows의 긴 글/검색 패키지 검사를 별도 12분 작업으로 분리해 기존 회귀와 각각 끝까지 확인한다.
+
 ## 문단 복제와 로컬 복구 이력
 
 로컬 후보 **0.2.11**은 일반 본문·셀 문단을 바로 뒤에 복제하며, 전체 텍스트·혼합 글자 서식·문단 속성을 유지한다. 빈 문단도 지원하고 새 문단의 인스턴스 값과 셀의 문단 수를 검사한다. 첫 읽기의 원래 대상은 일괄 작업 안에서 추적하고 새 복사 문단은 다시 읽어 선택한다. 숨은 제어·기존 LF·탭이 없는 100,000 UTF-16 단위 이내의 대상에 적용한다.
@@ -166,7 +174,7 @@
 개발자가 기존 두 npm lockfile 의존성을 준비한 뒤 실행하는 검사다:
 
 ```powershell
-node --test tests/test_local_runner.mjs tests/test_local_structure.mjs tests/test_local_advanced.mjs tests/test_local_extended.mjs tests/test_local_pictures.mjs tests/test_local_text.mjs tests/test_local_table_format.mjs tests/test_local_batch.mjs tests/test_local_move.mjs tests/test_local_style.mjs tests/test_local_history.mjs
+node --test tests/test_local_runner.mjs tests/test_local_structure.mjs tests/test_local_advanced.mjs tests/test_local_extended.mjs tests/test_local_pictures.mjs tests/test_local_text.mjs tests/test_local_table_format.mjs tests/test_local_batch.mjs tests/test_local_move.mjs tests/test_local_style.mjs tests/test_local_history.mjs tests/test_local_find.mjs
 node scripts/package_local_plugin.mjs
 node scripts/check-local-plugin.mjs
 python scripts/check-local-structure.py
@@ -183,6 +191,8 @@ node scripts/check-local-move.mjs
 python scripts/check-local-move.py
 node scripts/check-local-long-text.mjs
 python scripts/check-local-long-text.py
+node scripts/check-local-find.mjs
+python scripts/check-local-text.py outputs/local-find-20261011
 python scripts/archive_local_plugin.py
 ```
 

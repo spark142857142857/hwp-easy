@@ -12,7 +12,7 @@ try{
  const runner=path.join(packageDir,'skills/edit-local-hwp/scripts/local-runner.mjs'),source=path.join(temporary,'selected.hwp');
  const call=request=>{const file=path.join(temporary,'request.json');fs.writeFileSync(file,JSON.stringify(request));const response=spawnSync(process.execPath,[runner,'--request',file],{cwd:temporary,encoding:'utf8',windowsHide:true,timeout:65000,env:{...process.env,NODE_PATH:''}});assert.equal(response.status,0,response.stdout);assert.equal(response.stderr,'');const r=JSON.parse(response.stdout);assert.equal(r.ok,true);return r.result;};
  const read=()=>{let cursor,version,blocks=[];do{const r=call({action:'read',source,max_chars:64000,max_blocks:128,...(cursor?{cursor,expected_sha256:version}:{})});version=r.source_sha256;blocks.push(...r.blocks);cursor=r.next_cursor;}while(cursor);return {source_sha256:version,blocks};};
- const perform=(kind,type,extra,stage='range')=>{const before=fs.readFileSync(source),state=read(),block=state.blocks.find(b=>b.kind===kind&&b.text==='가😀나 ABC');assert.ok(block);const request={source,expected_sha256:state.source_sha256,operations:[{type,target_id:block.target_id,expected_old:block.text,...extra}]};
+ const perform=(kind,type,extra)=>{const before=fs.readFileSync(source),state=read(),block=state.blocks.find(b=>b.kind===kind&&b.text==='가😀나 ABC'&&(type!=='delete_paragraph'||kind==='paragraph'||b.cell_paragraph>0));assert.ok(block);const request={source,expected_sha256:state.source_sha256,operations:[{type,target_id:block.target_id,expected_old:block.text,...extra}]};
    assert.equal(call({action:'plan',...request}).saved,false);assert.deepEqual(fs.readFileSync(source),before);
    const saved=call({action:'edit',...request});assert.equal(saved.saved_path,source);assert.equal(saved.raw_preservation_verified,true);
    const name=`case-${String(cases.length+1).padStart(3,'0')}`;fs.writeFileSync(path.join(out,name+'-before.hwp'),before);fs.writeFileSync(path.join(out,name+'-after.hwp'),fs.readFileSync(source));
@@ -28,6 +28,8 @@ try{
    for(const spec of [{start:0,end:0,new_text:'앞😀'},{start:2,end:2,new_text:'중간 삽입'},{start:1,end:5,new_text:'긴 replacement😀'},{start:7,end:7,new_text:'끝'},{start:1,end:4,new_text:''},{start:0,end:7,new_text:''},{start:0,end:7,new_text:'전체 😀'}])perform(kind,'splice_text',spec);
    for(const offset of [0,1,2,3,4,7])perform(kind,'split_paragraph',{offset});
    perform(kind,'duplicate_paragraph',{});
+   const baseline=fs.readFileSync(source);fs.writeFileSync(source,fs.readFileSync(path.join(out,cases.at(-1).name+'-after.hwp')));
+   perform(kind,'delete_paragraph',{});fs.writeFileSync(source,baseline);
    for(const spec of [{start:0,end:0,new_text:'\n'},{start:2,end:2,new_text:'\n중간\n'},{start:1,end:5,new_text:'새 답변\n😀 두 번째\n셋째'},{start:7,end:7,new_text:'\n'},{start:0,end:7,new_text:'\n\n'},{start:0,end:7,new_text:'새 답변\n둘째 😀'}])perform(kind,'splice_text',spec);
  }
  fs.writeFileSync(path.join(out,'cases.json'),JSON.stringify({cases},null,2)+'\n');

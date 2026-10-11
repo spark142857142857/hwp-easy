@@ -118,3 +118,17 @@ test('duplicate rejects unexpected operation fields and stale expected text',()=
  assert.throws(()=>edit(source,b,{type:'duplicate_paragraph',offset:1}),/INVALID_OPERATION/);
  assert.throws(()=>edit(source,b,{type:'duplicate_paragraph',expected_old:'stale'}),/EXPECTED_OLD_MISMATCH/);
 });
+
+test('deleting a mixed-style body paragraph preserves every retained block',()=>{
+ const source=mixed('paragraph'),before=inspect(source),b=before.blocks.find(x=>x.kind==='paragraph'&&x.text==='가😀나 ABC');
+ const out=edit(source,b,{type:'delete_paragraph'}),after=inspect(out.bytes);
+ assert.deepEqual(after.blocks.map(x=>x.text),before.blocks.filter(x=>x.id!==b.id).map(x=>x.text));
+ const withoutPosition=x=>{const c=structuredClone(x);delete c.id;delete c.paragraph;return c;};
+ assert.deepEqual(after.blocks.map(withoutPosition),before.blocks.filter(x=>x.id!==b.id).map(withoutPosition));
+ assert.equal(out.raw_preservation_verified,true);
+});
+test('deleting a later mixed-style cell paragraph preserves its mixed-style predecessor',()=>{
+ let source=mixed('cell'),b=inspect(source).blocks.find(x=>x.kind==='cell'&&x.text==='가😀나 ABC');
+ source=edit(source,b,{type:'duplicate_paragraph'}).bytes;const before=inspect(source),second=before.blocks.find(x=>x.kind==='cell'&&x.cell===b.cell&&x.cell_paragraph===1);
+ const out=edit(source,second,{type:'delete_paragraph'}),after=inspect(out.bytes);assert.deepEqual(after.blocks,inspect(mixed('cell')).blocks);assert.equal(out.raw_preservation_verified,true);
+});

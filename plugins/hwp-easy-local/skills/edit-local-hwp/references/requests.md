@@ -60,7 +60,15 @@ Duplicate a plain body/cell paragraph immediately after itself with `duplicate_p
 
 Restore a chosen entry only for the user's requested undo/recovery. Restore verifies the selected path, current version and backup bytes, and preserves the replaced current version as another recovery copy. A recovery history listing is not a cursor-based chronological undo stack.
 
-Delete a plain body paragraph, or a cell paragraph after the first. A paragraph carrying section, page, table or other extended controls cannot be deleted. Merging requires the selected paragraph and its immediate predecessor to have matching paragraph styles; supported plain mixed character styles are retained. Text is concatenated without an added separator.
+`find` searches exact case-sensitive text within supported body/cell blocks without saving. It returns version-bound target IDs, Unicode code-point start/end offsets and short excerpts with their offsets. Query text is 1–256 UTF-16 units, well formed and without control characters; it is literal rather than regex or Unicode-normalized. Separate paragraphs/cells do not join into one match. Results do not overlap and paginate with `max_matches` (default 50, maximum 200). Follow `next_cursor` with the same file hash and query; `complete` covers the supported block search only, and `all_content_supported` separately reports whether other document content is unsupported. A cursor is a validated position, not authorization. Read the full matched block before editing; a search result is not proof of editability.
+
+```json
+{"action":"find","source":"<selected path>","expected_sha256":"<current hash>","query":"<literal text>","max_matches":50}
+```
+
+For several requested replacements in one paragraph, use the matched code-point ranges in descending order in one atomic batch, updating that paragraph's `expected_old` after each step. This preserves the original earlier ranges. Confirm the intended occurrence scope when the wording is ambiguous.
+
+Delete a plain body paragraph, or a cell paragraph after the first; supported mixed character styles are allowed. A paragraph carrying section, page, table or other extended controls cannot be deleted. Merging requires the selected paragraph and its immediate predecessor to have matching paragraph styles; supported plain mixed character styles are retained. Text is concatenated without an added separator.
 
 ```json
 {"action":"edit","source":"<selected path>","expected_sha256":"<hash>","operations":[{"type":"delete_paragraph","target_id":"<paragraph ID>","expected_old":"<whole old text>"}]}

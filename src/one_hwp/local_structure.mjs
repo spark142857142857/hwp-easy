@@ -226,7 +226,7 @@ export function verifyListCounts(raw, model) {
 export function structuralEdit(HwpDocument, source, hash, operation) {
   const formatting=['format_text','format_paragraph'].includes(operation?.type);
   const splicing=operation?.type==='splice_text';
-  const paragraphBoundary=['split_paragraph','merge_paragraph','duplicate_paragraph'].includes(operation?.type);
+  const paragraphBoundary=['split_paragraph','merge_paragraph','duplicate_paragraph','delete_paragraph'].includes(operation?.type);
   const creatingBoundary=['split_paragraph','duplicate_paragraph'].includes(operation?.type);
   const api = createEngineApi(HwpDocument,{existingLineBreaksEditable:true,mixedStyleSameLength:formatting||splicing||paragraphBoundary}), raw = readHwp(source), doc = api.openDocument(source);
   try {
