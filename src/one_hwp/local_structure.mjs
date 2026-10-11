@@ -13,6 +13,7 @@ import { prepareMergedTableChange } from './local_merged_table.mjs';
 import { prepareMergedAxisChange } from './local_merged_axis.mjs';
 import {pictureProfile} from './local_picture.mjs';
 import {prepareTextSplice} from './local_text.mjs';
+import {prepareMultilineSplice} from './local_multiline.mjs';
 import {prepareParagraphChange} from './local_paragraph.mjs';
 
 const fail = (code) => { throw new GuardError(code); };
@@ -257,7 +258,7 @@ export function structuralEdit(HwpDocument, source, hash, operation) {
     if (operation.expected_old !== block.text) fail('EXPECTED_OLD_MISMATCH');
     const sourceRecords = recordsByBlock(raw, before);
     const formatChange=formatting?prepareFormatChange(doc,raw,block,operation,sourceRecords):null;
-    const textChange=splicing?prepareTextSplice(doc,block,operation,sourceRecords.get(id)):null;
+    const textChange=splicing?(typeof operation.new_text==='string'&&operation.new_text.includes('\n')?prepareMultilineSplice:prepareTextSplice)(doc,block,operation,sourceRecords.get(id)):null;
     const tableChange=['split_table_cell','merge_table_cells'].includes(operation.type)
       ?prepareMergedTableChange(before,block,operation,sourceRecords)
       :operation.type.includes('_table_')?(before.tables.find(t=>t.section===block.section&&t.paragraph===block.paragraph&&t.control===block.control)?.cells.some(c=>c.rowSpan>1||c.colSpan>1)
@@ -309,7 +310,7 @@ export function structuralEdit(HwpDocument, source, hash, operation) {
       ? doc.splitParagraph(block.section, position, offset)
       : doc.splitParagraphInCell(block.section, block.paragraph, block.control, block.cell, position, offset));
     if(formatChange)formatChange.apply();
-    else if(textChange)textChange.apply();
+    else if(textChange){textChange.apply();added=textChange.added??0;}
     else if(paragraphChange){paragraphChange.apply();added=operation.type==='split_paragraph'?1:-1;}
     else if(tableChange)tableChange.apply(doc);
     else if(removing) {
@@ -425,7 +426,12 @@ export function structuralEdit(HwpDocument, source, hash, operation) {
       else compareRecords(sourceRecords.get(old.id), savedRecords.get(expected.id), changed);
     }
     const inserted = after.blocks.filter(b => !originalIds.has(b.id));
-    if(formatChange||textChange) {
+    if(splicing&&added>0) {
+      if(inserted.length!==added||after.blocks.length!==before.blocks.length+added)fail('TEXT_CONTENT_MISMATCH');
+      const check=api.openDocument(output);
+      try{inserted.forEach((fresh,i)=>textChange.verifyBlock(fresh,check,i+1));}finally{check.free();}
+      inserted.forEach((fresh,i)=>textChange.verifyRecords(sourceRecords.get(id),savedRecords.get(fresh.id),i+1));
+    } else if(formatChange||textChange) {
       if(inserted.length||after.blocks.length!==before.blocks.length)fail('FORMAT_CONTENT_MISMATCH');
     } else if(operation.type==='split_paragraph') {
       if(inserted.length!==1||after.blocks.length!==before.blocks.length+1)fail('PARAGRAPH_CONTENT_MISMATCH');
@@ -484,6 +490,6 @@ export function structuralEdit(HwpDocument, source, hash, operation) {
     return { bytes: output, _target_remap:targetRemap, content_verified: true, raw_preservation_verified: true,
       raw_preservation_scope: 'existing_blocks_and_streams_with_explicit_structure_changes',
       restored_cell_list_words:repaired.restored_cell_list_words,
-      structure_changed: !formatting&&!splicing, formatting_changed:formatting, text_range_changed:splicing, layout_verified: false };
+      structure_changed: !formatting&&(!splicing||added>0), formatting_changed:formatting, text_range_changed:splicing, layout_verified: false };
   } finally { doc.free(); }
 }

@@ -27,6 +27,7 @@ try{
    call({action:'edit',source,expected_sha256:state.source_sha256,operations:[{type:'format_text',target_id:b.target_id,expected_old:b.text,start:1,end:4,props:{bold:true,textColor:'#AABBCC',fontSize:1400}}]});
    for(const spec of [{start:0,end:0,new_text:'앞😀'},{start:2,end:2,new_text:'중간 삽입'},{start:1,end:5,new_text:'긴 replacement😀'},{start:7,end:7,new_text:'끝'},{start:1,end:4,new_text:''},{start:0,end:7,new_text:''},{start:0,end:7,new_text:'전체 😀'}])perform(kind,'splice_text',spec);
    for(const offset of [0,1,2,3,4,7])perform(kind,'split_paragraph',{offset});
+   for(const spec of [{start:0,end:0,new_text:'\n'},{start:2,end:2,new_text:'\n중간\n'},{start:1,end:5,new_text:'새 답변\n😀 두 번째\n셋째'},{start:7,end:7,new_text:'\n'},{start:0,end:7,new_text:'\n\n'},{start:0,end:7,new_text:'새 답변\n둘째 😀'}])perform(kind,'splice_text',spec);
  }
  fs.writeFileSync(path.join(out,'cases.json'),JSON.stringify({cases},null,2)+'\n');
  const report={status:'PASS',cases:cases.length,split_merge_checks:cases.filter(c=>c.merged_file).length,packaged_process:true,plan_unsaved:true,same_file_saved:true,restored_bytes_exact:true,layout_verified:false};fs.writeFileSync(path.join(out,'verification.json'),JSON.stringify(report,null,2)+'\n');console.log(JSON.stringify(report));

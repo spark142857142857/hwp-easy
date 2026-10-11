@@ -32,8 +32,40 @@ for(const kind of ['paragraph','cell'])test(`empty ${kind} insertion and same-fi
  const saved=await runLocal({action:'edit',...request}),next=await runLocal({action:'read',source});assert.ok(next.blocks.some(x=>x.text==='새 😀 문장'));
  await runLocal({action:'restore',source,expected_sha256:next.source_sha256,backup_id:saved.backup_id});assert.deepEqual(fs.readFileSync(source),original);
 });
-for(const spec of [{start:-1,end:0,new_text:'x'},{start:1,end:0,new_text:'x'},{start:0,end:99,new_text:'x'},{start:0,end:0,new_text:'bad\ntext'},{start:0,end:0,new_text:'\ud800'}])test('invalid range is rejected '+JSON.stringify(spec),()=>{
+for(const spec of [{start:-1,end:0,new_text:'x'},{start:1,end:0,new_text:'x'},{start:0,end:99,new_text:'x'},{start:0,end:0,new_text:'bad\rtext'},{start:0,end:0,new_text:'\ud800'}])test('invalid range is rejected '+JSON.stringify(spec),()=>{
  const source=mixed('paragraph'),b=inspect(source).blocks.find(x=>x.text==='가😀나 ABC');assert.throws(()=>edit(source,b,{type:'splice_text',...spec}),/INVALID_TEXT_RANGE/);
+});
+
+for(const kind of ['paragraph','cell'])for(const spec of [
+ {start:0,end:0,new_text:'첫 😀\n다음'}, {start:0,end:0,new_text:'\n'},
+ {start:2,end:2,new_text:'\n중간\n'}, {start:1,end:5,new_text:'새 답변\n😀 두 번째\n셋째'},
+ {start:7,end:7,new_text:'\n'}, {start:7,end:7,new_text:'끝\n다음\n'},
+ {start:0,end:7,new_text:'\n\n'}, {start:0,end:7,new_text:'새 답변\n둘째 😀'},
+])test(`${kind} mixed multiline range preserves prefix/suffix styles and actual paragraph boundaries ${JSON.stringify(spec)}`,()=>{
+ const source=mixed(kind),before=inspect(source),b=before.blocks.find(x=>x.kind===kind&&x.text==='가😀나 ABC'),index=before.blocks.indexOf(b),points=[...b.text];
+ const out=edit(source,b,{type:'splice_text',...spec}),after=inspect(out.bytes),expected=(points.slice(0,spec.start).join('')+spec.new_text+points.slice(spec.end).join('')).split('\n'),saved=after.blocks.slice(index,index+expected.length);
+ assert.deepEqual(saved.map(x=>x.text),expected);assert.equal(out.structure_changed,true);assert.equal(out.raw_preservation_verified,true);
+ assert.deepEqual(after.blocks.slice(0,index).map(x=>x.text),before.blocks.slice(0,index).map(x=>x.text));assert.deepEqual(after.blocks.slice(index+expected.length).map(x=>x.text),before.blocks.slice(index+1).map(x=>x.text));
+ if(kind==='cell')assert.ok(saved.every(x=>x.kind==='cell'&&x.cell===b.cell));
+});
+
+for(const kind of ['paragraph','cell'])test(`multiline insertion into empty ${kind} retains formatting and exactly restores the file`,async t=>{
+ const dir=fs.mkdtempSync(path.join(os.tmpdir(),'hwp-easy-multiline-'));t.after(()=>{assert.equal(path.dirname(dir),os.tmpdir());assert.ok(path.basename(dir).startsWith('hwp-easy-multiline-'));fs.rmSync(dir,{recursive:true,force:true});});
+ const source=path.join(dir,'same.hwp');fs.writeFileSync(source,fixture({table:kind==='cell',paragraphs:['前','','後'],cells:[['A','']]}));
+ const before=fs.readFileSync(source),state=await runLocal({action:'read',source}),b=state.blocks.find(x=>x.kind===kind&&x.text===''&&x.structural_editable),request={source,expected_sha256:state.source_sha256,operations:[{type:'splice_text',target_id:b.target_id,expected_old:'',start:0,end:0,new_text:'첫 😀\n\n끝'}]};
+ assert.equal((await runLocal({action:'plan',...request})).saved,false);assert.deepEqual(fs.readFileSync(source),before);const result=await runLocal({action:'edit',...request}),after=await runLocal({action:'read',source});assert.ok(after.blocks.some(x=>x.text==='첫 😀'));
+ await runLocal({action:'restore',source,expected_sha256:after.source_sha256,backup_id:result.backup_id});assert.deepEqual(fs.readFileSync(source),before);
+});
+
+test('multiline expansion preserves later initial identities within an atomic batch',async t=>{
+ const dir=fs.mkdtempSync(path.join(os.tmpdir(),'hwp-easy-multiline-batch-'));t.after(()=>{assert.equal(path.dirname(dir),os.tmpdir());assert.ok(path.basename(dir).startsWith('hwp-easy-multiline-batch-'));fs.rmSync(dir,{recursive:true,force:true});});
+ const source=path.join(dir,'same.hwp');fs.writeFileSync(source,mixed('paragraph'));const state=await runLocal({action:'read',source,max_chars:64000}),body=state.blocks.find(x=>x.kind==='paragraph'&&x.text==='가😀나 ABC'),last=state.blocks.find(x=>x.text==='끝');
+ const result=await runLocal({action:'edit',source,expected_sha256:state.source_sha256,operations:[{type:'splice_text',target_id:body.target_id,expected_old:body.text,start:1,end:3,new_text:'첫\n둘\n셋'},{type:'splice_text',target_id:last.target_id,expected_old:last.text,start:0,end:0,new_text:'이동 '}]}),after=await runLocal({action:'read',source});
+ assert.equal(result.atomic_batch,true);assert.ok(after.blocks.some(x=>x.text==='이동 끝'));
+});
+
+for(const value of ['bad\tline\nnext','a\n'.repeat(100),'\ud800\n'])test('unsafe or over-count multiline insertion is unsaved',()=>{
+ const source=mixed('paragraph'),b=inspect(source).blocks.find(x=>x.kind==='paragraph'&&x.text==='가😀나 ABC');assert.throws(()=>edit(source,b,{type:'splice_text',start:0,end:0,new_text:value}),/INVALID_TEXT_RANGE|INVALID_PARAGRAPH_COUNT/);
 });
 for(const kind of ['paragraph','cell'])for(const offset of [0,1,2,3,4,7])test(`${kind} mixed paragraph split at ${offset} and merge restores text and styles`,()=>{
  const source=mixed(kind),before=inspect(source),block=before.blocks.find(b=>b.kind===kind&&b.text==='가😀나 ABC'),split=edit(source,block,{type:'split_paragraph',offset});

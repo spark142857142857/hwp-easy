@@ -131,6 +131,12 @@
 
 합성 회귀 20개는 위치 이동·병합/분리 셀의 문단 추적·중간 조건 불일치·삭제 대상 재사용·Save As·그림과 표 배치의 묶음 저장을 확인한다. 전체 로컬 회귀 **185개**가 통과했다. 분리 패키지의 합성 묶음 **8개·25작업**과 `testdocs/` 복사본의 **12개·38작업**을, 매번 다시 읽고 개별 저장한 결과와 비교해 모든 decoded 스트림이 같음을 확인했다. 무저장 계획·한 번 저장·원래 바이트 복구를 검사했으며, 원본 세 문서는 불변이다. 한글 화면에서는 행 높이와 셀 아래 정렬·좌/하 여백을 함께 적용한 합성 결과도 확인했다. 기존 0.2.6의 Windows Python CI는 검사 확대 후 5분 job 시간 초과로 중단돼, 전체 검사에 10분의 유한 실행 시간을 적용했다.
 
+### 혼합 서식 문장에 여러 문단 삽입
+
+후보 **0.2.8**은 부분 삽입·치환의 새 텍스트에 LF가 있으면 실제 본문/셀 문단을 만든다. 선택 영역 밖 앞뒤 글자의 원래 서식과 문단 속성을 유지하고, 새 글자는 삽입 위치의 서식을 사용한다. 빈 문단과 양 끝 삽입을 지원하며 100개 문단·100,000 UTF-16 단위를 검사한다. 새 문단의 인스턴스 값, raw UTF-16 run, 셀 문단 수와 마지막 플래그를 확인한다. CR·탭·잘못된 surrogate·문단 수 초과는 저장 전 거부한다.
+
+전체 로컬 회귀 **207개**, 분리 패키지의 텍스트/문단 **38개**와 독립 reader가 통과했다. `testdocs/` 세 복사본의 기존 본문·셀 다섯 곳에서 새 **25개** 여러 문단 삽입/치환 사례가 무저장 계획·같은 사본 경로 저장·재열기·정확한 바이트 복구와 독립 raw 검사도 통과했다. 세 원본은 불변이며 사본과 기록은 ignored `outputs/improvement-loop-20261011/real-multiline/`에 보관한다. 일반 문단의 범위를 확대한 것이며 숨은 제어가 있는 대상의 자유 편집이나 전체 쪽 배치 인증은 아니다.
+
 소스 실행기: [local_runner.mjs](../src/one_hwp/local_runner.mjs). 복구 가능한 저장: [local_file.mjs](../src/one_hwp/local_file.mjs). 구조 변경 검사: [local_structure.mjs](../src/one_hwp/local_structure.mjs). 직사각형 표 변경: [local_table.mjs](../src/one_hwp/local_table.mjs). 병합 셀: [local_merged_table.mjs](../src/one_hwp/local_merged_table.mjs). 병합 표 행·열: [local_merged_axis.mjs](../src/one_hwp/local_merged_axis.mjs). 서식: [local_format.mjs](../src/one_hwp/local_format.mjs). 그림: [local_picture.mjs](../src/one_hwp/local_picture.mjs), [셀 그림 저장](../src/one_hwp/local_cell_picture.mjs).
 
 실행 패키지는 Node.js 22 이상과 로컬 파일 권한을 사용한다. 엔진 JS·WASM·압축 해제기와 고지를 포함하며 실행 시 Python·pip·npm 설치나 HWP Easy 인증을 요구하지 않는다. Codex 데스크톱의 번들 Node 경로를 사용할 수 있다. 에이전트가 내부 실행 명령을 수행하므로 사용자가 명령을 입력하는 흐름으로 안내하지 않는다.

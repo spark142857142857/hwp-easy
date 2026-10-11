@@ -52,7 +52,23 @@ def verify_case(folder, case, verify_merge=True):
     index = case['target_raw_index']
     target = before[index]
     prior, empty = shapes(target)
-    if case['type'] == 'splice_text':
+    multiline = case['type'] == 'splice_text' and '\n' in case['new_text']
+    if multiline:
+        start, end, text = case['start'], case['end'], case['new_text']
+        inherited = prior[start] if end > start else prior[max(0, start - 1)] if prior else empty
+        parts = text.split('\n')
+        wanted = (target['text'][:start] + text + target['text'][end:]).split('\n')
+        ids = [([*prior[:start]] if i == 0 else []) + [inherited] * len(part) + ([*prior[end:]] if i == len(parts) - 1 else []) for i, part in enumerate(parts)]
+        assert len(after) == len(before) + len(parts) - 1
+        changed = after[index:index + len(parts)]
+        assert [b['text'] for b in changed] == wanted
+        assert [shapes(b)[0] for b in changed] == ids
+        assert all(shapes(b)[1] == inherited for b, run in zip(changed, ids) if not run)
+        assert [reader.canon(b) for b in before[:index] + before[index + 1:]] == [reader.canon(b) for b in after[:index] + after[index + len(parts):]]
+        assert len(cells) == len(new_cells)
+        for left, right in zip(cells.values(), new_cells.values()):
+            assert left[2:] == right[2:]
+    elif case['type'] == 'splice_text':
         start, end, text = case['start'], case['end'], case['new_text']
         inherited = prior[start] if end > start else prior[max(0, start - 1)] if prior else empty
         wanted = target['text'][:start] + text + target['text'][end:]
@@ -85,7 +101,7 @@ def verify_case(folder, case, verify_merge=True):
             assert merged_cells == cells
     for current in changed:
         expected = reader.canon(target, (67, 68), ((0, 4), (12, 14)))
-        if case['type'] == 'split_paragraph' and current is changed[1]:
+        if (case['type'] == 'split_paragraph' or multiline) and current is not changed[0]:
             expected = [(tag, level, payload[:18] + bytes(4) + payload[22:]) if tag == 66 else (tag, level, payload) for tag, level, payload in expected]
         assert expected == reader.canon(current, (67, 68), ((0, 4), (12, 14)))
     return True
