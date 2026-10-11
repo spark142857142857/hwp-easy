@@ -6,12 +6,20 @@ import { canonicalRecord, textControlBytes } from '../../probes/sites-runtime/gu
 import { mapRawTargets } from '../../probes/sites-runtime/engine/document.mjs';
 import { expectedEditedBlock } from './text_font_selection.mjs';
 import { packStructuralBodyRepairs } from '../../probes/sites-runtime/engine/structural-body-repair.mjs';
+import { pageNumberPreservationProfile } from '../../probes/sites-runtime/guard/page-number.mjs';
+import { prepareTableChange } from './local_table.mjs';
 
 const fail = (code) => { throw new GuardError(code); };
 const equal = (a, b) => JSON.stringify(a) === JSON.stringify(b);
 const bytesEqual = (a, b) => a.length === b.length && a.every((v, i) => v === b[i]);
 const view = (b) => new DataView(b.buffer, b.byteOffset, b.byteLength);
 const copy = (o) => structuredClone(o);
+export function structuralProfileSupported(raw, model) {
+  const unsupported = [...model.unsupported, ...raw.profile.unsupported];
+  const preserved = pageNumberPreservationProfile(raw, unsupported);
+  return preserved !== null && unsupported.every(item => preserved.length
+    && item.kind === 'control' && item.control_id === 'pgnp');
+}
 function text(value) {
   if (typeof value !== 'string' || !value.isWellFormed() || value.length > 100000
     || /[\r\u0000-\u0008\u000b-\u001f]/.test(value)) fail('INVALID_EDIT_TEXT');
@@ -131,9 +139,13 @@ function cellHeaders(raw) {
     }
     return result;
 }
-function matchedCellHeaders(beforeRaw, afterRaw, translate, newHost) {
-  const left = cellHeaders(beforeRaw),right = cellHeaders(afterRaw).filter(r=>!(newHost
+function matchedCellHeaders(beforeRaw, afterRaw, translate, newHost, cellChange) {
+  const left = cellHeaders(beforeRaw).filter(r=>!cellChange||cellChange.header(r)!==null),right = cellHeaders(afterRaw).filter(r=>!(newHost
     && r.section===newHost.section && r.host===newHost.paragraph));
+  if(cellChange) {
+    const fresh=cellChange.freshCoordinates;
+    for(let i=right.length-1;i>=0;i--)if(cellChange.inTable(right[i])&&fresh.has(`${view(right[i].payload).getUint16(10,true)}:${view(right[i].payload).getUint16(8,true)}`))right.splice(i,1);
+  }
   if(left.length!==right.length)fail('CELL_PRESERVATION_MISMATCH');
   left.forEach((r,i)=>{
     const target=translate({section:r.section,paragraph:r.host,kind:'paragraph'}),saved=right[i];
@@ -142,9 +154,10 @@ function matchedCellHeaders(beforeRaw, afterRaw, translate, newHost) {
   });
   return left.map((r,i)=>[r,right[i]]);
 }
-function verifyCellHeaders(beforeRaw, afterRaw, translate, newHost) {
-  matchedCellHeaders(beforeRaw,afterRaw,translate,newHost).forEach(([r,saved])=>{
+function verifyCellHeaders(beforeRaw, afterRaw, translate, newHost, cellChange) {
+  matchedCellHeaders(beforeRaw,afterRaw,translate,newHost,cellChange).forEach(([r,saved])=>{
     const a=r.payload.slice(),b=saved.payload.slice();
+    if(cellChange)cellChange.patchHeader(r,a);
     // Counts were independently checked against the complete model and raw
     // ordering. Every remaining cell-header byte stays unchanged.
     a.fill(0,0,2);b.fill(0,0,2);
@@ -155,11 +168,12 @@ function verifyCellHeaders(beforeRaw, afterRaw, translate, newHost) {
 // exact transition after matching complete ordered cell headers, translated
 // hosts, and independently verified paragraph counts. New table headers are
 // never patched. The full raw/model checks still run on the repaired bytes.
-function preserveStructuralCellWords(beforeRaw, candidate, afterRaw, before, after, translate, newHost) {
+function preserveStructuralCellWords(beforeRaw, candidate, afterRaw, before, after, translate, newHost, cellChange) {
   verifyListCounts(beforeRaw,before);verifyListCounts(afterRaw,after);
   const patches=new Map();let restored=0;
-  for(const [original,saved] of matchedCellHeaders(beforeRaw,afterRaw,translate,newHost)) {
+  for(const [original,saved] of matchedCellHeaders(beforeRaw,afterRaw,translate,newHost,cellChange)) {
     const a=original.payload.slice(),b=saved.payload.slice();a.fill(0,0,2);b.fill(0,0,2);
+    if(cellChange)cellChange.patchHeader(original,a);
     if(bytesEqual(a,b))continue;
     if(view(a).getUint16(6,true)!==0||view(b).getUint16(6,true)!==0x0400
       ||a.some((byte,i)=>i!==6&&i!==7&&byte!==b[i]))fail('CELL_PRESERVATION_MISMATCH');
@@ -200,12 +214,18 @@ export function structuralEdit(HwpDocument, source, hash, operation) {
     const before = api.inspectDocument(doc, source);
     mapRawTargets(raw, before.blocks);
     verifyListCounts(raw, before);
-    if (before.unsupported.length || raw.profile.unsupported.length) fail('UNSUPPORTED_EDIT_PROFILE');
+    if (!structuralProfileSupported(raw,before)) fail('UNSUPPORTED_EDIT_PROFILE');
     if (!operation || typeof operation !== 'object' || Array.isArray(operation)) fail('INVALID_OPERATION');
     const schemas = {
       replace_text: ['type', 'target_id', 'expected_old', 'new_text'],
       insert_paragraphs: ['type', 'target_id', 'expected_old', 'paragraphs'],
       create_table: ['type', 'target_id', 'expected_old', 'cells'],
+      delete_paragraph: ['type', 'target_id', 'expected_old'],
+      merge_paragraph: ['type', 'target_id', 'expected_old', 'previous_target_id', 'expected_previous'],
+      insert_table_row: ['type', 'target_id', 'expected_old', 'index', 'texts'],
+      insert_table_column: ['type', 'target_id', 'expected_old', 'index', 'texts'],
+      delete_table_row: ['type', 'target_id', 'expected_old', 'index', 'expected_cells'],
+      delete_table_column: ['type', 'target_id', 'expected_old', 'index', 'expected_cells'],
     };
     const schema = schemas[operation.type];
     if (!schema || !equal(Object.keys(operation).sort(), [...schema].sort())) fail('INVALID_OPERATION');
@@ -213,6 +233,27 @@ export function structuralEdit(HwpDocument, source, hash, operation) {
     if (!block || !block.editable || block.style.char_shape_ids.length !== 1) fail('TARGET_NOT_EDITABLE');
     if (operation.expected_old !== block.text) fail('EXPECTED_OLD_MISMATCH');
     const sourceRecords = recordsByBlock(raw, before);
+    const tableChange=operation.type.includes('_table_')?prepareTableChange(before,block,operation,sourceRecords,text):null;
+    const removing = ['delete_paragraph','merge_paragraph'].includes(operation.type);
+    let previous;
+    if(removing) {
+      // The removed paragraph must be plain; never remove section/page/table controls.
+      if(sourceRecords.get(id).some(r=>![66,67,68,69,72].includes(r.tag))
+        || sourceRecords.get(id).some(r=>r.tag===67 && !bytesEqual(textControlBytes(r.payload),new Uint8Array([13,0]))))
+        fail('STRUCTURAL_TARGET_HAS_CONTROLS');
+      const position=block.kind==='cell'?block.cell_paragraph:block.paragraph;
+      previous=before.blocks.find(b=>b.section===block.section && b.kind===block.kind
+        && (block.kind==='paragraph'?b.paragraph===position-1
+          :b.paragraph===block.paragraph&&b.control===block.control&&b.cell===block.cell&&b.cell_paragraph===position-1));
+      if(operation.type==='merge_paragraph') {
+        if(!previous || rawId(operation.previous_target_id,hash)!==previous.id
+          || operation.expected_previous!==previous.text)fail('PREVIOUS_PARAGRAPH_MISMATCH');
+        if(!previous.editable || previous.style.char_shape_ids.length!==1
+          || !equal(previous.style.char_shape_ids,block.style.char_shape_ids)
+          || !equal(previous.style.paragraph,block.style.paragraph))fail('MERGE_STYLE_MISMATCH');
+        text(previous.text+block.text);
+      } else if(block.kind==='cell' && !previous)fail('CELL_FIRST_PARAGRAPH_DELETE_UNSUPPORTED');
+    }
     // Structural targets cannot carry hidden controls, range tags or binary objects.
     if (block.kind==='cell' && sourceRecords.get(id).some(r => ![66, 67, 68, 69, 72].includes(r.tag))) fail('STRUCTURAL_TARGET_HAS_CONTROLS');
     const shape = block.style.char_shape_ids[0];
@@ -221,7 +262,7 @@ export function structuralEdit(HwpDocument, source, hash, operation) {
     if (lines && (!Array.isArray(lines) || !lines.length || lines.length > 100
       || lines.some(line => text(line).includes('\n')) || lines.reduce((n, s) => n + s.length, 0) > 100000)) fail('INVALID_PARAGRAPHS');
     let added = 0, tableAdded = false, tableHost;
-    if (operation.type !== 'replace_text' && block.kind !== 'paragraph') fail('BODY_PARAGRAPH_REQUIRED');
+    if (!tableChange && !['replace_text','delete_paragraph','merge_paragraph'].includes(operation.type) && block.kind !== 'paragraph') fail('BODY_PARAGRAPH_REQUIRED');
     const replace = (position, oldText, value) => {
       const count = [...value].length;
       if (block.kind === 'paragraph') {
@@ -236,7 +277,17 @@ export function structuralEdit(HwpDocument, source, hash, operation) {
     const split = (position, offset) => checked(block.kind === 'paragraph'
       ? doc.splitParagraph(block.section, position, offset)
       : doc.splitParagraphInCell(block.section, block.paragraph, block.control, block.cell, position, offset));
-    if (operation.type === 'replace_text') {
+    if(tableChange)tableChange.apply(doc);
+    else if(removing) {
+      const position=block.kind==='cell'?block.cell_paragraph:block.paragraph;
+      if(operation.type==='delete_paragraph'&&block.kind==='paragraph')checked(doc.deleteParagraph(block.section,position));
+      else {
+        if(operation.type==='delete_paragraph')replace(position,block.text,'');
+        checked(block.kind==='paragraph'?doc.mergeParagraph(block.section,position)
+          :doc.mergeParagraphInCell(block.section,block.paragraph,block.control,block.cell,position));
+      }
+      added=-1;
+    } else if (operation.type === 'replace_text') {
       const start = block.kind === 'paragraph' ? block.paragraph : block.cell_paragraph;
       replace(start, block.text, lines[0]);
       for (let i = 1; i < lines.length; i++) {
@@ -258,11 +309,15 @@ export function structuralEdit(HwpDocument, source, hash, operation) {
         || cells.some(row => !Array.isArray(row) || row.length !== cells[0].length
           || row.some(value => text(value).includes('\n')))
         || cells.flat().reduce((n, s) => n + s.length, 0) > 100000) fail('INVALID_TABLE');
-      const location = JSON.parse(doc.createTable(block.section, block.paragraph, [...block.text].length, cells.length, cells[0].length));
+      // The engine reuses an empty paragraph as the host. Split it first so
+      // creation still means AFTER the selected paragraph, preserving its ID.
+      const emptyHost=block.text.length===0;
+      if(emptyHost)split(block.paragraph,0);
+      const location = JSON.parse(doc.createTable(block.section, block.paragraph+(emptyHost?1:0), [...block.text].length, cells.length, cells[0].length));
       if (!location.ok || location.paraIdx !== block.paragraph + 1 || location.controlIdx !== 0) fail('TABLE_POSITION_UNVERIFIED');
       tableHost = location.paraIdx;
       // The engine inserts two trailing empty paragraphs; retain one as the caret paragraph.
-      checked(doc.deleteParagraph(block.section, tableHost + 2));
+      if(!emptyHost)checked(doc.deleteParagraph(block.section, tableHost + 2));
       cells.forEach((row, r) => row.forEach((value, c) => {
         checked(doc.insertTextInCell(block.section, tableHost, 0, r * row.length + c, 0, 0, value));
       }));
@@ -272,8 +327,9 @@ export function structuralEdit(HwpDocument, source, hash, operation) {
     let after;
     try { after = api.inspectDocument(reopened, output); } finally { reopened.free(); }
     let savedRaw = readHwp(output);
-    if (after.unsupported.length || savedRaw.profile.unsupported.length) fail('UNSUPPORTED_EDIT_PROFILE');
+    if (!structuralProfileSupported(savedRaw,after)) fail('UNSUPPORTED_EDIT_PROFILE');
     const translate = (old) => {
+      if(tableChange)return tableChange.translate(old);
       const result = copy(old);
       if (old.section === block.section) {
         if (block.kind === 'paragraph' && old.paragraph > block.paragraph) result.paragraph += added;
@@ -284,8 +340,14 @@ export function structuralEdit(HwpDocument, source, hash, operation) {
         ? `:t${result.control}:c${result.cell}:p${result.cell_paragraph}` : '');
       return result;
     };
+    const expectedUnsupported=before.unsupported.map(item=>{
+      const result=copy(item);
+      if(item.kind==='control'&&item.list===0)result.paragraph=translate({kind:'paragraph',section:0,paragraph:item.paragraph}).paragraph;
+      return result;
+    });
+    if(!equal(expectedUnsupported,after.unsupported))fail('CONTROL_PRESERVATION_MISMATCH');
     const newHost=tableAdded?{section:block.section,paragraph:tableHost}:null;
-    const repaired=preserveStructuralCellWords(raw,output,savedRaw,before,after,translate,newHost);
+    const repaired=preserveStructuralCellWords(raw,output,savedRaw,before,after,translate,newHost,tableChange);
     if(repaired.bytes!==output) {
       const repairCheck=api.openDocument(repaired.bytes);
       try{if(!equal(api.inspectDocument(repairCheck,repaired.bytes),after))fail('PRESERVATION_MISMATCH');}
@@ -295,16 +357,26 @@ export function structuralEdit(HwpDocument, source, hash, operation) {
     const savedRecords=recordsByBlock(savedRaw,after);
     const originalIds = new Set();
     for (const old of before.blocks) {
+      if(removing && old.id===id)continue;
       let expected = translate(old);
+      if(!expected)continue;
       const saved = after.blocks.find(b => b.id === expected.id);
       originalIds.add(expected.id);
       if (!saved) fail('CONTENT_MISMATCH');
-      if (old.id === id && operation.type === 'replace_text') expected=expectedEditedBlock(expected,lines[0],true);
+      const merged=operation.type==='merge_paragraph' && old.id===previous.id;
+      const changed=old.id===id&&operation.type==='replace_text'||merged;
+      if (changed) expected=expectedEditedBlock(expected,merged?previous.text+block.text:lines[0],true);
       if (!equal(withoutPosition(expected), withoutPosition(saved))) fail('CONTENT_MISMATCH');
-      compareRecords(sourceRecords.get(old.id), savedRecords.get(expected.id), old.id === id && operation.type === 'replace_text');
+      if(tableChange && old.kind==='paragraph' && tableChange.inTable(old))tableChange.verifyHostRecords(sourceRecords.get(old.id),savedRecords.get(expected.id),compareRecords);
+      else compareRecords(sourceRecords.get(old.id), savedRecords.get(expected.id), changed);
     }
     const inserted = after.blocks.filter(b => !originalIds.has(b.id));
-    if (tableAdded) {
+    if(tableChange) {
+      tableChange.verifyTable(after,inserted);
+      for(const fresh of inserted)if(savedRecords.get(fresh.id).some(r=>![66,67,68,69,72].includes(r.tag)))fail('INSERTED_PARAGRAPH_HAS_CONTROLS');
+    } else if(removing) {
+      if(inserted.length || after.blocks.length!==before.blocks.length-1)fail('CONTENT_MISMATCH');
+    } else if (tableAdded) {
       if (inserted.length !== 2 + operation.cells.flat().length || inserted.some(b => b.section !== block.section)) fail('CONTENT_MISMATCH');
       const tables = after.tables.filter(t => t.section === block.section && t.paragraph === tableHost);
       if (tables.length !== 1 || tables[0].dimensions.rowCount !== operation.cells.length
@@ -341,9 +413,10 @@ export function structuralEdit(HwpDocument, source, hash, operation) {
       return result;
     });
     const existingTables = after.tables.filter(t => !(tableAdded && t.section === block.section && t.paragraph === tableHost));
-    if (!equal(expectedTables, existingTables)) fail('TABLE_PRESERVATION_MISMATCH');
+    const unaffected=t=>!tableChange||t.id!==tableChange.table.id;
+    if (!equal(expectedTables.filter(unaffected), existingTables.filter(unaffected))) fail('TABLE_PRESERVATION_MISMATCH');
     verifyListCounts(savedRaw, after);
-    verifyCellHeaders(raw,savedRaw,translate,newHost);
+    verifyCellHeaders(raw,savedRaw,translate,newHost,tableChange);
     verifyOutsideBody(raw, savedRaw, tableAdded);
     return { bytes: output, content_verified: true, raw_preservation_verified: true,
       raw_preservation_scope: 'existing_blocks_and_streams_with_explicit_structure_changes',

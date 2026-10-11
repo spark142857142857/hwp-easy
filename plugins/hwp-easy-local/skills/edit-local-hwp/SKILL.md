@@ -1,6 +1,6 @@
 ---
 name: edit-local-hwp
-description: Read and edit an explicitly selected local HWP file, add paragraphs or a simple table, and save checked changes to that same file.
+description: Read and edit an explicitly selected local HWP, insert/delete/merge paragraphs, edit simple table rows and columns, and save checked changes to that same file.
 ---
 
 Use only when explicitly invoked for the current task. The user's instructions take precedence over this workflow.
@@ -16,5 +16,7 @@ Read the supported content through all returned cursors before making claims abo
 For requested edits, check a plan and then edit using the same source hash. Omitting `output` saves directly to the selected HWP and keeps its previous bytes in `.hwp-easy-backups` beside it. Set `output` only for an explicit Save As request. Never remove recovery files during routine editing. A read, preview or plan does not save.
 
 Existing text changes can be batched. Structural operations run one at a time: reread after each successful save because positions and target IDs can change. Newlines in `replace_text` produce real HWP paragraphs, including paragraphs inside a cell. Do not erase requested newlines to bypass rejection. If one atomic requested batch is unsupported, do not partly apply it without a revised user request.
+
+For paragraph merging, identify both adjacent paragraphs and provide their full expected text. Table changes use an actual cell target and the zero-based insertion/deletion index. Deletions require the exact paragraph texts of all removed cells. Existing merged-cell tables are outside the current row/column profile; do not flatten them or replace the table to bypass a rejection. Verified page-number controls remain byte-preserved and are not edited semantically.
 
 Verify `ok`, `saved`, `saved_path`, `output_sha256` and content checks. Reread the saved file at its returned hash. Report the changed file directly, without a download task. If saving is unconfirmed, inspect the selected file before retrying. A stale-version error requires a new read; an unsupported edit remains unsaved. Restore only on the user's request using the returned backup ID and current hash. Content checks do not certify every HWP layout or complex object.

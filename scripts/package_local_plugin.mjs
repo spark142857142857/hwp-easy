@@ -28,7 +28,8 @@ for(const [file,from] of [
   ['PAKO-ZLIB-LICENSE.txt','probes/sites-runtime/guard/ZLIB-LICENSE.txt'],
 ])await fs.copyFile(path.join(root,from),path.join(out,'licenses',file));
 const hash=data=>createHash('sha256').update(data).digest('hex');
-const manifest={package:'hwp-easy-local',version:'0.2.0',runtime:'Node >=22; bundled JS and WASM; no npm or Python at execution time',
+const metadata=JSON.parse(await fs.readFile(path.join(source,'plugin.json'),'utf8'));
+const manifest={package:'hwp-easy-local',version:metadata.version,runtime:'Node >=22; bundled JS and WASM; no npm or Python at execution time',
   engine:'@rhwp/core 0.8.6',wasm_sha256:hash(await fs.readFile(path.join(scripts,'rhwp_bg.wasm'))),
   runner_sha256:hash(await fs.readFile(path.join(scripts,'local-runner.mjs'))),
   global_registration_changed:false,remote_deployment_changed:false,portal_submission:'NOT_RUN',directory_publication:'NOT_DONE'};

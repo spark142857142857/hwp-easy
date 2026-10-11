@@ -38,6 +38,22 @@ try {
  const table=call({action:'edit',...requestFor(state,{type:'create_table',target_id:target.target_id,expected_old:target.text,cells:[['제목','새 표'],['내용','표 내용']]})});
  state=read();assert.equal(state.table_count,2);assert.ok(state.blocks.some(b=>b.kind==='cell'&&b.text==='표 내용'));
  const withTable=fs.readFileSync(source);fs.writeFileSync(path.join(reportDir,'synthetic-structure.hwp'),withTable);
+ const apply=(find,type,extra={})=>{
+  state=read();const block=state.blocks.find(find);assert.ok(block);
+  return call({action:'edit',...requestFor(state,{type,target_id:block.target_id,expected_old:block.text,...extra})});
+ };
+ const tableCell=b=>b.kind==='cell'&&b.text==='제목';
+ apply(tableCell,'insert_table_row',{index:1,texts:['새 행 1','새 행 2']});
+ apply(tableCell,'insert_table_column',{index:1,texts:['새 열 1','새 열 2','새 열 3']});
+ apply(tableCell,'delete_table_row',{index:1,expected_cells:[['새 행 1'],['새 열 2'],['새 행 2']]});
+ apply(tableCell,'delete_table_column',{index:1,expected_cells:[['새 열 1'],['새 열 3']]});
+ state=read();let previous=state.blocks.find(b=>b.text==='추가한 문단');
+ apply(b=>b.kind==='paragraph'&&b.text==='다음 문단','merge_paragraph',{previous_target_id:previous.target_id,expected_previous:previous.text});
+ apply(b=>b.kind==='paragraph'&&b.text==='추가한 문단다음 문단','delete_paragraph');
+ state=read();previous=state.blocks.find(b=>b.kind==='cell'&&b.text==='첫 답변');
+ apply(b=>b.kind==='cell'&&b.text==='둘째 답변 😀','merge_paragraph',{previous_target_id:previous.target_id,expected_previous:previous.text});
+ state=read();assert.ok(state.blocks.some(b=>b.kind==='cell'&&b.text==='첫 답변둘째 답변 😀'));
+ fs.writeFileSync(path.join(reportDir,'synthetic-restructured.hwp'),fs.readFileSync(source));
  const preview=call({action:'preview',source,expected_sha256:state.source_sha256,page:0});assert.ok(preview.svg.startsWith('<svg'));
  const restored=call({action:'restore',source,expected_sha256:state.source_sha256,backup_id:edited.backup_id});
  assert.deepEqual(fs.readFileSync(source),original);fs.writeFileSync(path.join(reportDir,'synthetic-original.hwp'),original);
@@ -45,6 +61,7 @@ try {
    local_path_with_korean_and_spaces:true,external_browser_opened:false,network_transfer_used:false,
    plan_did_not_save:true,edit_saved_same_selected_path:true,multiline_cell_saved_and_reopened:true,
    new_body_paragraphs_saved_and_reopened:true,new_table_saved_and_reopened:true,passive_svg_preview:true,
+   paragraph_merge_and_delete_saved_and_reopened:true,table_row_column_insert_and_delete_saved_and_reopened:true,
    restore_exact_original_bytes:true,backup_count:fs.readdirSync(path.join(temporary,'.hwp-easy-backups')).filter(p=>p.endsWith('.hwp')).length,
    original_sha256:hash(original),multiline_sha256:hash(multiline),structure_sha256:hash(withTable),layout_verified:false,
    publication:'NOT_DONE',global_codex_configuration_changed:false};

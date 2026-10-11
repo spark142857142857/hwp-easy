@@ -6,7 +6,6 @@ import zipfile
 
 ROOT = Path(__file__).resolve().parents[1]
 PACKAGE = ROOT / "outputs/local-plugin-20261011/hwp-easy-local"
-DESTINATION = PACKAGE.parent / "hwp-easy-local-0.2.0.zip"
 SKILL = "skills/edit-local-hwp"
 FILES = ("plugin.json", "build-manifest.json", f"{SKILL}/SKILL.md", f"{SKILL}/agents/openai.yaml",
          f"{SKILL}/references/requests.md", f"{SKILL}/scripts/local-runner.mjs", f"{SKILL}/scripts/rhwp_bg.wasm",
@@ -15,6 +14,10 @@ FILES = ("plugin.json", "build-manifest.json", f"{SKILL}/SKILL.md", f"{SKILL}/ag
          *(f"licenses/{name}" for name in ("THIRD_PARTY_NOTICES.md", "RHWP-LICENSE.txt", "RHWP-THIRD-PARTY-LICENSES.md",
                                            "PAKO-LICENSE.txt", "PAKO-ZLIB-LICENSE.txt")))
 manifest = json.loads((PACKAGE / "build-manifest.json").read_text(encoding="utf-8"))
+version = manifest["version"]
+assert len(version.split(".")) == 3 and all(part.isdecimal() for part in version.split("."))
+assert json.loads((PACKAGE / "plugin.json").read_text(encoding="utf-8"))["version"] == version
+DESTINATION = PACKAGE.parent / f"hwp-easy-local-{version}.zip"
 for filename, field in ((f"{SKILL}/scripts/local-runner.mjs", "runner_sha256"), (f"{SKILL}/scripts/rhwp_bg.wasm", "wasm_sha256")):
     assert hashlib.sha256((PACKAGE / filename).read_bytes()).hexdigest() == manifest[field]
 assert all(not (PACKAGE / name).is_symlink() and (PACKAGE / name).is_file() for name in FILES)

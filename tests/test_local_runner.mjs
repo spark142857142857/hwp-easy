@@ -6,6 +6,7 @@ import os from 'node:os';
 import { fixture } from './rhwp_fixtures.mjs';
 import { initializeLocal, runLocal } from '../src/one_hwp/local_runner.mjs';
 import { readLocal, saveLocal, digest } from '../src/one_hwp/local_file.mjs';
+import { withPageNumber } from '../probes/sites-runtime/tests/page-number-fixtures.mjs';
 initializeLocal(fs.readFileSync(new URL('../node_modules/@rhwp/core/rhwp_bg.wasm',import.meta.url)));
 function workspace(t) {
  const dir=fs.mkdtempSync(path.join(os.tmpdir(),'hwp-easy-local-test-'));
@@ -42,6 +43,14 @@ test('an existing LF target advertises structural eligibility and can become a s
  const saved=await runLocal({action:'edit',source,expected_sha256:read.source_sha256,
    operations:[replacement(read,'기존\n줄바꿈','한 문단 답변')]}),after=await runLocal({action:'read',source,max_chars:64000});
  assert.equal(saved.selected_file_updated,true);assert.deepEqual(after.blocks.map(b=>b.text),['시작','한 문단 답변','끝']);
+});
+test('opaque page numbers retain partial-reading status while allowing verified structural candidates',async t=>{
+ const {source}=workspace(t),original=withPageNumber(fixture(),{paragraph:0});fs.writeFileSync(source,original);
+ const read=await runLocal({action:'read',source,max_chars:64000}),block=read.blocks.find(b=>b.text==='중간 합성 문단');
+ assert.equal(read.all_content_supported,false);assert.equal(block.structural_editable,true);
+ const saved=await runLocal({action:'edit',source,expected_sha256:read.source_sha256,operations:[{type:'insert_paragraphs',target_id:block.target_id,expected_old:block.text,paragraphs:['新 문단']}]});
+ const after=await runLocal({action:'read',source,max_chars:64000});assert.equal(after.all_content_supported,false);assert.ok(after.blocks.some(b=>b.text==='新 문단'));
+ await runLocal({action:'restore',source,expected_sha256:after.source_sha256,backup_id:saved.backup_id});assert.deepEqual(fs.readFileSync(source),Buffer.from(original));
 });
 test('stale document and invalid edit batch leave the current file unchanged',async t=>{
  const {source}=workspace(t),read=await runLocal({action:'read',source,max_chars:64000});

@@ -5,7 +5,8 @@ import { spawnSync } from 'node:child_process';
 import { HwpDocument, initSync } from '@rhwp/core';
 import { createDocumentEngine } from '../../probes/sites-runtime/engine/document.mjs';
 import { createEngineApi } from './rhwp_api.mjs';
-import { structuralEdit } from './local_structure.mjs';
+import { structuralEdit, structuralProfileSupported } from './local_structure.mjs';
+import { readHwp } from '../../probes/sites-runtime/guard/container.mjs';
 import { readLocal, saveLocal, restoreLocal } from './local_file.mjs';
 import { GuardError } from '../../probes/sites-runtime/guard/records.mjs';
 
@@ -31,19 +32,22 @@ export async function runLocal(request) {
   if(request.action==='capabilities')return {engine:'@rhwp/core',engine_version:'0.8.6',transport:'local_execution',
     save_default:'same_file',selected_file_updated:true,file_location:'current_execution_environment',uploads_required:false,web_browser_required:false,
     read:true,preview:true,edit:true,restore:true,new_paragraphs:true,multiline_body_and_cells:true,new_simple_tables:true,
+    delete_paragraphs:true,merge_adjacent_paragraphs:true,
+    insert_delete_table_rows_columns:true,
     edit_profiles:{existing_text:'guarded paragraph/cell replacement; constrained mixed styles',
-      structure:'uniform-style plain targets; body paragraph insertion and rectangular table creation'},
+      structure:'uniform-style targets; multiline, paragraph insertion/deletion/merge, rectangular tables and row/column changes; verified opaque page numbers preserved'},
     layout_verified:false,requires:'Node.js 22 or newer with local file permissions',max_input_bytes:4194304};
   const snapshot=readLocal(request.source,request.expected_sha256),engine=createDocumentEngine(HwpDocument);
   const document=await engine.open(snapshot.bytes),version=document.source_sha256;
   if(request.action==='read') {
     const result=document.read({expected_sha256:version,...Object.fromEntries(['cursor','max_chars','max_blocks'].filter(k=>Object.hasOwn(request,k)).map(k=>[k,request[k]]))});
     let structural;
-    if(result.blocks.some(b=>b.style.profile==='existing_line_breaks_not_editable')) {
+    if(!result.all_content_supported || result.blocks.some(b=>b.style.profile==='existing_line_breaks_not_editable')) {
       const api=createEngineApi(HwpDocument,{existingLineBreaksEditable:true}),opened=api.openDocument(snapshot.bytes);
       try {structural=api.inspectDocument(opened,snapshot.bytes);}finally{opened.free();}
     }
-    result.blocks=result.blocks.map(block=>({...block,structural_editable:result.all_content_supported
+    const profileSupported=structural?structuralProfileSupported(readHwp(snapshot.bytes),structural):result.all_content_supported;
+    result.blocks=result.blocks.map(block=>({...block,structural_editable:profileSupported
       && Boolean((structural?.blocks.find(b=>b.id===block.id)??block).editable)
       && (structural?.blocks.find(b=>b.id===block.id)??block).style.char_shape_ids?.length===1}));
     return {...result,source:snapshot.source,persistence:'local_file',saved:false};

@@ -54,11 +54,14 @@ def decode(data):
 original_streams, original = decode((folder / "synthetic-original.hwp").read_bytes())
 multiline_streams, multiline = decode((folder / "synthetic-multiline.hwp").read_bytes())
 structure_streams, structure = decode((folder / "synthetic-structure.hwp").read_bytes())
+restructured_streams, restructured = decode((folder / "synthetic-restructured.hwp").read_bytes())
 assert [b["text"] for b in multiline if b["level"] == 2] == ["문항", "첫 답변", "둘째 답변 😀", "반복 문구", "반복 문구"]
 assert [b["text"] for b in multiline if b["level"] == 0] == [b["text"] for b in original if b["level"] == 0]
 assert [b["text"] for b in structure if b["level"] == 2] == ["문항", "첫 답변", "둘째 답변 😀", "반복 문구", "반복 문구", "제목", "새 표", "내용", "표 내용"]
 assert [b["text"] for b in structure if b["level"] == 0 and b["text"]] == ["첫 합성 문단", "중간 합성 문단", "추가한 문단", "다음 문단", "마지막 합성 문단"]
-for streams in (multiline_streams, structure_streams):
+assert [b["text"] for b in restructured if b["level"] == 2] == ["문항", "첫 답변둘째 답변 😀", "반복 문구", "반복 문구", "제목", "새 표", "내용", "표 내용"]
+assert [b["text"] for b in restructured if b["level"] == 0 and b["text"]] == ["첫 합성 문단", "중간 합성 문단", "마지막 합성 문단"]
+for streams in (multiline_streams, structure_streams, restructured_streams):
     assert streams.keys() == original_streams.keys()
     for name, value in original_streams.items():
         if name not in {"PrvText", "PrvImage", "DocInfo"} and not name.startswith("BodyText/"):
@@ -69,6 +72,7 @@ for streams in (multiline_streams, structure_streams):
             (level, payload) for kind, level, payload in records(original_streams["DocInfo"]) if kind == tag]
 report = {"status": "PASS", "reader": "Python olefile and independent HWP record decoding",
           "multiline_real_cell_paragraphs": True, "new_body_paragraphs": True, "new_table_cell_text": True,
+          "paragraph_deletion_and_merging": True, "table_row_column_insert_delete_round_trip": True,
           "existing_font_and_style_definitions_unchanged": True, "non_body_streams_unchanged": True,
           "layout_verified": False}
 (folder / "independent-verification.json").write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")

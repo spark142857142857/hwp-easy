@@ -30,7 +30,29 @@ Change `action` to `edit` to save. `replace_text` with `\n` creates real paragra
 {"action":"edit","source":"<selected path>","expected_sha256":"<read hash>","operations":[{"type":"create_table","target_id":"<body paragraph ID>","expected_old":"<whole old text>","cells":[["Name","Synthetic name"],["Answer","Synthetic answer"]]}]}
 ```
 
-Paragraphs and tables are inserted **after** the selected plain body paragraph. Structural targets require a uniform character style and no hidden control content. Table creation inserts a rectangular table plus a following empty caret paragraph; maximum 50 rows/columns and 256 cells. New paragraphs: at most 100 and total 100,000 UTF-16 units. Structural operations cannot share a batch. Existing table row/column insertion, arbitrary mixed-style restructuring, nested objects and general page-layout editing are not yet exposed by this runner.
+Paragraphs and tables are inserted **after** the selected body paragraph, including an empty paragraph. Structural targets require a uniform character style. Table creation inserts a rectangular table plus a following empty caret paragraph; maximum 50 rows/columns and 256 cells. New paragraphs: at most 100 and total 100,000 UTF-16 units. Structural operations cannot share a batch. Verified page-number controls are preserved as opaque bytes; this does not make semantic reading complete.
+
+Delete a plain body paragraph, or a cell paragraph after the first. A paragraph carrying section, page, table or other extended controls cannot be deleted. Merging requires the selected paragraph and its immediate predecessor to have matching paragraph/character styles. Text is concatenated without an added separator.
+
+```json
+{"action":"edit","source":"<selected path>","expected_sha256":"<hash>","operations":[{"type":"delete_paragraph","target_id":"<paragraph ID>","expected_old":"<whole old text>"}]}
+```
+
+```json
+{"action":"edit","source":"<selected path>","expected_sha256":"<hash>","operations":[{"type":"merge_paragraph","target_id":"<second paragraph ID>","expected_old":"<second text>","previous_target_id":"<first paragraph ID>","expected_previous":"<first text>"}]}
+```
+
+Change an existing rectangular table through one of its actual cell targets. `index` is the inserted row/column position (0 through the current count), or deleted position (0 through count minus one). Inserted `texts` has one string per new cell, in column order for a row or row order for a column. Deleted `expected_cells` has one array of full paragraph texts per removed cell, in the same order. The last row/column cannot be removed.
+
+```json
+{"action":"edit","source":"<selected path>","expected_sha256":"<hash>","operations":[{"type":"insert_table_row","target_id":"<cell ID>","expected_old":"<cell text>","index":1,"texts":["New A","New B"]}]}
+```
+
+```json
+{"action":"edit","source":"<selected path>","expected_sha256":"<hash>","operations":[{"type":"delete_table_column","target_id":"<cell ID>","expected_old":"<cell text>","index":1,"expected_cells":[["Top paragraph 1","Top paragraph 2"],["Bottom paragraph"]]}]}
+```
+
+`insert_table_column` and `delete_table_row` use the corresponding schemas. This profile requires unmerged cells, row-major storage, plain uniform-style cell paragraphs and supported uniform table geometry. Retained cell metadata stays exact except requested coordinates; the table grows/shrinks along the changed axis. Arbitrary merged tables, mixed-style restructuring, nested objects and general page-layout editing remain unsupported.
 
 Save As adds `output` to an edit only when the user requests it. If that output exists, also provide `expected_output_sha256` from a read of that exact destination.
 
