@@ -2,7 +2,7 @@
 import {GuardError} from '../../probes/sites-runtime/guard/records.mjs';
 import {digest} from './local_file.mjs';
 const fail=code=>{throw new GuardError(code);};
-const positionKeys=['kind','section','paragraph','control','cell','cell_paragraph','row','column','row_span','column_span'];
+const positionKeys=['kind','section','paragraph','control','cell','cell_paragraph','row','column','row_span','column_span','cell_path','list_id'];
 export function validateFind(options,version){
   const {query,max_matches=50,cursor}=options;
   if(typeof query!=='string'||!query.length||query.length>256||!query.isWellFormed()||/[\u0000-\u001f]/.test(query))fail('INVALID_SEARCH_QUERY');

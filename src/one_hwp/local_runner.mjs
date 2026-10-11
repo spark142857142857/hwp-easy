@@ -12,6 +12,7 @@ import { readHwp } from '../../probes/sites-runtime/guard/container.mjs';
 import { readLocal, saveLocal, restoreLocal, localHistory } from './local_file.mjs';
 import { GuardError } from '../../probes/sites-runtime/guard/records.mjs';
 import {findLocalDocument,validateFind} from './local_find.mjs';
+import {hasLocalComplexContent,createLocalComplexSnapshot} from './local_complex.mjs';
 
 let initialized = false;
 export function initializeLocal(wasmBytes) { if (!initialized) { initSync({module:wasmBytes}); initialized=true; } }
@@ -44,6 +45,7 @@ export async function runLocal(request) {
     split_merge_table_cells:true,format_text:true,format_paragraph:true,
     resize_table_columns_rows:true,format_cell_layout:true,format_table_padding:true,
     atomic_operation_batches:true,max_operations:100,batch_target_ids:'initial_read; stable identity through verified position changes',
+    complex_local:{recursive_table_cell_text:true,max_cell_depth:8,clickhere_field_values:true,duplicate_field_names:'explicit field target ID',picture_groups:'move whole group; crop a selected PNG/JPEG child; preserve transforms',complex_structure_changes:false},
     pictures:{insert:'local PNG/JPEG, body paragraph or top-level table cell',replace:'local PNG/JPEG, retain frame size and position',update:'size, position, four-edge crop and integer-degree rotation',multiple_per_paragraph:32,picture_index_required_when_multiple:true,delete:true,delete_cleans_unused_embedded_data:false},
     edit_profiles:{existing_text:'guarded paragraph/cell replacement; selected range insertion/deletion/replacement preserves retained mixed character styles',
       structure:'uniform-style targets; paragraphs, simple or merged table rows/columns and verified cell split/merge; opaque page numbers and supported pictures preserved',
@@ -55,10 +57,12 @@ export async function runLocal(request) {
   if(request.action==='history')return localHistory(snapshot,request.limit);
   if(request.action==='find')validateFind(request,snapshot.sha256);
   const engine=createDocumentEngine(HwpDocument,{includeTableMetadata:request.action!=='find',plainStyleInspection:true});
-  const document=await engine.open(snapshot.bytes),version=document.source_sha256;
+  const complex=hasLocalComplexContent(readHwp(snapshot.bytes));
+  const document=complex&&!['preview','restore'].includes(request.action)?createLocalComplexSnapshot(HwpDocument,snapshot.bytes,snapshot.sha256):await engine.open(snapshot.bytes),version=document.source_sha256;
   if(request.action==='find')return {...findLocalDocument(document,request),source:snapshot.source};
   if(request.action==='read') {
     const result=document.read({expected_sha256:version,...Object.fromEntries(['cursor','max_chars','max_blocks'].filter(k=>Object.hasOwn(request,k)).map(k=>[k,request[k]]))});
+    if(complex)return {...result,source:snapshot.source,persistence:'local_file',saved:false};
     let structural;
     if(!result.all_content_supported || result.blocks.some(b=>!b.editable||b.style.profile==='existing_line_breaks_not_editable')) {
       const api=createEngineApi(HwpDocument,{existingLineBreaksEditable:true,mixedStyleSameLength:true}),opened=api.openDocument(snapshot.bytes);
@@ -79,7 +83,7 @@ export async function runLocal(request) {
     return {...recovery.publish(),restored:true};
   }
   if(!Array.isArray(request.operations)||!request.operations.length||request.operations.length>100)fail('INVALID_OPERATIONS');
-  const structural=readHwp(snapshot.bytes).profile.unsupported.some(x=>[76,85].includes(x.record_tag))||request.operations.some(op=>op?.type!=='replace_text'
+  const structural=complex||readHwp(snapshot.bytes).profile.unsupported.some(x=>[76,85].includes(x.record_tag))||request.operations.some(op=>op?.type!=='replace_text'
     || typeof op?.new_text==='string'&&op.new_text.includes('\n')
     || typeof op?.expected_old==='string'&&op.expected_old.includes('\n'));
   let candidate;

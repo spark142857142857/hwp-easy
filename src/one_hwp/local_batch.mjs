@@ -7,6 +7,7 @@ import {structuralEdit} from './local_structure.mjs';
 import {pictureEdit} from './local_picture.mjs';
 import {tableFormatEdit} from './local_table_format.mjs';
 import {moveLocalBlock} from './local_move.mjs';
+import {hasLocalComplexContent,editLocalComplex} from './local_complex.mjs';
 
 const fail=code=>{throw new GuardError(code);};
 const pictureTypes=new Set(['insert_picture','update_picture','delete_picture','replace_picture']);
@@ -20,6 +21,7 @@ function rawTarget(value,version){
 const target=(id,version)=>`hwp5:${version}:${Buffer.from(id).toString('base64url')}`;
 
 export async function applyLocalOperation(HwpDocument,bytes,version,operation){
+  if(hasLocalComplexContent(readHwp(bytes)))return editLocalComplex(HwpDocument,bytes,version,operation);
   if(['move_paragraph','move_table'].includes(operation.type))return moveLocalBlock(HwpDocument,bytes,version,operation);
   if(tableTypes.has(operation.type))return tableFormatEdit(HwpDocument,bytes,version,operation);
   if(pictureTypes.has(operation.type))return pictureEdit(HwpDocument,bytes,version,operation);
