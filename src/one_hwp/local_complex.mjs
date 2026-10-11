@@ -38,7 +38,7 @@ function inspection(HwpDocument,bytes){return quiet(()=>{
     const tokens=text.length?textTokens(records[text[0]].payload):[],visible=tokens.map(t=>t.text).join('');if(visible!==b.text)fail('TARGET_MAPPING_UNVERIFIED');
     if((total+=b.text.length)>2000000)fail('EDIT_LIMIT_EXCEEDED');
     Object.assign(b,{id:`s${section}:r${i}`,raw_level:records[at].level,record_index:at,records_end:end,text_record:text[0],shape_record:shapes[0],tokens});
-    try{if(!text.length||(view(records[at].payload).getUint32(0,true)&0x7fffffff)!==records[text[0]].payload.length/2)fail('COMPLEX_STYLE_UNVERIFIED');b.unit_styles=rawShapes(records[at],records[shapes[0]],records[text[0]].payload,definitions);b.text_range_editable=b.text.length<=100000;
+    try{if(!text.length||(view(records[at].payload).getUint32(0,true)&0x7fffffff)!==records[text[0]].payload.length/2)fail('COMPLEX_STYLE_UNVERIFIED');if(Boolean(view(records[at].payload).getUint32(4,true)&(1<<10))!==tokens.some(t=>t.code===10))fail('COMPLEX_TEXT_UNVERIFIED');b.unit_styles=rawShapes(records[at],records[shapes[0]],records[text[0]].payload,definitions);b.text_range_editable=b.text.length<=100000;
      if(tokens.some(t=>t.text&&t.length===2&&b.unit_styles[t.unit]!==b.unit_styles[t.unit+1]))fail('COMPLEX_STYLE_UNVERIFIED');
      // Compare model shapes at every run boundary and midpoint. Exact raw runs
      // and definitions remain authoritative and are preserved across publication.
@@ -115,5 +115,5 @@ export function editLocalComplex(HwpDocument,source,version,op){
  const result=publishRawBody(source,before.raw,b.section,records),after=inspection(HwpDocument,result.bytes);verifyRawOutput(before.raw,after.raw,result.name,result.expected);
  if(before.blocks.length!==after.blocks.length||before.blocks.some((old,i)=>old.id!==after.blocks[i].id||after.blocks[i].text!==(old.id===b.id?wanted:old.text)))fail('COMPLEX_CONTENT_MISMATCH');
  if(field){const f=after.fields.find(f=>f.id===field.id);if(!f||f.value!==op.new_text||f.name!==field.name||f.guide!==field.guide)fail('FIELD_PRESERVATION_MISMATCH');}
- return {bytes:equalBytes(source,result.bytes)?source:result.bytes,content_verified:true,raw_preservation_verified:true,raw_preservation_scope:'exact_all_streams_and_records_except_selected_text_runs_line_cache_or_group_offsets_crop',text_range_changed:['splice_text','replace_text','set_field'].includes(op.type),field_changed:op.type==='set_field',picture_group_changed:Boolean(group),layout_verified:false};
+ return {bytes:equalBytes(source,result.bytes)?source:result.bytes,content_verified:true,raw_preservation_verified:true,raw_preservation_scope:'exact_all_streams_and_records_except_selected_text_runs_line_break_mask_line_cache_or_group_offsets_crop',text_range_changed:['splice_text','replace_text','set_field'].includes(op.type),field_changed:op.type==='set_field',picture_group_changed:Boolean(group),line_break_mode:'hwp_character_10_within_same_paragraph',paragraph_count_changed:false,layout_verified:false};
 }

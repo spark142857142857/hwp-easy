@@ -91,6 +91,10 @@ def verify(folder, case):
         header = bytearray(old[at][2])
         prior, = struct.unpack_from('<I', header)
         struct.pack_into('<I', header, 0, prior & 0x80000000 | len(wanted_text) // 2)
+        # Character 10 is a line break inside the existing paragraph. Only
+        # its control-mask bit changes; field/table/drawing bits stay exact.
+        mask, = struct.unpack_from('<I', header, 4)
+        struct.pack_into('<I', header, 4, (mask & ~(1 << 10)) | (1 << 10 if any(t[3] == 10 for t in tokens(wanted_text)) else 0))
         struct.pack_into('<H', header, 12, len(runs))
         struct.pack_into('<H', header, 16, 0)
         for i, payload in ((at, bytes(header)), (text_idx, wanted_text), (shape_idx, shapes)):

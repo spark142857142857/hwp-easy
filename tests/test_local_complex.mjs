@@ -59,8 +59,38 @@ test('complex batch publishes once; stale final field prevents all writes and ba
 test('field anchors cannot be crossed through a plain text operation',async t=>{
  const {source}=workspace(t,fieldFixture()),state=await read(source),b=state.blocks[0],original=fs.readFileSync(source);
  await assert.rejects(edit(source,state,{type:'replace_text',target_id:b.target_id,expected_old:b.text,new_text:'erase all'}),/TEXT_RANGE_CROSSES_CONTROL/);assert.deepEqual(fs.readFileSync(source),original);
- for(const value of ['line\nbreak','\u0000','\ud800'])await assert.rejects(edit(source,state,{type:'set_field',target_id:state.fields[0].target_id,expected_old:state.fields[0].value,new_text:value}),/INVALID_EDIT_TEXT/);
+ for(const value of ['line\rbreak','tab\tvalue','\u0000','\ud800'])await assert.rejects(edit(source,state,{type:'set_field',target_id:state.fields[0].target_id,expected_old:state.fields[0].value,new_text:value}),/INVALID_EDIT_TEXT/);
  assert.deepEqual(fs.readFileSync(source),original);
+});
+
+for(const cell of [false,true])for(const mixed of [false,true])test(`field line breaks keep one paragraph and all surrounding anchors: cell=${cell}, mixed=${mixed}`,async t=>{
+ const {source}=workspace(t,fieldFixture({cell,mixed,multiple:true})),original=fs.readFileSync(source),before=await read(source),f=before.fields[0];
+ const value='지원 동기 😀\n경험과 결과\n향후 계획';
+ const result=await edit(source,before,{type:'set_field',target_id:f.target_id,expected_old:f.value,new_text:value}),after=await read(source);
+ assert.equal(after.fields[0].value,value);assert.equal(after.fields[0].editable,true);assert.equal(after.blocks.length,before.blocks.length);assert.equal(result.paragraph_count_changed,false);assert.equal(result.line_break_mode,'hwp_character_10_within_same_paragraph');assert.equal(after.fields[1].value,before.fields[1].value);
+ const group=b=>[...parseRecords(readHwp(b).streams.get('BodyText/Section0'))];const old=group(original),now=group(fs.readFileSync(source));assert.equal(old.filter(r=>r.tag===66).length,now.filter(r=>r.tag===66).length);
+ const unchanged=rs=>rs.filter(r=>![66,67,68,69].includes(r.tag)).map(r=>({tag:r.tag,level:r.level,payload:r.payload}));assert.deepEqual(unchanged(old),unchanged(now));
+ const host=after.blocks.findIndex(b=>b.id===f.block_id),header=now.filter(r=>r.tag===66)[host];assert.equal(new DataView(header.payload.buffer,header.payload.byteOffset).getUint32(4,true)&1024,1024);
+ await runLocal({action:'restore',source,expected_sha256:after.source_sha256,backup_id:result.backup_id});assert.deepEqual(fs.readFileSync(source),original);
+});
+
+for(const depth of [2,3])test(`nested cell line breaks retain all table levels and text outside selected cell: depth=${depth}`,async t=>{
+ const bytes=depth===2?nestedFixture():nestedFixture(nestedFixture(),{inside_nested:true});const {source}=workspace(t,bytes),before=await read(source),b=before.blocks.find(b=>b.cell_path.length===depth&&b.text==='inner answer 😀');
+ await edit(source,before,{type:'splice_text',target_id:b.target_id,expected_old:b.text,start:6,end:12,new_text:'첫 줄\n둘째 😀\n셋째'});const after=await read(source);assert.equal(after.blocks.length,before.blocks.length);assert.equal(after.blocks.find(x=>x.id===b.id).text,'inner 첫 줄\n둘째 😀\n셋째 😀');assert.deepEqual(after.blocks.find(x=>x.id===b.id).cell_path,b.cell_path);
+ for(const old of before.blocks)if(old.id!==b.id)assert.equal(after.blocks.find(x=>x.id===old.id).text,old.text);
+ const tables=b=>[...parseRecords(readHwp(b).streams.get('BodyText/Section0'))].filter(r=>[71,72,77].includes(r.tag)).map(r=>({tag:r.tag,level:r.level,payload:r.payload}));assert.deepEqual(tables(fs.readFileSync(source)),tables(bytes));
+});
+
+for(const value of ['\n','\nfirst\n\nlast\n',Array(100).fill('line').join('\n')])test(`field empty and boundary lines remain readable: ${value.split('\n').length} lines`,async t=>{
+ const {source}=workspace(t,fieldFixture()),before=await read(source),f=before.fields[0];await edit(source,before,{type:'set_field',target_id:f.target_id,expected_old:f.value,new_text:value});const after=await read(source);assert.equal(after.fields[0].value,value);assert.equal(after.fields[0].editable,true);
+ const unchanged=fs.readFileSync(source);await assert.rejects(edit(source,after,{type:'set_field',target_id:after.fields[0].target_id,expected_old:value,new_text:Array(101).fill('x').join('\n')}),/INVALID_LINE_COUNT/);assert.deepEqual(fs.readFileSync(source),unchanged);
+});
+
+test('clearing a field removes its LF mask only when no other line break remains',async t=>{
+ const d=new HwpDocument(fieldFixture());let bytes;try{const f=JSON.parse(d.getFieldList())[0];d.setFieldValue(f.fieldId,'line A\nline B');bytes=checkedExport(d);}finally{d.free();}
+ const {source}=workspace(t,bytes);let before=await read(source),f=before.fields[0];await edit(source,before,{type:'set_field',target_id:f.target_id,expected_old:f.value,new_text:''});let after=await read(source);assert.equal(after.fields[0].value,'');const mask=b=>{const h=[...parseRecords(readHwp(b).streams.get('BodyText/Section0'))].find(r=>r.tag===66);return new DataView(h.payload.buffer,h.payload.byteOffset).getUint32(4,true);};assert.equal(mask(fs.readFileSync(source)),mask(bytes)&~1024);
+ const outside=new HwpDocument(bytes);try{outside.insertText(0,0,0,'outside\n');fs.writeFileSync(source,checkedExport(outside));}finally{outside.free();}
+ before=await read(source);f=before.fields[0];await edit(source,before,{type:'set_field',target_id:f.target_id,expected_old:f.value,new_text:'one line'});after=await read(source);assert.equal(after.fields[0].value,'one line');assert.ok(after.blocks[0].text.startsWith('outside\n'));assert.equal(mask(fs.readFileSync(source))&1024,1024);
 });
 test('editing prefix and suffix next to a field preserves both boundaries and field value',async t=>{
  const {source}=workspace(t,fieldFixture());let state=await read(source),b=state.blocks[0],f=state.fields[0];await edit(source,state,{type:'splice_text',target_id:b.target_id,expected_old:b.text,start:0,end:f.start,new_text:'new prefix '});

@@ -20,21 +20,23 @@ function trial(bytes,choose,operation){fs.writeFileSync(source,bytes);const befo
  const blockId=target.block_id??target.id,block=before.blocks.find(b=>b.id===blockId),index=before.blocks.findIndex(b=>b.id===blockId);
  const meta={name,type:op.type,target_raw_index:index,expected_old:op.expected_old,...Object.fromEntries(['start','end','new_text','picture_index','props'].filter(k=>Object.hasOwn(op,k)).map(k=>[k,op[k]]))};
  if(target.field_id){meta.start=target.start;meta.end=target.end;assert.equal(after.fields.find(f=>f.id===target.id).value,op.new_text);}
- else if(op.type==='splice_text'){assert.equal(after.blocks[index].text,[...block.text].slice(0,op.start).join('')+op.new_text+[...block.text].slice(op.end).join(''));const found=call({action:'find',source,expected_sha256:after.source_sha256,query:op.new_text});assert.ok(found.matches.some(m=>m.target_id===after.blocks[index].target_id));}
+ else if(op.type==='splice_text'){assert.equal(after.blocks[index].text,[...block.text].slice(0,op.start).join('')+op.new_text+[...block.text].slice(op.end).join(''));const query=op.new_text.split('\n').find(Boolean);if(query){const found=call({action:'find',source,expected_sha256:after.source_sha256,query});assert.ok(found.matches.some(m=>m.target_id===after.blocks[index].target_id));}}
  const restored=call({action:'restore',source,expected_sha256:after.source_sha256,backup_id:result.backup_id});assert.deepEqual(fs.readFileSync(source),Buffer.from(bytes));assert.equal(restored.restored,true);cases.push(meta);
 }
 try{
  if(!real){
-  for(const cell of [false,true])for(const mixed of [false,true])for(const new_text of ['changed 🚀',''])trial(fieldFixture({cell,mixed,multiple:true}),s=>s.fields[0],(s,f)=>({type:'set_field',target_id:f.target_id,expected_old:f.value,new_text}));
+  for(const cell of [false,true])for(const mixed of [false,true])for(const new_text of ['changed 🚀','','first line\n\nsecond 😀\n'])trial(fieldFixture({cell,mixed,multiple:true}),s=>s.fields[0],(s,f)=>({type:'set_field',target_id:f.target_id,expected_old:f.value,new_text}));
   const nested=nestedFixture();trial(nested,s=>s.blocks.find(b=>b.kind==='nested_cell'&&b.text==='inner answer 😀'),(s,b)=>({type:'splice_text',target_id:b.target_id,expected_old:b.text,start:6,end:12,new_text:'변경 🚀'}));
+  trial(nested,s=>s.blocks.find(b=>b.kind==='nested_cell'&&b.text==='inner answer 😀'),(s,b)=>({type:'splice_text',target_id:b.target_id,expected_old:b.text,start:6,end:12,new_text:'변경\n다음 😀\n'}));
   for(const type of ['move_picture_group','crop_group_picture'])trial(groupFixture(),s=>s.picture_groups[0],(s,g)=>type==='move_picture_group'?{type,target_id:g.target_id,expected_old:s.blocks.find(b=>b.id===g.block_id).text,expected_properties:g.properties,props:{horzOffset:500,vertOffset:200}}:{type,target_id:g.target_id,expected_old:s.blocks.find(b=>b.id===g.block_id).text,picture_index:1,expected_properties:Object.fromEntries(Object.entries(g.pictures[1]).filter(([k])=>k!=='picture_index')),props:{cropLeft:75,cropBottom:150}});
  }else for(const [document,input] of originals.entries()){
   // Synthetic fields/pictures supplement these real forms, whose original
   // corpus contains no complex objects. The originals are never written.
   const doc=new HwpDocument(input.bytes);let fieldBytes,groupBytes,hasTable;
   try{const info=JSON.parse(doc.getCursorModel());hasTable=info.lists.some(l=>l.isCell);const p=1;assert.ok(doc.getParagraphCount(0)>p);const f=JSON.parse(doc.insertClickHereField(0,p,0,'Synthetic guide','Synthetic memo','synthetic field',true));doc.setFieldValue(f.fieldId,'synthetic value');fieldBytes=checkedExport(doc);}finally{doc.free();}
-  for(const new_text of ['변경 🚀',''])trial(fieldBytes,s=>s.fields[0],(s,f)=>({type:'set_field',target_id:f.target_id,expected_old:f.value,new_text}));
+  for(const new_text of ['변경 🚀','','합성 지원 동기\n\n합성 경험 😀\n'])trial(fieldBytes,s=>s.fields[0],(s,f)=>({type:'set_field',target_id:f.target_id,expected_old:f.value,new_text}));
   if(hasTable)trial(nestedFixture(input.bytes),s=>s.blocks.find(b=>b.kind==='nested_cell'&&b.text==='inner answer 😀'),(s,b)=>({type:'splice_text',target_id:b.target_id,expected_old:b.text,start:6,end:12,new_text:'변경 🚀'}));
+  if(hasTable)trial(nestedFixture(input.bytes),s=>s.blocks.find(b=>b.kind==='nested_cell'&&b.text==='inner answer 😀'),(s,b)=>({type:'splice_text',target_id:b.target_id,expected_old:b.text,start:6,end:12,new_text:'변경\n합성 계획 😀'}));
   groupBytes=groupFixture({source:input.bytes,paragraph:1});
   for(const type of ['move_picture_group','crop_group_picture'])trial(groupBytes,s=>s.picture_groups[0],(s,g)=>type==='move_picture_group'?{type,target_id:g.target_id,expected_old:s.blocks.find(b=>b.id===g.block_id).text,expected_properties:g.properties,props:{horzOffset:500,vertOffset:200}}:{type,target_id:g.target_id,expected_old:s.blocks.find(b=>b.id===g.block_id).text,picture_index:1,expected_properties:Object.fromEntries(Object.entries(g.pictures[1]).filter(([k])=>k!=='picture_index')),props:{cropLeft:75,cropBottom:150}});
  }

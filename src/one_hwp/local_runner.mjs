@@ -5,18 +5,39 @@ import { spawnSync } from 'node:child_process';
 import { HwpDocument, initSync } from '@rhwp/core';
 import { createDocumentEngine } from '../../probes/sites-runtime/engine/document.mjs';
 import {createLocalEngineApi as createEngineApi} from './local_api.mjs';
-import { preservableStructuralProfile } from './local_structure.mjs';
+import { preservableStructuralProfile,recordsByBlock } from './local_structure.mjs';
 import {localPictures} from './local_picture.mjs';
 import {editLocalBatch} from './local_batch.mjs';
 import { readHwp } from '../../probes/sites-runtime/guard/container.mjs';
 import { readLocal, saveLocal, restoreLocal, localHistory } from './local_file.mjs';
 import { GuardError } from '../../probes/sites-runtime/guard/records.mjs';
+import {textControlBytes} from '../../probes/sites-runtime/guard/preservation.mjs';
 import {findLocalDocument,validateFind} from './local_find.mjs';
 import {hasLocalComplexContent,createLocalComplexSnapshot} from './local_complex.mjs';
 
 let initialized = false;
 export function initializeLocal(wasmBytes) { if (!initialized) { initSync({module:wasmBytes}); initialized=true; } }
 const fail = code => { throw new GuardError(code); };
+function rangeEligibleBlocks(document,version,raw,structural) {
+  let model=structural;
+  if(!model){
+    const blocks=[];let cursor;
+    do{const page=document.read({expected_sha256:version,max_chars:64000,max_blocks:128,...(cursor?{cursor}:{})});
+      for(const block of page.blocks){if(blocks.at(-1)?.id===block.id)blocks.at(-1).text+=block.text;else blocks.push({...block});}
+      cursor=page.next_cursor;
+    }while(cursor);
+    model={blocks};
+  }
+  const eligible=new Set();
+  let mapped;
+  try{mapped=recordsByBlock(raw,model);}catch(error){if(error instanceof GuardError&&error.code==='TARGET_MAPPING_UNVERIFIED')return eligible;throw error;}
+  for(const [id,records] of mapped){
+    if(records.some(r=>![66,67,68,69,72].includes(r.tag)))continue;
+    if(records.filter(r=>r.tag===67).some(r=>{const c=textControlBytes(r.payload);return c.length!==2||c[0]!==13||c[1]!==0;}))continue;
+    eligible.add(id);
+  }
+  return eligible;
+}
 function object(value, keys, required) {
   if (!value || Object.getPrototypeOf(value)!==Object.prototype || Object.keys(value).some(k=>!keys.includes(k))
     || required.some(k=>!Object.hasOwn(value,k))) fail('INVALID_ARGUMENTS');
@@ -45,7 +66,7 @@ export async function runLocal(request) {
     split_merge_table_cells:true,format_text:true,format_paragraph:true,
     resize_table_columns_rows:true,format_cell_layout:true,format_table_padding:true,
     atomic_operation_batches:true,max_operations:100,batch_target_ids:'initial_read; stable identity through verified position changes',
-    complex_local:{recursive_table_cell_text:true,max_cell_depth:8,clickhere_field_values:true,duplicate_field_names:'explicit field target ID',picture_groups:'move whole group; crop a selected PNG/JPEG child; preserve transforms',complex_structure_changes:false},
+    complex_local:{recursive_table_cell_text:true,max_cell_depth:8,clickhere_field_values:true,line_breaks:'HWP character 10 within same paragraph; up to 100 lines per inserted value',duplicate_field_names:'explicit field target ID',picture_groups:'move whole group; crop a selected PNG/JPEG child; preserve transforms',complex_structure_changes:false},
     pictures:{insert:'local PNG/JPEG, body paragraph or top-level table cell',replace:'local PNG/JPEG, retain frame size and position',update:'size, position, four-edge crop and integer-degree rotation',multiple_per_paragraph:32,picture_index_required_when_multiple:true,delete:true,delete_cleans_unused_embedded_data:false},
     edit_profiles:{existing_text:'guarded paragraph/cell replacement; selected range insertion/deletion/replacement preserves retained mixed character styles',
       structure:'uniform-style targets; paragraphs, simple or merged table rows/columns and verified cell split/merge; opaque page numbers and supported pictures preserved',
@@ -69,9 +90,10 @@ export async function runLocal(request) {
       try {structural=api.inspectDocument(opened,snapshot.bytes);}finally{opened.free();}
     }
     const profileSupported=structural?preservableStructuralProfile(readHwp(snapshot.bytes),structural):result.all_content_supported;
+    const ranges=rangeEligibleBlocks(document,version,readHwp(snapshot.bytes),structural);
     result.blocks=result.blocks.map(block=>{const local=structural?.blocks.find(b=>b.id===block.id)??block;return {...block,
       structural_editable:profileSupported&&Boolean(local.editable)&&local.style.char_shape_ids?.length===1,
-      text_range_editable:profileSupported&&Boolean(local.editable)&&!/[\u0000-\u001f]/.test(local.text)};});
+      text_range_editable:profileSupported&&Boolean(local.editable)&&ranges.has(block.id)&&!/[\u0000-\u001f]/.test(local.text)};});
     let pictures=[],picture_profile_supported=true;
     try{pictures=localPictures(HwpDocument,snapshot.bytes,version);}catch(error){if(!(error instanceof GuardError))throw error;picture_profile_supported=false;}
     return {...result,pictures,picture_profile_supported,source:snapshot.source,persistence:'local_file',saved:false};

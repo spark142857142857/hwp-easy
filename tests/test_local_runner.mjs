@@ -27,6 +27,20 @@ test('local read reports full detached table geometry on every cursor',async t=>
  const next=await runLocal({action:'read',source,expected_sha256:read.source_sha256,cursor:read.next_cursor,max_chars:4,max_blocks:1});
  assert.deepEqual(next.tables[0].dimensions,dimensions);
 });
+test('section-anchor paragraph advertises replacement separately from plain range editing on every cursor',async t=>{
+ const {source}=workspace(t);fs.writeFileSync(source,fixture({table:false,paragraphs:['first title','plain body','last']}));
+ const first=await runLocal({action:'read',source,max_chars:3,max_blocks:1});
+ assert.equal(first.blocks[0].editable,true);assert.equal(first.blocks[0].text_range_editable,false);
+ const next=await runLocal({action:'read',source,cursor:first.next_cursor,max_chars:64000});
+ assert.equal(next.blocks[0].text_range_editable,false);
+ assert.equal(next.blocks.find(b=>b.text==='plain body').text_range_editable,true);
+ const whole=await runLocal({action:'read',source,max_chars:64000}),target=whole.blocks[0];
+ await assert.rejects(runLocal({action:'plan',source,expected_sha256:whole.source_sha256,operations:[{type:'splice_text',target_id:target.target_id,expected_old:target.text,start:0,end:1,new_text:'x'}]}),/TEXT_TARGET_HAS_CONTROLS/);
+ const original=fs.readFileSync(source),saved=await runLocal({action:'edit',source,expected_sha256:whole.source_sha256,operations:[{type:'replace_text',target_id:target.target_id,expected_old:target.text,new_text:'changed title'}]});
+ const after=await runLocal({action:'read',source,max_chars:64000});assert.equal(after.blocks[0].text,'changed title');
+ assert.equal(after.blocks[0].text_range_editable,false);
+ await runLocal({action:'restore',source,expected_sha256:after.source_sha256,backup_id:saved.backup_id});assert.deepEqual(fs.readFileSync(source),original);
+});
 test('local edit overwrites selected path, preserves recovery and restores exact bytes',async t=>{
  const {source}=workspace(t),original=fs.readFileSync(source),read=await runLocal({action:'read',source,max_chars:64000});
  const operations=[replacement(read,'중간 합성 문단','로컬 저장 확인'),replacement(read,'합성 답변 원문','직접 수정한 답변')];

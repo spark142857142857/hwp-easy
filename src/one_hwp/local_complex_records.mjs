@@ -26,7 +26,8 @@ export function rawShapes(header,shape,text,definitionCount){
  const units=Array(text.length/2);let at=0;for(let i=0;i<units.length;i++){while(at+1<anchors.length&&anchors[at+1].unit<=i)at++;units[i]=anchors[at].id;}return units;
 }
 export function spliceRawParagraph(records,block,start,end,value,fieldRange){
- if(typeof value!=='string'||!value.isWellFormed()||/[\u0000-\u001f]/.test(value)||value.length>100000)fail('INVALID_EDIT_TEXT');
+ if(typeof value!=='string'||!value.isWellFormed()||/[\u0000-\u0009\u000b-\u001f]/.test(value)||value.length>100000)fail('INVALID_EDIT_TEXT');
+ if(value.split('\n').length>100)fail('INVALID_LINE_COUNT');
  const {tokens,unit_styles}=block,points=[...block.text];if(!Number.isSafeInteger(start)||!Number.isSafeInteger(end)||start<0||end<start||end>points.length)fail('INVALID_TEXT_RANGE');
  const textIndex=block.text_record,old=records[textIndex].payload;
  let from,to;
@@ -44,6 +45,9 @@ export function spliceRawParagraph(records,block,start,end,value,fieldRange){
  ids.forEach((id,unit)=>{if(!unit||id!==ids[unit-1])runs.push({id,unit});});if(runs.length>32)fail('COMPLEX_STYLE_LIMIT');
  const shape=Buffer.alloc(runs.length*8);runs.forEach((r,i)=>{shape.writeUInt32LE(r.unit,i*8);shape.writeUInt32LE(r.id,i*8+4);});
  const header=records[block.record_index].payload.slice();view(header).setUint32(0,((view(header).getUint32(0,true)&0x80000000)|payload.length/2)>>>0,true);
+ // LF is HWP character control 10: a line break inside this same paragraph.
+ // Keep every other control-mask bit and all field/table/drawing anchors.
+ view(header).setUint32(4,(view(header).getUint32(4,true)&~(1<<10))|(textTokens(payload).some(t=>t.code===10)?1<<10:0),true);
  view(header).setUint16(12,runs.length,true);view(header).setUint16(16,0,true);
  const edited=records.map((r,i)=>i===block.record_index?{...r,payload:header}:i===textIndex?{...r,payload}:i===block.shape_record?{...r,payload:shape}:r)
   .filter((r,i)=>!(i>block.record_index&&i<block.records_end&&r.tag===69&&r.level===block.raw_level+1));
