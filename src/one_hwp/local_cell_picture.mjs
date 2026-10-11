@@ -25,7 +25,7 @@ export function relocateCellPicture(candidate,raw,beforeRecords,block,offset){
  const shapes=cellRecords.find(r=>r.tag===68);if(!shapes||shapes.payload.length%8)fail('PICTURE_ANCHOR_PROFILE_UNSUPPORTED');for(let i=0;i<shapes.payload.length;i+=8){const pos=view(shapes.payload).getUint32(i,true);if(pos>point)view(shapes.payload).setUint32(i,pos+8,true);}
  // Use cell-relative inline geometry. It moves with the cell instead of being
  // a page-relative sibling of the table. Size and binary identity stay exact.
- const moved=objects.map(r=>({...r,level:r.level+2,payload:r.payload.slice()})),v=view(moved[0].payload);v.setUint32(4,0x00000001,true);v.setInt32(8,0,true);v.setInt32(12,0,true);
+ const moved=objects.map(r=>({...r,level:r.level+2,payload:r.payload.slice()})),v=view(moved[0].payload);v.setUint32(4,0x000a0001,true);v.setInt32(8,0,true);v.setInt32(12,0,true);
  const drop=new Set([...selected,objectStart,objectStart+1,objectStart+2]),output=[];
  for(let i=0;i<records.length;i++){if(i===selected[0])output.push(...cellRecords,...moved);if(!drop.has(i))output.push(replacement.get(i)??records[i]);}
  return packLocalBodyRewrite(candidate,raw,new Map([[name,encode(output)]]));

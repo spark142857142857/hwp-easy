@@ -128,6 +128,9 @@ def verify_case(before_file, after_file, meta):
         level = 3 if target['cell'] is not None else 1
         assert [(t, l) for t, l, _ in new] == [(71, level), (76, level + 1), (85, level + 2)]
         assert struct.unpack_from('<II', new[0][2], 16) == (meta['width'], meta['height'])
+        # HWP format table 70: inline placement must not select percent sizing.
+        flags = struct.unpack_from('<I', new[0][2], 4)[0]
+        assert (flags >> 15) & 7 == 4 and (flags >> 18) & 3 == 2
         assert struct.unpack_from('<4I', new[1][2], 20) == (meta['width'], meta['height'], meta['width'], meta['height'])
         assert struct.unpack_from('<4i', new[2][2], 44) == (0, 0, width * 75, height * 75)
         assert struct.unpack_from('<H', new[2][2], 71)[0] == image_id
