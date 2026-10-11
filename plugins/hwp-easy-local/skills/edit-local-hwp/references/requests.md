@@ -1,5 +1,7 @@
 # Agent request format
 
+`move_paragraph` moves a plain body paragraph, and `move_table` moves the complete table selected by an actual cell target. Both take `target_id`, `expected_old`, `after_target_id` (a body paragraph in the same section) and `expected_after` (its full text). The first body group and tables grouped with section settings there stay in place. Styles, cell geometry and supported cell pictures travel as complete raw groups. Moving a group already immediately after its anchor is unchanged. No-op same-file edits return `saved:false, unchanged:true, save_required:false`; explicit Save As still writes the requested result.
+
 Invoke the bundled `scripts/local-runner.mjs` with `--request <absolute JSON file>`. All responses are JSON: `{ "ok": true, "result": {...} }` or `{ "ok": false, "error": "FIXED_CODE", "save_confirmed": false }`. Process timeout is 60 seconds. Inputs and saved outputs are limited to 4 MiB; normal model limits still apply. The runner performs no network requests.
 
 Use absolute filesystem paths. The examples below use placeholders, not executable example documents. Unknown fields and operations are rejected.

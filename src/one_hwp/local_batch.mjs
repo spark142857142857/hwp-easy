@@ -6,6 +6,7 @@ import {digest} from './local_file.mjs';
 import {structuralEdit} from './local_structure.mjs';
 import {pictureEdit} from './local_picture.mjs';
 import {tableFormatEdit} from './local_table_format.mjs';
+import {moveLocalBlock} from './local_move.mjs';
 
 const fail=code=>{throw new GuardError(code);};
 const pictureTypes=new Set(['insert_picture','update_picture','delete_picture','replace_picture']);
@@ -19,6 +20,7 @@ function rawTarget(value,version){
 const target=(id,version)=>`hwp5:${version}:${Buffer.from(id).toString('base64url')}`;
 
 export async function applyLocalOperation(HwpDocument,bytes,version,operation){
+  if(['move_paragraph','move_table'].includes(operation.type))return moveLocalBlock(HwpDocument,bytes,version,operation);
   if(tableTypes.has(operation.type))return tableFormatEdit(HwpDocument,bytes,version,operation);
   if(pictureTypes.has(operation.type))return pictureEdit(HwpDocument,bytes,version,operation);
   if(operation.type==='replace_text'&&!readHwp(bytes).profile.unsupported.some(x=>[76,85].includes(x.record_tag))
@@ -31,7 +33,7 @@ export async function applyLocalOperation(HwpDocument,bytes,version,operation){
 }
 
 export async function editLocalBatch(HwpDocument,source,initialVersion,operations){
-  const identities=new Map(),keys=['target_id','previous_target_id'];
+  const identities=new Map(),keys=['target_id','previous_target_id','after_target_id'];
   // Every target belongs to the caller's initial read, even when it moves in
   // an earlier step. Text and picture conditions refer to each step's state.
   for(const op of operations){

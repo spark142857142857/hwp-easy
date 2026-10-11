@@ -97,6 +97,13 @@ export function saveLocal(snapshot, bytes, { output, expected_output_sha256 } = 
   if (destination && (!expected || destination.sha256 !== expected)) fail('VERSION_CONFLICT');
   if (!destination && expected !== undefined) fail('VERSION_CONFLICT');
   if (same && expected_output_sha256 !== undefined && expected_output_sha256 !== snapshot.sha256) fail('VERSION_CONFLICT');
+  if (same && digest(bytes) === snapshot.sha256) {
+    checkedCurrent(snapshot);
+    return { source: snapshot.source, source_sha256: snapshot.sha256, saved_path: snapshot.source,
+      output_sha256: snapshot.sha256, saved: false, unchanged: true, save_required: false,
+      save_mode: 'same_file', selected_file_updated: false, file_location: 'current_execution_environment',
+      backup_id: null, persistence: 'local_file' };
+  }
   const directory = backupDirectory(target), lock = path.join(directory, `${digest(Buffer.from(key(target)))}.lock`);
   let locked = false, temporary;
   try {

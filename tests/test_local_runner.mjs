@@ -104,3 +104,10 @@ test('pagination is version bound across independent runner calls',async t=>{
  assert.deepEqual(next.page_starts_at,{block_index:first.next_cursor.block_index,offset:first.next_cursor.offset});
  await assert.rejects(runLocal({action:'read',source,cursor:{...first.next_cursor,sha256:'0'.repeat(64)}}),/CURSOR_VERSION_CONFLICT/);
 });
+
+test('identical publication verifies current identity without creating recovery files',t=>{
+ const {source,dir}=workspace(t),snapshot=readLocal(source),result=saveLocal(snapshot,snapshot.bytes);
+ assert.equal(result.saved,false);assert.equal(result.unchanged,true);assert.equal(result.output_sha256,snapshot.sha256);assert.equal(fs.existsSync(path.join(dir,'.hwp-easy-backups')),false);
+ fs.utimesSync(source,new Date(),new Date(Date.now()+10000));
+ assert.throws(()=>saveLocal(snapshot,snapshot.bytes),/VERSION_CONFLICT/);assert.equal(fs.existsSync(path.join(dir,'.hwp-easy-backups')),false);
+});

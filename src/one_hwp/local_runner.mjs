@@ -35,6 +35,7 @@ export async function runLocal(request) {
     save_default:'same_file',selected_file_updated:true,file_location:'current_execution_environment',uploads_required:false,web_browser_required:false,
     read:true,preview:true,edit:true,restore:true,new_paragraphs:true,multiline_body_and_cells:true,new_simple_tables:true,
     delete_paragraphs:true,merge_adjacent_paragraphs:true,split_paragraph:true,splice_text:true,mixed_style_multiline_insertion:true,
+    move_body_paragraphs:true,move_complete_tables:true,
     insert_delete_table_rows_columns:true,
     insert_delete_merged_table_rows_columns:true,font_family_change:true,
     split_merge_table_cells:true,format_text:true,format_paragraph:true,
