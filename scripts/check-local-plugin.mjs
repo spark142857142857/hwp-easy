@@ -54,6 +54,28 @@ try {
  apply(b=>b.kind==='cell'&&b.text==='둘째 답변 😀','merge_paragraph',{previous_target_id:previous.target_id,expected_previous:previous.text});
  state=read();assert.ok(state.blocks.some(b=>b.kind==='cell'&&b.text==='첫 답변둘째 답변 😀'));
  fs.writeFileSync(path.join(reportDir,'synthetic-restructured.hwp'),fs.readFileSync(source));
+ fs.writeFileSync(path.join(reportDir,'synthetic-advanced-before.hwp'),fs.readFileSync(source));
+ const answer=b=>b.kind==='cell'&&b.text==='첫 답변둘째 답변 😀';
+ apply(answer,'format_text',{start:0,end:2,props:{bold:true,fontSize:1400,textColor:'#123456'}});
+ fs.writeFileSync(path.join(reportDir,'synthetic-format-text.hwp'),fs.readFileSync(source));
+ apply(answer,'format_text',{start:0,end:[...'첫 답변둘째 답변 😀'].length,props:{italic:true}});
+ fs.writeFileSync(path.join(reportDir,'synthetic-format-runs.hwp'),fs.readFileSync(source));
+ apply(answer,'format_paragraph',{props:{alignment:'center',lineSpacing:190}});
+ fs.writeFileSync(path.join(reportDir,'synthetic-format-paragraph.hwp'),fs.readFileSync(source));
+ apply(tableCell,'merge_table_cells',{range:{top:0,left:0,bottom:0,right:1},expected_cells:[['제목'],['새 표']]});
+ fs.writeFileSync(path.join(reportDir,'synthetic-merge-cells.hwp'),fs.readFileSync(source));
+ apply(tableCell,'split_table_cell',{expected_cells:[['제목','새 표']]});
+ fs.writeFileSync(path.join(reportDir,'synthetic-split-cell.hwp'),fs.readFileSync(source));
+ const image=path.join(temporary,'합성 PNG.png'),png=Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=','base64');fs.writeFileSync(image,png);
+ fs.writeFileSync(path.join(reportDir,'synthetic-image.png'),png);
+ apply(b=>b.kind==='paragraph'&&b.text==='중간 합성 문단','insert_picture',{offset:1,width:7200,height:3600,image:{source:image,expected_sha256:hash(png)}});
+ fs.writeFileSync(path.join(reportDir,'synthetic-insert-picture.hwp'),fs.readFileSync(source));
+ state=read();let picture=state.pictures[0];assert.ok(picture);
+ apply(b=>b.kind==='paragraph'&&b.text==='중간 합성 문단','update_picture',{expected_properties:picture.properties,props:{width:10000,height:5000,horzOffset:200,vertOffset:100}});
+ fs.writeFileSync(path.join(reportDir,'synthetic-update-picture.hwp'),fs.readFileSync(source));
+ state=read();picture=state.pictures[0];
+ const removed=apply(b=>b.kind==='paragraph'&&b.text==='중간 합성 문단','delete_picture',{expected_properties:picture.properties});assert.equal(removed.retained_unused_image_data,true);
+ fs.writeFileSync(path.join(reportDir,'synthetic-delete-picture.hwp'),fs.readFileSync(source));state=read();assert.equal(state.pictures.length,0);
  const preview=call({action:'preview',source,expected_sha256:state.source_sha256,page:0});assert.ok(preview.svg.startsWith('<svg'));
  const restored=call({action:'restore',source,expected_sha256:state.source_sha256,backup_id:edited.backup_id});
  assert.deepEqual(fs.readFileSync(source),original);fs.writeFileSync(path.join(reportDir,'synthetic-original.hwp'),original);
@@ -62,6 +84,8 @@ try {
    plan_did_not_save:true,edit_saved_same_selected_path:true,multiline_cell_saved_and_reopened:true,
    new_body_paragraphs_saved_and_reopened:true,new_table_saved_and_reopened:true,passive_svg_preview:true,
    paragraph_merge_and_delete_saved_and_reopened:true,table_row_column_insert_and_delete_saved_and_reopened:true,
+   format_text_and_paragraph_saved_and_reopened:true,merged_cell_split_merge_saved_and_reopened:true,
+   body_png_insert_resize_move_delete_saved_and_reopened:true,
    restore_exact_original_bytes:true,backup_count:fs.readdirSync(path.join(temporary,'.hwp-easy-backups')).filter(p=>p.endsWith('.hwp')).length,
    original_sha256:hash(original),multiline_sha256:hash(multiline),structure_sha256:hash(withTable),layout_verified:false,
    publication:'NOT_DONE',global_codex_configuration_changed:false};

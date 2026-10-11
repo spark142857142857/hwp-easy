@@ -27,8 +27,17 @@ function safePath(value, { missing = false, hwp = true, directory = false } = {}
   return resolved;
 }
 export function readLocal(value, expected) {
+  return readSnapshot(value,expected,true);
+}
+export function readImageLocal(value,expected) {
+  if(typeof value!=='string'||path.extname(value).toLowerCase()!=='.png'||!hash(expected))fail('INVALID_IMAGE_FILE');
+  const snapshot=readSnapshot(value,expected,false);
+  if(snapshot.bytes.length>1048576)fail('IMAGE_LIMIT_EXCEEDED');
+  return snapshot;
+}
+function readSnapshot(value, expected, hwp) {
   if (expected !== undefined && !hash(expected)) fail('INVALID_VERSION');
-  const source = safePath(value), initial = fs.lstatSync(source);
+  const source = safePath(value,{hwp}), initial = fs.lstatSync(source);
   const fd = fs.openSync(source, fs.constants.O_RDONLY | (fs.constants.O_NOFOLLOW ?? 0));
   try {
     const before = fs.fstatSync(fd);

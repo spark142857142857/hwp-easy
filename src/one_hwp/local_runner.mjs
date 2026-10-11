@@ -5,7 +5,8 @@ import { spawnSync } from 'node:child_process';
 import { HwpDocument, initSync } from '@rhwp/core';
 import { createDocumentEngine } from '../../probes/sites-runtime/engine/document.mjs';
 import { createEngineApi } from './rhwp_api.mjs';
-import { structuralEdit, structuralProfileSupported } from './local_structure.mjs';
+import { structuralEdit, preservableStructuralProfile } from './local_structure.mjs';
+import {pictureEdit,localPictures} from './local_picture.mjs';
 import { readHwp } from '../../probes/sites-runtime/guard/container.mjs';
 import { readLocal, saveLocal, restoreLocal } from './local_file.mjs';
 import { GuardError } from '../../probes/sites-runtime/guard/records.mjs';
@@ -34,8 +35,12 @@ export async function runLocal(request) {
     read:true,preview:true,edit:true,restore:true,new_paragraphs:true,multiline_body_and_cells:true,new_simple_tables:true,
     delete_paragraphs:true,merge_adjacent_paragraphs:true,
     insert_delete_table_rows_columns:true,
+    split_merge_table_cells:true,format_text:true,format_paragraph:true,
+    pictures:{insert:'local PNG, body paragraph',update:'size and position',delete:true,delete_cleans_unused_embedded_data:false},
     edit_profiles:{existing_text:'guarded paragraph/cell replacement; constrained mixed styles',
-      structure:'uniform-style targets; multiline, paragraph insertion/deletion/merge, rectangular tables and row/column changes; verified opaque page numbers preserved'},
+      structure:'uniform-style targets; paragraphs, simple table rows/columns and verified cell split/merge; opaque page numbers and supported body pictures preserved',
+      formatting:'selected plain character ranges; size/color/decorations and paragraph alignment/spacing; exact raw definition patches',
+      pictures:'one supported picture per plain body paragraph; local PNG insertion and existing picture size/position/removal'},
     layout_verified:false,requires:'Node.js 22 or newer with local file permissions',max_input_bytes:4194304};
   const snapshot=readLocal(request.source,request.expected_sha256),engine=createDocumentEngine(HwpDocument);
   const document=await engine.open(snapshot.bytes),version=document.source_sha256;
@@ -46,11 +51,13 @@ export async function runLocal(request) {
       const api=createEngineApi(HwpDocument,{existingLineBreaksEditable:true}),opened=api.openDocument(snapshot.bytes);
       try {structural=api.inspectDocument(opened,snapshot.bytes);}finally{opened.free();}
     }
-    const profileSupported=structural?structuralProfileSupported(readHwp(snapshot.bytes),structural):result.all_content_supported;
+    const profileSupported=structural?preservableStructuralProfile(readHwp(snapshot.bytes),structural):result.all_content_supported;
     result.blocks=result.blocks.map(block=>({...block,structural_editable:profileSupported
       && Boolean((structural?.blocks.find(b=>b.id===block.id)??block).editable)
       && (structural?.blocks.find(b=>b.id===block.id)??block).style.char_shape_ids?.length===1}));
-    return {...result,source:snapshot.source,persistence:'local_file',saved:false};
+    let pictures=[],picture_profile_supported=true;
+    try{pictures=localPictures(HwpDocument,snapshot.bytes,version);}catch(error){if(!(error instanceof GuardError))throw error;picture_profile_supported=false;}
+    return {...result,pictures,picture_profile_supported,source:snapshot.source,persistence:'local_file',saved:false};
   }
   if(request.action==='preview')return {...document.preview({expected_sha256:version,page:request.page??0}),source:snapshot.source,saved:false};
   if(request.action==='restore') {
@@ -59,13 +66,15 @@ export async function runLocal(request) {
     return {...recovery.publish(),restored:true};
   }
   if(!Array.isArray(request.operations)||!request.operations.length||request.operations.length>100)fail('INVALID_OPERATIONS');
-  const structural=request.operations.some(op=>op?.type!=='replace_text'
+  const structural=readHwp(snapshot.bytes).profile.unsupported.some(x=>[76,85].includes(x.record_tag))||request.operations.some(op=>op?.type!=='replace_text'
     || typeof op?.new_text==='string'&&op.new_text.includes('\n')
     || typeof op?.expected_old==='string'&&op.expected_old.includes('\n'));
   let candidate;
   if(structural) {
     if(request.operations.length!==1)fail('STRUCTURAL_EDIT_REQUIRES_ONE_OPERATION');
-    candidate=structuralEdit(HwpDocument,snapshot.bytes,version,request.operations[0]);
+    candidate=['insert_picture','update_picture','delete_picture'].includes(request.operations[0]?.type)
+      ?pictureEdit(HwpDocument,snapshot.bytes,version,request.operations[0])
+      :structuralEdit(HwpDocument,snapshot.bytes,version,request.operations[0]);
   } else {
     const operations=request.operations.map(op=>{
       object(op,['type','target_id','expected_old','new_text'],['type','target_id','expected_old','new_text']);

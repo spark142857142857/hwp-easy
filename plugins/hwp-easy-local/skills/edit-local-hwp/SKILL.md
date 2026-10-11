@@ -1,6 +1,6 @@
 ---
 name: edit-local-hwp
-description: Read and edit an explicitly selected local HWP, insert/delete/merge paragraphs, edit simple table rows and columns, and save checked changes to that same file.
+description: Read and edit an explicitly selected local HWP, change supported paragraphs, tables, formatting and body pictures, and save checked changes to that same file.
 ---
 
 Use only when explicitly invoked for the current task. The user's instructions take precedence over this workflow.
@@ -18,5 +18,11 @@ For requested edits, check a plan and then edit using the same source hash. Omit
 Existing text changes can be batched. Structural operations run one at a time: reread after each successful save because positions and target IDs can change. Newlines in `replace_text` produce real HWP paragraphs, including paragraphs inside a cell. Do not erase requested newlines to bypass rejection. If one atomic requested batch is unsupported, do not partly apply it without a revised user request.
 
 For paragraph merging, identify both adjacent paragraphs and provide their full expected text. Table changes use an actual cell target and the zero-based insertion/deletion index. Deletions require the exact paragraph texts of all removed cells. Existing merged-cell tables are outside the current row/column profile; do not flatten them or replace the table to bypass a rejection. Verified page-number controls remain byte-preserved and are not edited semantically.
+
+Existing supported merged cells can be split to their existing grid, and a complete rectangular range can be merged. Confirm all selected cells' paragraph texts in storage order; do not guess a cell index from its row and column. Merge retains the first cell's paragraphs and appends nonempty paragraphs from other selected cells. Empty paragraphs from those other cells are removed. Existing fields, nested objects and unsupported geometry are refused before saving.
+
+Character formatting uses code-point start/end offsets on a plain paragraph or cell; an emoji is one code point. Supported properties are size, color, bold, italic, underline and strikethrough. Paragraph formatting supports alignment and spacing/margins. Use the documented engine units internally; do not make the user construct JSON or calculate offsets.
+
+Read `pictures` for version-bound body-picture targets and exact `expected_properties`. Insert a user-selected local PNG with its file hash into a plain body paragraph, or change a supported picture's size/position or remove its anchor. A paragraph supports one picture in this profile. Other supported paragraphs/cells can still be edited while the existing picture and image stream remain exact. Removing a picture leaves unused embedded image bytes and recovery copies; do not describe it as permanent sensitive-data removal. JPEG insertion, arbitrary picture replacement, cell images, cropping/rotation and captions remain outside the verified profile.
 
 Verify `ok`, `saved`, `saved_path`, `output_sha256` and content checks. Reread the saved file at its returned hash. Report the changed file directly, without a download task. If saving is unconfirmed, inspect the selected file before retrying. A stale-version error requires a new read; an unsupported edit remains unsaved. Restore only on the user's request using the returned backup ID and current hash. Content checks do not certify every HWP layout or complex object.
