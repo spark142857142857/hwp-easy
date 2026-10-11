@@ -170,7 +170,8 @@ def verify_axis(blocks, after, cells, new_cells, target, meta):
         struct.pack_into('<II', wanted, 16, width, height)
         assert new_cells[key] == wanted
         new_blocks = [b for b in after if b['cell'] == key]
-        assert len(new_blocks) == 1 and new_blocks[0]['text'] == ''
+        wanted_text = meta['texts'][opposite] if 'texts' in meta else ''
+        assert len(new_blocks) == 1 and new_blocks[0]['text'] == wanted_text
     unaffected = lambda source: [b for b in source if b['host'] != host]
     assert [canon(b) for b in unaffected(blocks)] == [canon(b) for b in unaffected(after)]
     for key, p in cells.items():

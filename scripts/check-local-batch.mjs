@@ -1,0 +1,36 @@
+/** Compare one atomic package save with separately reread/verified single saves. */
+import fs from 'node:fs';import path from 'node:path';import os from 'node:os';import assert from 'node:assert/strict';import {spawnSync} from 'node:child_process';
+import {fixture} from '../tests/rhwp_fixtures.mjs';import {readHwp} from '../probes/sites-runtime/guard/container.mjs';
+const root=process.cwd(),out=process.argv[2]?path.resolve(process.argv[2]):path.join(root,'outputs/local-batch-20261011');fs.mkdirSync(out,{recursive:true});
+const temporary=fs.mkdtempSync(path.join(os.tmpdir(),'hwp-easy-batch-package-')),cases=[];
+const body='가😀나 ABC',cells=[['A','B'],['C','D']];
+const definitions=[
+ {label:'mixed_text',table:false,steps:[{identity:body,type:'format_text',start:1,end:4,props:{bold:true,textColor:'#334455'}},{identity:body,type:'splice_text',start:1,end:3,new_text:'새 문장'},{identity:body,expected_old:'가새 문장 ABC',type:'split_paragraph',offset:2},{identity:'마지막',type:'replace_text',new_text:'후속 문단'}]},
+ {label:'insert_body',steps:[{identity:body,type:'insert_paragraphs',paragraphs:['추가 A','추가 B']},{identity:'B',kind:'cell',type:'format_paragraph',props:{alignment:'center'}},{identity:'D',kind:'cell',type:'replace_text',new_text:'D edited'}]},
+ {label:'new_table',steps:[{identity:body,type:'create_table',cells:[['새 표','값']]},{identity:'B',kind:'cell',type:'splice_text',start:0,end:0,new_text:'保留 '},{identity:'마지막',type:'format_text',start:0,end:2,props:{italic:true}}]},
+ {label:'insert_column',steps:[{identity:'A',kind:'cell',type:'insert_table_column',index:0,texts:['X','Y']},{identity:'D',kind:'cell',type:'splice_text',start:0,end:0,new_text:'原 '},{identity:'B',kind:'cell',type:'resize_table_columns',widths:[10000,12000,20000]}]},
+ {label:'merged_cell',steps:[{identity:'A',kind:'cell',type:'merge_table_cells',range:{top:0,left:0,bottom:0,right:1},expected_cells:[['A'],['B']]},{identity:'B',kind:'cell',type:'splice_text',start:0,end:0,new_text:'保持 '},{identity:'D',kind:'cell',type:'format_cell',props:{verticalAlign:2,paddingLeft:400,applyInnerMargin:true}}]},
+ {label:'cell_split',cells:[['A','가😀나 ABC\n뒤 답변'],['C','D']],steps:[{identity:body,kind:'cell',type:'split_paragraph',offset:2},{identity:'뒤 답변',kind:'cell',type:'splice_text',start:0,end:0,new_text:'후속 '},{identity:'D',kind:'cell',type:'format_paragraph',props:{alignment:'right'}}]},
+ {label:'body_merge',table:false,paragraphs:['시작','왼쪽','오른쪽','마지막'],steps:[{identity:'오른쪽',type:'merge_paragraph',previous:'왼쪽',expected_previous:'왼쪽'},{identity:'왼쪽',expected_old:'왼쪽오른쪽',type:'splice_text',start:2,end:2,new_text:'과'},{identity:'마지막',type:'replace_text',new_text:'끝'}]},
+ {label:'delete_body',steps:[{identity:body,type:'delete_paragraph'},{identity:'마지막',type:'splice_text',start:0,end:0,new_text:'이동 '},{identity:'B',kind:'cell',type:'format_table',props:{paddingLeft:300,cellSpacing:20}}]},
+];
+try{
+ const installed=path.join(temporary,'isolated package');fs.cpSync(path.join(root,'outputs/local-plugin-20261011/hwp-easy-local'),installed,{recursive:true});assert.equal(fs.existsSync(path.join(temporary,'node_modules')),false);const runner=path.join(installed,'skills/edit-local-hwp/scripts/local-runner.mjs');
+ const call=request=>{const file=path.join(temporary,'request.json');fs.writeFileSync(file,JSON.stringify(request));const result=spawnSync(process.execPath,[runner,'--request',file],{cwd:temporary,encoding:'utf8',timeout:65000,windowsHide:true,maxBuffer:8*1024*1024,env:{...process.env,NODE_PATH:''}});assert.equal(result.status,0,result.stdout);assert.equal(result.stderr,'');const response=JSON.parse(result.stdout);assert.equal(response.ok,true);return response.result;};
+ const read=source=>call({action:'read',source,max_chars:64000,max_blocks:128});
+ for(const definition of definitions){
+  const original=fixture({table:definition.table,paragraphs:definition.paragraphs??['시작',body,'마지막'],cells:definition.cells??cells}),source=path.join(temporary,definition.label+'.hwp'),separate=path.join(temporary,definition.label+'-separate.hwp');fs.writeFileSync(source,original);fs.writeFileSync(separate,original);const state=read(source);
+  const find=(s,text,kind='paragraph')=>{const matches=s.blocks.filter(b=>b.kind===kind&&b.text===text);assert.equal(matches.length,1,'EXACT_UNIQUE_TARGET_REQUIRED');return matches[0];};
+  const operations=definition.steps.map(spec=>{const {identity,kind,previous,...operation}=spec,b=find(state,identity,kind);return {expected_old:b.text,...operation,target_id:b.target_id,...(previous?{previous_target_id:find(state,previous,kind).target_id}:{} )};});
+  const request={source,expected_sha256:state.source_sha256,operations};assert.equal(call({action:'plan',...request}).saved,false);assert.deepEqual(fs.readFileSync(source),original);const saved=call({action:'edit',...request});assert.equal(saved.atomic_batch,true);assert.equal(saved.saved_path,source);assert.equal(saved.operation_count,operations.length);assert.equal(saved.raw_preservation_verified,true);
+  const name='case-'+String(cases.length+1).padStart(3,'0'),steps=[];fs.writeFileSync(path.join(out,name+'-before.hwp'),original);fs.writeFileSync(path.join(out,name+'-after.hwp'),fs.readFileSync(source));
+  for(const [index,spec] of definition.steps.entries()){
+   const current=read(separate),{identity,kind,previous,...operation}=spec,expected=operation.expected_old??identity,b=find(current,expected,kind),before=fs.readFileSync(separate),stepName=name+'-step-'+index;
+   const single={...operation,target_id:b.target_id,expected_old:expected,...(previous?{previous_target_id:find(current,operation.expected_previous,kind).target_id}:{})};
+   call({action:'edit',source:separate,expected_sha256:current.source_sha256,operations:[single]});fs.writeFileSync(path.join(out,stepName+'-before.hwp'),before);fs.writeFileSync(path.join(out,stepName+'-after.hwp'),fs.readFileSync(separate));steps.push({name:stepName,target_raw_index:current.blocks.indexOf(b),...operation});
+  }
+  const a=readHwp(fs.readFileSync(source)),b=readHwp(fs.readFileSync(separate));assert.deepEqual([...a.streams.keys()].sort(),[...b.streams.keys()].sort());for(const [key,value] of a.streams)assert.deepEqual(value,b.streams.get(key));fs.writeFileSync(path.join(out,name+'-separate.hwp'),fs.readFileSync(separate));
+  const next=read(source);call({action:'restore',source,expected_sha256:next.source_sha256,backup_id:saved.backup_id});assert.deepEqual(fs.readFileSync(source),original);cases.push({name,label:definition.label,operations:operations.length,steps});
+ }
+ const report={status:'PASS',cases:cases.length,operations:cases.reduce((n,c)=>n+c.operations,0),same_file_saved:true,plan_unsaved:true,restore_exact:true,all_decoded_streams_match_separately_reread_operations:true,isolated_package_without_node_modules:true,network_used:false,layout_verified:false};fs.writeFileSync(path.join(out,'cases.json'),JSON.stringify({cases},null,2)+'\n');fs.writeFileSync(path.join(out,'verification.json'),JSON.stringify(report,null,2)+'\n');console.log(JSON.stringify(report));
+}finally{assert.equal(path.dirname(temporary),os.tmpdir());assert.ok(path.basename(temporary).startsWith('hwp-easy-batch-package-'));fs.rmSync(temporary,{recursive:true,force:true});}

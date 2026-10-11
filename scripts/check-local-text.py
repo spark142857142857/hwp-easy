@@ -44,7 +44,7 @@ def streams_unchanged(old, saved):
             assert left == right
 
 
-def verify_case(folder, case):
+def verify_case(folder, case, verify_merge=True):
     name = case['name']
     old, before, cells = reader.decode(folder / (name + '-before.hwp'))
     saved, after, new_cells = reader.decode(folder / (name + '-after.hwp'))
@@ -76,12 +76,13 @@ def verify_case(folder, case):
         for left, right in zip(cells.values(), new_cells.values()):
             assert left[2:] == right[2:]
         changed = after[index:index + 2]
-        merged, merged_blocks, merged_cells = reader.decode(folder / case['merged_file'])
-        streams_unchanged(old, merged)
-        assert [b['text'] for b in merged_blocks] == [b['text'] for b in before]
-        assert [shapes(b)[0] for b in merged_blocks] == [shapes(b)[0] for b in before]
-        assert [reader.canon(b) for b in merged_blocks] == [reader.canon(b) for b in before]
-        assert merged_cells == cells
+        if verify_merge:
+            merged, merged_blocks, merged_cells = reader.decode(folder / case['merged_file'])
+            streams_unchanged(old, merged)
+            assert [b['text'] for b in merged_blocks] == [b['text'] for b in before]
+            assert [shapes(b)[0] for b in merged_blocks] == [shapes(b)[0] for b in before]
+            assert [reader.canon(b) for b in merged_blocks] == [reader.canon(b) for b in before]
+            assert merged_cells == cells
     for current in changed:
         expected = reader.canon(target, (67, 68), ((0, 4), (12, 14)))
         if case['type'] == 'split_paragraph' and current is changed[1]:

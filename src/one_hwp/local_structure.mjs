@@ -479,7 +479,9 @@ export function structuralEdit(HwpDocument, source, hash, operation) {
     verifyListCounts(savedRaw, after);
     verifyCellHeaders(raw,savedRaw,translate,newHost,tableChange);
     verifyOutsideBody(raw, savedRaw, tableAdded,formatChange?.verifyDefinitions);
-    return { bytes: output, content_verified: true, raw_preservation_verified: true,
+    const targetRemap=Object.fromEntries(before.blocks.map(old=>[old.id,
+      removing&&old.id===id?null:translate(old)?.id??null]));
+    return { bytes: output, _target_remap:targetRemap, content_verified: true, raw_preservation_verified: true,
       raw_preservation_scope: 'existing_blocks_and_streams_with_explicit_structure_changes',
       restored_cell_list_words:repaired.restored_cell_list_words,
       structure_changed: !formatting&&!splicing, formatting_changed:formatting, text_range_changed:splicing, layout_verified: false };

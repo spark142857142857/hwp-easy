@@ -5,9 +5,9 @@ import { spawnSync } from 'node:child_process';
 import { HwpDocument, initSync } from '@rhwp/core';
 import { createDocumentEngine } from '../../probes/sites-runtime/engine/document.mjs';
 import { createEngineApi } from './rhwp_api.mjs';
-import { structuralEdit, preservableStructuralProfile } from './local_structure.mjs';
-import {pictureEdit,localPictures} from './local_picture.mjs';
-import {tableFormatEdit} from './local_table_format.mjs';
+import { preservableStructuralProfile } from './local_structure.mjs';
+import {localPictures} from './local_picture.mjs';
+import {editLocalBatch} from './local_batch.mjs';
 import { readHwp } from '../../probes/sites-runtime/guard/container.mjs';
 import { readLocal, saveLocal, restoreLocal } from './local_file.mjs';
 import { GuardError } from '../../probes/sites-runtime/guard/records.mjs';
@@ -39,6 +39,7 @@ export async function runLocal(request) {
     insert_delete_merged_table_rows_columns:true,font_family_change:true,
     split_merge_table_cells:true,format_text:true,format_paragraph:true,
     resize_table_columns_rows:true,format_cell_layout:true,format_table_padding:true,
+    atomic_operation_batches:true,max_operations:100,batch_target_ids:'initial_read; stable identity through verified position changes',
     pictures:{insert:'local PNG/JPEG, body paragraph or top-level table cell',replace:'local PNG/JPEG, retain frame size and position',update:'size, position, four-edge crop and integer-degree rotation',multiple_per_paragraph:32,picture_index_required_when_multiple:true,delete:true,delete_cleans_unused_embedded_data:false},
     edit_profiles:{existing_text:'guarded paragraph/cell replacement; selected range insertion/deletion/replacement preserves retained mixed character styles',
       structure:'uniform-style targets; paragraphs, simple or merged table rows/columns and verified cell split/merge; opaque page numbers and supported pictures preserved',
@@ -75,12 +76,7 @@ export async function runLocal(request) {
     || typeof op?.expected_old==='string'&&op.expected_old.includes('\n'));
   let candidate;
   if(structural) {
-    if(request.operations.length!==1)fail('STRUCTURAL_EDIT_REQUIRES_ONE_OPERATION');
-    candidate=['resize_table_columns','resize_table_rows','format_cell','format_table'].includes(request.operations[0]?.type)
-      ?tableFormatEdit(HwpDocument,snapshot.bytes,version,request.operations[0])
-      :['insert_picture','update_picture','delete_picture','replace_picture'].includes(request.operations[0]?.type)
-      ?pictureEdit(HwpDocument,snapshot.bytes,version,request.operations[0])
-      :structuralEdit(HwpDocument,snapshot.bytes,version,request.operations[0]);
+    candidate=await editLocalBatch(HwpDocument,snapshot.bytes,version,request.operations);
   } else {
     const operations=request.operations.map(op=>{
       object(op,['type','target_id','expected_old','new_text'],['type','target_id','expected_old','new_text']);
