@@ -23,6 +23,8 @@ The Worker guard uses `pako` **3.0.2**, pinned by `probes/sites-runtime/package-
 
 ## Build-time notice checks
 
+The bundled local CFB writer retains this source attribution: `cfb.js (C) 2013-present SheetJS -- http://sheetjs.com`. Its embedded CRC implementation carries `crc32.js (C) 2014-present SheetJS -- http://sheetjs.com` in the bundle's legal comments.
+
 `probes/sites-runtime/scripts/runtime-notices.mjs` checks installed package names, versions and license declarations, lockfile integrity pins and the exact notice text (allowing only Windows CRLF normalization). The build includes `RHWP-LICENSE.txt`, `RHWP-THIRD-PARTY-LICENSES.md`, `PAKO-LICENSE.txt`, `PAKO-ZLIB-LICENSE.txt` and `THIRD-PARTY-NOTICES.json` in `dist/server`. The manifest records source revisions, notice digests and the bundled WASM digest. Missing/altered notices and inconsistent package pins fail the build. These packaging checks do not replace a full compiled-dependency license review.
 
 ## @rhwp/core MIT license
