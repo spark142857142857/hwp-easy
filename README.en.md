@@ -2,23 +2,41 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
-**Read and edit supported HWP form fields with an agent, without installing Hancom.**
+Ask an agent to edit HWP files without installing Hancom.
 
-[한국어](README.md) · [Documentation](docs/README.md) · [Developer setup](docs/developer-guide.md)
+[한국어](README.md) | [Documentation](docs/README.md) | [Developer setup](docs/developer-guide.md)
 
-HWP Easy combines the pinned `@rhwp/core` WASM engine with exact target selection, independent preservation checks and recoverable storage. The local Codex execution path reads the selected HWP and saves checked changes to that same file, without an upload, browser or download step. It supports multiline body/cell answers, paragraph and table creation, supported merged-table row/column changes, font formatting and multiple PNG/JPEG pictures in body or cell paragraphs, including replacement, cropping and rotation. See [local editing](docs/local-file-editing.md). The separate remote MCP edits a hosted copy.
+In local Codex, HWP Easy reads the selected file, checks the edits and **saves to that same HWP file**. It keeps the previous file for recovery. The remote MCP edits an uploaded copy; you download the result. See [local editing](docs/local-file-editing.md).
 
 ## Status
 
-Local **0.2.7** combines supported text, structure, formatting, table layout and picture operations into one checked save. Original block identities follow verified position changes; a failed step leaves the selected file untouched. Eight synthetic batches and twelve local-form-copy batches matched all decoded streams from separately reread single operations. The local regression total is 185.
+| Component | Status |
+| --- | --- |
+| Local editing | Package candidate 0.2.15 supports the edits listed below. Tests used copies of real forms and an isolated package. Directory distribution is pending. |
+| Remote MCP | Upload, reading, editing, saving, preview, download and restore have been tested with one account. |
+| Public plugin | Remote package 0.1.9 was submitted for review. Its recorded submission status is In review / Not published. |
+| Codex Cloud | Fixed synthetic HWP files were tested from input through result retrieval. General forms and the full attachment UI remain untested. |
+| Authentication | Automatic refresh remains under investigation. A successful call does not establish that the connection will stay active. |
 
-The local **0.2.6** candidate adds mixed-style range insertion/deletion/replacement, paragraph splitting/merging and merged-table column widths, stored row heights, cell padding/alignment and table spacing. Fifty text/boundary cases and twelve table-metadata cases passed on copies of local forms, including same-file saving, exact restoration and independent raw checks. Four focused Hancom views confirmed selected outcomes. Stored row height is a minimum and may expand to fit content.
+The Site URL is public for domain verification. Document access requires sign-in and owner checks. Public requests without authentication or with forged identity headers were rejected.
 
-The owner-only remote MVP has been tested through upload, full supported-content reads, paragraph and table-cell edits, saving, previews, download and restore. The remote 0.1.9 package is In review and Not published. The local 0.2.5 candidate passed real execution in an isolated folder without node_modules, same-file save/restore and independent record checks. Its latest 50 picture-edit checks used copies of three local forms; the originals stayed unchanged. Thirteen focused picture views and two additional RGB PNG views were checked in Hancom HWP 2020, including cropping and rotation; this does not certify every page or arbitrary existing images. A cell-picture sizing defect was fixed; a rendering mismatch for the 1×1 grayscale-alpha PNG fixture remains recorded. The local candidate has not been installed or submitted to the directory.
+Second-account plugin installation and document isolation still need verification. See [MVP records](docs/mvp-status.md) and [release preparation](docs/public-plugin-release.md).
 
-**A public source repository does not publish the plugin or grant access to hosted documents.** The Site URL is publicly reachable for domain verification; document operations still require sign-in and owner checks. Live public checks rejected anonymous requests and forged identity headers. Actual second-account installation and isolation remain untested. Codex Cloud verification covers fixed synthetic HWP flows; arbitrary forms and the complete attachment UI are not certified. Authentication refresh remains under investigation. See [MVP evidence](docs/mvp-status.md) and [public release preparation](docs/public-plugin-release.md).
+## Local editing
 
-## Remote MCP editing contract
+| Target | Supported operations |
+| --- | --- |
+| Text and paragraphs | Search, partial edits, multiline answers, insertion, deletion, splitting, merging, duplication and movement |
+| Tables | Creation and movement, supported merged-table row and column changes, cell merging and splitting, sizing, padding and alignment |
+| Character formatting | Font family, size, color, bold, italic, underline and strikethrough |
+| Pictures | PNG/JPEG insertion, replacement, sizing, positioning, cropping and rotation in body or cell paragraphs |
+| Complex objects | ClickHere field values, nested-cell text and character formatting, picture-group movement and selected child-picture cropping |
+
+Support depends on the document structure and requested operation. Nested-table structural changes, field creation and deletion, and grouped-picture replacement and rotation are not yet supported.
+
+A batch is checked before one save; if any step fails, none of the changes are saved. [Local editing](docs/local-file-editing.md) documents the conditions and test results, including external-viewer checks.
+
+## Remote MCP editing
 
 - Read supported paragraphs and top-level table cells in unencrypted HWP 5.x. Follow paginated reads on one pinned version.
 - Check exact target IDs, full old text, the expected version and preservation before saving.
@@ -27,7 +45,9 @@ The owner-only remote MVP has been tested through upload, full supported-content
 - Remote limits are **4 MiB** per input and **400,000 UTF-16 units** across body and table text. Documents within those limits can still be unsupported.
 - New paragraphs, table rows, images, formatting changes, new line breaks, encryption/DRM bypass and HWPX/PDF/DOCX conversion are outside the supported scope.
 
-The remote path also supports validated empty-cell fills/clears and narrowly constrained mixed-style replacements. This does not imply equivalent support in the local Python MCP or arbitrary documents.
+The remote path can also fill or clear validated empty cells and make some mixed-style replacements. These operations have their own restrictions; the local Python MCP uses a different support profile.
+
+HWP processing uses [`@rhwp/core`](https://github.com/edwardkim/rhwp) **0.8.6**. HWP Easy adds target selection, independent preservation checks, storage and agent integration to this WASM engine.
 
 ## Repository map
 
@@ -42,10 +62,12 @@ The remote path also supports validated empty-cell fills/clears and narrowly con
 | `docs/` | User, developer, verification and release documentation |
 | `docs/legacy/` | Historical Windows COM documentation |
 
-Developer setup requires Node.js 22+ and Python 3.11+. The new engine path does not require Hancom, COM, Wine or a GUI. Follow the [developer guide](docs/developer-guide.md) and [architecture](docs/architecture.md); CLI setup is not the promised normal user installation flow. Historical directory names and entry points are retained for compatibility.
+Development uses Node.js 22+ and Python 3.11+. The new engine runs without Hancom, COM, Wine or a GUI. See the [developer guide](docs/developer-guide.md) for setup and the [architecture](docs/architecture.md) for code organization.
+
+Users are not expected to install this development environment. Existing directory names and entry points are retained for compatibility.
 
 ## Support and licensing
 
-Use [Issues](https://github.com/spark142857142857/hwp-easy/issues) for ordinary bugs and proposals, with synthetic reproductions. Do not post personal HWP files, credentials, cookies or authentication codes.
+Report bugs and suggestions in [Issues](https://github.com/spark142857142857/hwp-easy/issues). Use synthetic reproductions and leave out personal documents, credentials, cookies and authentication codes.
 
-HWP Easy's own code is available under the [MIT License](LICENSE). External engines and libraries retain their respective licenses; see [third-party notices](THIRD_PARTY_NOTICES.md). Dots integration remains outside the MVP scope.
+HWP Easy is available under the [MIT License](LICENSE). External engines and libraries retain their own licenses; see [third-party notices](THIRD_PARTY_NOTICES.md). Dots integration is reserved for later work.
