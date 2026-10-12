@@ -2,7 +2,7 @@
   "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
   "name": "hwp-easy",
   "version": "0.2.15",
-  "description": "Read and edit a selected local HWP, saving verified changes to the same file.",
+  "description": "선택한 HWP를 직접 읽고 편집해 검증한 결과를 같은 파일에 저장합니다.\nRead and edit a selected local HWP, saving verified changes to the same file.",
   "author": { "name": "원석 유" },
   "homepage": "https://github.com/spark142857142857/hwp-easy",
   "repository": "https://github.com/spark142857142857/hwp-easy",
@@ -10,15 +10,15 @@
     "com.openai": {
       "interface": {
         "displayName": "HWP Easy",
-        "shortDescription": "Edit your selected HWP in place",
-        "longDescription": "Read an HWP file accessible to your agent and save verified edits to the same file, with previous bytes retained for recovery. Supports text, paragraphs, supported merged tables, character formatting and body/cell PNG/JPEG pictures. Selected field values, nested-cell text and character formatting, and picture-group moves and crops are also supported. Requires filesystem access and Node.js 22+ in the agent execution environment. The document engine is bundled; no HWP Easy server, account or upload is required. Support depends on document structure; exact external-viewer page layout is not certified.",
+        "shortDescription": "HWP 직접 편집·같은 파일 저장·복구\nEdit your selected HWP in place",
+        "longDescription": "한글을 설치하지 않고 에이전트가 접근할 수 있는 HWP 파일을 읽고 편집합니다. 검증한 결과를 같은 파일에 저장하고 이전 내용은 복구용으로 보관합니다. 텍스트·문단·지원하는 병합 표·글자 서식·본문과 표 셀의 PNG/JPEG 그림을 편집할 수 있습니다. 지원하는 누름틀 값, 중첩 셀의 텍스트와 글자 서식, 그림 그룹 이동과 선택한 그림 자르기도 제공합니다. HWP Easy 서버·계정·업로드는 필요하지 않습니다. 실행 환경에 파일 접근 권한과 Node.js 22 이상이 필요하며 문서 엔진은 패키지에 포함됩니다. 지원 범위는 문서 구조에 따라 달라지고 외부 뷰어의 정확한 쪽 배치를 보증하지 않습니다.\n\nRead an HWP file accessible to your agent and save verified edits to the same file, with previous bytes retained for recovery. Supports text, paragraphs, supported merged tables, character formatting and body/cell PNG/JPEG pictures. Selected field values, nested-cell text and character formatting, and picture-group moves and crops are also supported. Requires filesystem access and Node.js 22+ in the agent execution environment. The document engine is bundled; no HWP Easy server, account or upload is required. Support depends on document structure; exact external-viewer page layout is not certified.",
         "composerIcon": "./assets/hwp-easy.svg",
         "logo": "./assets/hwp-easy.svg",
         "category": "Productivity",
-        "capabilities": ["Read local HWP", "Save to the same file", "Edit paragraphs", "Edit simple tables", "Restore previous bytes"],
+        "capabilities": ["HWP 읽기\nRead HWP", "같은 파일 저장\nSave in place", "문단 편집\nEdit paragraphs", "지원 표 편집\nEdit supported tables", "이전 내용 복구\nRestore previous bytes"],
         "websiteURL": "https://github.com/spark142857142857/hwp-easy",
         "supportURL": "https://github.com/spark142857142857/hwp-easy/issues",
-        "defaultPrompt": ["Use $edit-local-hwp to read and edit the HWP file I select, saving it in place."]
+        "defaultPrompt": ["$edit-local-hwp로 내가 지정한 HWP를 읽고 편집한 뒤 같은 파일에 저장해줘.", "Use $edit-local-hwp to read and edit the HWP file I select, saving it in place."]
       }
     }
   }
