@@ -2,7 +2,7 @@
 
 Use only when explicitly invoked for the current task. The user's instructions take precedence over this workflow.
 
-The installed plugin's qualified skill name is `hwp-easy:edit-local-hwp`. Use the installed skill entry supplied by the host; never infer its cache path from a version number.
+Use the installed skill entry supplied by the host; never infer its cache path from a version number.
 
 Use this package's `scripts/local-runner.mjs` with a Node.js 22+ executable in the agent's execution environment. If available, `load_workspace_dependencies` supplies the bundled Node path.
 

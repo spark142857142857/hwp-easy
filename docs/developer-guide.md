@@ -35,6 +35,7 @@ npm ci --ignore-scripts --no-audit --no-fund
 | MCP, 사용자 신원, 업로드, 브라우저 보기 | `probes/sites-runtime/host/`와 `worker/` |
 | D1/R2 버전, 복구, 삭제 | `probes/sites-runtime/storage/`, `db/`, `drizzle/` |
 | 메인 플러그인과 번들 생성 | `plugins/hwp-easy/`, `scripts/package_local_plugin.mjs`, `scripts/archive_local_plugin.py` |
+| Claude Code·Cursor 개인 스킬 | `scripts/package_agent_skills.mjs`, `install_agent_skill.mjs`, `check-agent-packages.mjs`, [재현 안내](agent-client-skills.md#개발자-재현) |
 | 원격 보관 패키지 | `plugins/archive/hwp-easy-remote-0.1.9/`와 `scripts/package_public_plugin.py` |
 | 제품 범위, 사용 안내 | `docs/PRD.md`, `docs/quick-start.md` |
 

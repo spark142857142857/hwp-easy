@@ -6,18 +6,20 @@ Read and edit HWP files with an agent without installing Hancom.
 
 [한국어](README.md) | [Usage](docs/quick-start.md) | [Documentation](docs/README.md)
 
-**HWP Easy 0.2.17 is the main local execution package.** The agent edits an accessible HWP and saves verified changes to the same file. Previous bytes are retained for recovery. No HWP Easy server, account or upload is required.
+**HWP Easy 0.2.18 is the main local execution package.** The agent edits an accessible HWP and saves verified changes to the same file. Previous bytes are retained for recovery. No HWP Easy server, account or upload is required.
 
 Select **HWP Easy** from the skill menu in a new chat, then specify the file and changes. In Codex CLI, type `$` and search for `HWP`. The skill is not applied automatically. An attached copy is distinct from the original file on your PC; cloud tasks process files available in their own environment.
+
+Claude Code and Cursor use personal skills invoked with **`/hwp-easy`**. Both share the same engine and remain explicit-only. See the [Korean/English installation and verification guide](docs/agent-client-skills.md).
 
 ## Current status
 
 | Area | Status |
 | --- | --- |
-| Main package | HWP Easy 0.2.17, with its engine and WASM bundled. Requires filesystem access and Node.js 22+. |
-| Actual local installation | Installed through Codex's supported CLI on Windows on October 12, 2026, and confirmed installed and enabled. The installed runtime passed synthetic read, edit, same-file save, history and exact-byte recovery checks. |
+| Main package | HWP Easy 0.2.18, with its engine and WASM bundled. Requires filesystem access and Node.js 22+. |
+| Actual local installation | Windows Codex 0.2.17 installation/enabled status and Claude Code/Cursor 0.2.18 personal skill installation were confirmed. Installed runtimes passed synthetic editing, same-file save, history and exact-byte recovery. Runtime checks and actual AI-host invocation are recorded separately. |
 | Public directory | Publication of the local main package and installation by other users remain unverified. |
-| Fresh chat | Explicit-only skills are intentionally hidden from the initial model list. HWP Easy appeared in the supported CLI selector, and selecting it injected the installed skill body. Plain invocation text in an app-tool-created chat did not inject it. Desktop menu selection remains unverified. |
+| Fresh chat | Explicit-only Codex skills are intentionally hidden from the initial model list. CLI selection injected the installed skill body; plain invocation text in an app-tool-created chat did not. User screenshots confirmed desktop menu display and selection, while desktop transmission/execution remains unverified. |
 | Cloud | Compatible with an execution environment in principle; installing this main package and completing file transfer in a new cloud task still needs validation. |
 | Remote 0.1.9 | Archived separately and excluded from the main installation. Existing deployment and submission records are retained. |
 

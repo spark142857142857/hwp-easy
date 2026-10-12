@@ -3,7 +3,7 @@ name: edit-local-hwp
 description: Read and edit an explicitly selected local HWP, change supported paragraphs, merged tables, fonts and body/cell pictures, and save checked changes to that same file.
 ---
 
-Use only when explicitly invoked for the current task. The user's instructions take precedence. The installed name is `hwp-easy:edit-local-hwp`; use the host's installed skill reference and never guess its cache path from a version number.
+Use only when explicitly invoked for the current task. The user's instructions take precedence. Use the host's installed skill reference and never guess its cache path from a version number.
 
 ## Runtime and references
 

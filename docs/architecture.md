@@ -4,17 +4,19 @@ HWP Easy는 WASM 엔진으로 HWP를 처리하고, 에이전트가 선택한 대
 
 ## 메인 로컬 파일 흐름
 
-2026년 10월 12일부터 로컬 실행 방식의 0.2.15가 HWP Easy 메인입니다. 설치 패키지에 Node 실행 코드와 WASM을 포함하며 HWP Easy 서버나 OAuth 연결을 요구하지 않습니다.
+2026년 10월 12일부터 로컬 실행 방식이 HWP Easy 메인입니다. 현재 0.2.18은 Codex와 Claude Code·Cursor용으로 같은 Node 실행 코드와 WASM을 포함하며 HWP Easy 서버나 OAuth 연결을 요구하지 않습니다.
 
 ```mermaid
 flowchart LR
-  U[사용자: 스킬 선택과 HWP 지정] --> A[Codex 에이전트]
+  U[사용자: 스킬 선택과 HWP 지정] --> A[Codex / Claude Code / Cursor]
   A --> E[설치된 Node/WASM 실행기와 독립 검사]
   E -->|버전과 저장 결과 확인| F[같은 HWP 파일]
   E -->|이전 바이트 보관과 복구| B[인접 복구 폴더]
 ```
 
 PC 또는 Cloud 실행 환경의 파일 권한을 따릅니다. Cloud와 첨부 사본은 PC 원본과 자동 동기화하지 않습니다. `local_runner.mjs`가 읽기·계획·편집·이력·복구를 제공하고 `local_file.mjs`가 충돌 검사, 복구 사본과 같은 경로 저장을 담당합니다. 원격 0.1.9는 별도 보관 경로입니다.
+
+Codex 플러그인과 Claude Code·Cursor 개인 스킬은 공통 소스·빌드에서 생성합니다. 후자의 호출은 `/hwp-easy`이며 자동 호출을 금지합니다. 개인 스킬 설치는 서버나 호스트 설정을 등록하지 않습니다. [클라이언트 배포 구조와 검증](agent-client-skills.md)
 
 ## 원격 문서 흐름
 

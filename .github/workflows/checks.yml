@@ -76,6 +76,44 @@ jobs:
       - name: Build Python package only
         run: python -m pip wheel --no-deps --wheel-dir dist .
 
+  agent-clients:
+    name: Claude Code and Cursor skills / ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 8
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    steps:
+      - name: Check out source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - name: Set up Node
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: '22'
+      - name: Set up independent Python reader
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7
+        with:
+          python-version: '3.12'
+      - name: Install exact engine runtime
+        run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Install exact package builder
+        working-directory: probes/sites-runtime
+        run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Install independent OLE reader
+        run: python -m pip install olefile==0.47
+      - name: Verify explicit-only installation, shared engine and same-file recovery
+        run: |
+          node --test tests/test_agent_skill_install.mjs
+          node scripts/package_local_plugin.mjs
+          node scripts/package_agent_skills.mjs
+          python scripts/archive_agent_skills.py
+          node scripts/check-agent-packages.mjs
+          python scripts/check-installed-plugin.py outputs/agent-client-check/claude-code
+          python scripts/check-installed-plugin.py outputs/agent-client-check/cursor
+
   local-complex:
     name: Complex local objects / ${{ matrix.os }}
     runs-on: ${{ matrix.os }}

@@ -1,12 +1,13 @@
 # 문서 모음
 
-처음이라면 저장소 [README](../README.md)에서 지원 기능과 배포 상태를 확인하세요. 로컬 HWP Easy 0.2.17이 메인이며 원격 0.1.9 자료는 보관 기록입니다.
+처음이라면 저장소 [README](../README.md)에서 지원 기능과 배포 상태를 확인하세요. 로컬 HWP Easy 0.2.18이 메인이며 원격 0.1.9 자료는 보관 기록입니다.
 
 ## 사용 안내
 
 | 문서 | 알 수 있는 내용 |
 | --- | --- |
 | [사용 안내](quick-start.md) | 설치한 HWP Easy 선택, 파일 지정, 같은 파일 저장과 복구 |
+| [Claude Code·Cursor 스킬](agent-client-skills.md) | 공통 로컬 엔진, 명시적 호출, 앱별 설치·저장·복구 검증 |
 | [실제 로컬 설치 검증](local-plugin-installation.md) | Windows Codex 설치·활성 확인과 설치된 실행기의 전체 파일 처리 |
 | [스킬 발견·호출 진단](local-skill-discovery.md) | 기본 목록 숨김의 원인, 정식 선택 메뉴와 자동 생성 채팅의 차이 |
 | [로컬 후속 품질 검증](local-plugin-quality.md) | 공개 복잡한 문서, 읽기 전용 보완, 새 채팅과 남은 항목 |

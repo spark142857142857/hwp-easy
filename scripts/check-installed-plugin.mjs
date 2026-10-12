@@ -1,4 +1,4 @@
-/** Exercise the actual Codex-installed bundle, never the source entrypoint. */
+/** Exercise an installed client bundle, never the source entrypoint. */
 import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
@@ -10,11 +10,16 @@ import {fixture} from '../tests/rhwp_fixtures.mjs';
 const [pluginArgument,reportArgument,nodeArgument]=process.argv.slice(2);
 assert.ok(pluginArgument&&reportArgument,'Usage: node check-installed-plugin.mjs <installed-plugin> <report-dir> [node-executable]');
 const plugin=path.resolve(pluginArgument),reportDir=path.resolve(reportArgument),node=nodeArgument||process.execPath;
-const metadata=JSON.parse(fs.readFileSync(path.join(plugin,'plugin.json'),'utf8'));
 const manifest=JSON.parse(fs.readFileSync(path.join(plugin,'build-manifest.json'),'utf8'));
+const standalone=manifest.distribution?.type==='agent_skill';
+const metadata=standalone?{name:manifest.package,version:manifest.version}:JSON.parse(fs.readFileSync(path.join(plugin,'plugin.json'),'utf8'));
 assert.equal(metadata.name,'hwp-easy');assert.equal(manifest.package,metadata.name);assert.equal(manifest.version,metadata.version);
-assert.equal(metadata.extensions['com.openai'].interface.displayName,'HWP Easy');
-const skill=path.join(plugin,'skills/edit-local-hwp');
+if(!standalone)assert.equal(metadata.extensions['com.openai'].interface.displayName,'HWP Easy');
+const skill=standalone?plugin:path.join(plugin,'skills/edit-local-hwp');
+if(standalone) {
+ const {inspectSkill}=await import('./install_agent_skill.mjs');
+ await inspectSkill(plugin,manifest.distribution.client);
+}
 assert.match(fs.readFileSync(path.join(skill,'agents/openai.yaml'),'utf8'),/allow_implicit_invocation: false/);
 assert.equal(fs.existsSync(path.join(plugin,'node_modules')),false);
 assert.equal(fs.existsSync(path.join(plugin,'mcp.json')),false);
@@ -67,7 +72,8 @@ try {
  const finalRestore=call({action:'restore',source,expected_sha256:hash(editedBytes),backup_id:edited.backup_id});
  assert.equal(finalRestore.restored,true);assert.deepEqual(fs.readFileSync(source),original);
  for(const [name,bytes]of [['synthetic-original.hwp',original],['synthetic-edited.hwp',editedBytes],['synthetic-restored.hwp',fs.readFileSync(source)]])fs.writeFileSync(path.join(reportDir,name),bytes);
- const report={status:'PASS',scope:'Codex-installed plugin runtime on Windows; synthetic HWP only',
+ const report={status:'PASS',scope:`Installed ${standalone?manifest.distribution.client:'codex'} runtime on ${process.platform}; synthetic HWP only`,
+  client:standalone?manifest.distribution.client:'codex',
   plugin:metadata.name,version:metadata.version,installed_plugin_path:plugin,node_executable:node,
   runner_sha256:manifest.runner_sha256,wasm_sha256:manifest.wasm_sha256,
   explicit_only_skill:true,no_remote_mcp:true,no_node_modules_at_execution:true,plan_did_not_save:true,
