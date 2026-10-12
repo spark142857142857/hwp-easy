@@ -25,6 +25,9 @@ class LocalMarketplaceTests(unittest.TestCase):
                 "runner_sha256": hashlib.sha256(b"synthetic JS").hexdigest(),
                 "wasm_sha256": hashlib.sha256(b"synthetic WASM").hexdigest()}).encode(),
             "skills/edit-local-hwp/agents/openai.yaml": b"policy:\n  allow_implicit_invocation: false\n",
+            "skills/edit-local-hwp/SKILL.md": b"---\nname: edit-local-hwp\ndescription: Synthetic skill\n---\nRead references before editing.\n",
+            "skills/edit-local-hwp/references/requests.md": b"Synthetic request reference",
+            "skills/edit-local-hwp/references/editing.md": b"Synthetic editing reference",
             "skills/edit-local-hwp/scripts/local-runner.mjs": b"synthetic JS",
             "skills/edit-local-hwp/scripts/rhwp_bg.wasm": b"synthetic WASM",
         }
@@ -65,6 +68,28 @@ class LocalMarketplaceTests(unittest.TestCase):
         self.files["skills/edit-local-hwp/scripts/local-runner.mjs"] = b"changed JS"
         self.write_archive()
         with self.assertRaises(ValueError):
+            module.prepare(self.archive, self.destination)
+        self.assertFalse(self.destination.exists())
+
+
+    def test_oversized_utf8_skill_is_rejected_before_extracting(self):
+        # Fewer than 8000 characters can still exceed the host's byte limit.
+        self.files["skills/edit-local-hwp/SKILL.md"] = ("한" * 2667).encode("utf-8")
+        self.write_archive()
+        with self.assertRaisesRegex(ValueError, "8000-byte"):
+            module.prepare(self.archive, self.destination)
+        self.assertFalse(self.destination.exists())
+
+    def test_exact_prompt_byte_limit_is_accepted(self):
+        self.files["skills/edit-local-hwp/SKILL.md"] = b"x" * 8000
+        self.write_archive()
+        module.prepare(self.archive, self.destination)
+        self.assertEqual((self.destination / "plugins/hwp-easy/skills/edit-local-hwp/SKILL.md").stat().st_size, 8000)
+
+    def test_missing_detailed_reference_is_rejected_before_extracting(self):
+        del self.files["skills/edit-local-hwp/references/editing.md"]
+        self.write_archive()
+        with self.assertRaisesRegex(ValueError, "reference"):
             module.prepare(self.archive, self.destination)
         self.assertFalse(self.destination.exists())
 

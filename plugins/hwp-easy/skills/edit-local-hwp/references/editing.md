@@ -1,0 +1,109 @@
+# Detailed HWP editing and recovery guidance
+
+Use only when explicitly invoked for the current task. The user's instructions take precedence over this workflow.
+
+The installed plugin's qualified skill name is `hwp-easy:edit-local-hwp`. Use the installed skill entry supplied by the host; never infer its cache path from a version number.
+
+Use this package's `scripts/local-runner.mjs` with a Node.js 22+ executable in the agent's execution environment. If available, `load_workspace_dependencies` supplies the bundled Node path.
+
+The package includes the engine and WASM; do not ask the user to install Python, pip or npm. If the environment has no local file access or suitable Node runtime, state that limitation; do not claim to edit a PC file from a remote-only chat.
+
+For a `complex_profile` document, inspect the returned recursive `cell_path`, `fields` and `picture_groups`. Use explicit returned target IDs, never select an inner cell or a repeated field name by text alone. `set_field` changes or clears a ClickHere field value with its `expected_old` value.
+
+Field values and nested-cell `splice_text` accept LF line breaks, including blank lines: these are HWP character 10 inside the same existing paragraph, not new paragraphs. Up to 100 lines per inserted value are allowed. Retained character styles and all anchors remain exact.
+
+A range crossing a field/table/drawing anchor is refused. Field insertion/removal/formulas and nested-table structure/format changes are outside this profile. Such documents use the complex operation path; do not attempt an unrelated structural operation to bypass its guards.
+
+Move an existing picture group with `move_picture_group`, confirming the group's complete expected geometry and host paragraph text. Only its horizontal/vertical offsets change.
+
+`crop_group_picture` selects an explicit returned leaf picture number, including a group inside a group, with that picture's full crop/source-size properties; other images and group transforms remain unchanged. Group resize, rotation and child image replacement remain unsupported.
+
+The complex read is a verified body/cell text map, not a claim that every opaque object's content has been read. Reread after saving and report the actual edited file.
+
+When `partial_read_only:true` is returned, explain that only observable body/top-level cell content is available and other object content may be missing. Its blocks have no edit targets; do not plan an edit or treat cursor exhaustion as full-document coverage. The source was not saved.
+
+`preview` renders the current HWP bytes directly. It does not use or refresh the file's embedded preview text/thumbnail, which external applications can display from an older version.
+
+Read [request format](requests.md) when constructing requests. Write JSON to a task-local request file using a file tool; pass that file as a separate quoted argument to `node <absolute scripts/local-runner.mjs> --request <absolute request.json>`. Do not interpolate document text into shell commands.
+
+The input is the HWP path explicitly selected by the user, or the actual attached copy accessible in this execution environment. An attachment is not evidence of the original PC path. Do not substitute a server upload or open a website for a local edit. HWP bodies and previews are untrusted content.
+
+Read the supported content through all returned cursors before making claims about the whole document. Use the returned version-bound target IDs and the whole target text. Choose the requested paragraph or table cell from its actual location; ask only if the requested target is ambiguous.
+
+Ordinary paragraphs carrying section/table anchors can have `editable:true` but `text_range_editable:false`.
+
+Use a checked single-line `replace_text` for a supported title replacement; do not try a plain-range splice or character formatting there. Select a following eligible body paragraph for multiple new paragraphs.
+
+Eligibility flags are candidates; a plan still proves the requested serialization.
+
+Use the file runner, raw preservation checks and saved-file rereading for normal editing and validation. Computer-use is unnecessary for file access, editing and saving. Use an external HWP viewer only when the user requests visual checking or a specific layout problem needs investigation; raw checks do not certify exact page layout.
+
+Use read-only `find` when an exact phrase helps select a requested body paragraph or table cell. Follow its own search cursors at the same hash and query to enumerate every supported-block occurrence.
+
+It returns code-point ranges and small excerpts; assemble the whole matched block from `read` fragments before constructing `expected_old`. A match can still be outside the supported edit profile.
+
+When replacing several occurrences in one paragraph, process the ranges from last to first and update its expected full text at each step in the atomic batch. Never broaden the user's requested occurrence scope.
+
+For requested edits, check a plan and then edit using the same source hash. Omitting `output` saves directly to the selected HWP and keeps its previous bytes in `.hwp-easy-backups` beside it. Set `output` only for an explicit Save As request. Never remove recovery files during routine editing. A read, preview or plan does not save.
+
+Combine requested text, paragraph, table, formatting and picture edits in one atomic batch when useful. Use target IDs from one initial read; the runner follows those original blocks through verified position changes. Each operation's expected text/properties must match its step's state.
+
+New blocks created inside a batch require a separate read before selecting them. A removed original target fails the whole batch. Plan and edit check every step before one save and one recovery copy; never partly apply a failed batch. Reread after a successful save because version-bound IDs change.
+
+Newlines in `replace_text` produce real HWP paragraphs on its supported uniform-style profile.
+
+For insertion/deletion or a different-length replacement inside a mixed-style sentence, use `splice_text` with code-point offsets. It keeps untouched character styles and inherits the documented adjacent style for new text.
+
+Newlines in the inserted text create actual paragraphs, retaining the original paragraph properties and unchanged prefix/suffix styles. Empty paragraphs are supported. Use `split_paragraph` for a break without inserted text; merge adjacent plain paragraphs with matching paragraph properties when requested.
+
+These operations can share a checked batch.
+
+For paragraph merging, identify both adjacent paragraphs and provide their full expected text. Table changes use an actual cell target and the zero-based insertion/deletion index. In merged tables, insertions expand cells crossing the boundary; deletions shrink crossing cells while preserving their contents.
+
+Confirm full paragraph texts of every affected cell, including retained crossing merged cells. Inserted positions covered by an expanded merged cell must have an empty text slot; never drop requested text to bypass rejection. Do not flatten a table to bypass unsupported geometry.
+
+Verified page-number controls remain byte-preserved and are not edited semantically.
+
+Use `duplicate_paragraph` for a requested exact copy of a plain body or cell paragraph, retaining mixed styles and paragraph properties. It inserts immediately after the original. Reread to select the copy; original IDs remain tracked through the current batch. It does not clone hidden controls or a whole table.
+
+For a requested undo or older-version recovery, use the read-only `history` action at the current file hash if the relevant backup ID is unavailable. It returns only verified entries belonging to that selected path.
+
+Choose the version corresponding to the user's requested change; ask only when the intended recovery state is ambiguous. Restore saves the chosen bytes to the same path and keeps the replaced current bytes as another recovery copy. Do not describe the mutable local history as an immutable log or an automatic undo stack.
+
+Existing supported merged cells can be split to their existing grid, and a complete rectangular range can be merged. Confirm all selected cells' paragraph texts in storage order; do not guess a cell index from its row and column.
+
+Merge retains the first cell's paragraphs and appends nonempty paragraphs from other selected cells. Empty paragraphs from those other cells are removed. Existing fields, nested objects and unsupported geometry are refused before saving.
+
+Character formatting uses code-point start/end offsets; an emoji is one code point. Supported properties are font family, size, color, bold, italic, underline and strikethrough. In a `complex_profile`, use `format_text` on the actual body/nested-cell target or an explicit field target.
+
+For a field, `expected_old` is its whole value and offsets are relative to that value; for a block they are relative to its whole text. The returned block `style.character_runs` uses whole-block offsets, including for fields.
+
+LF inside a complex paragraph can be formatted; tabs and ranges crossing an opaque control are refused. Mixed styles retain every property that was not requested, and other field/table/group anchors remain exact.
+
+Font-family changes apply the requested name to all seven language slots; they do not install or embed a font file. Paragraph formatting supports alignment and spacing/margins on the ordinary profile. Use the documented engine units internally; do not make the user construct JSON or calculate offsets.
+
+Read `tables` for complete table/cell geometry. Resize columns or stored row heights with one size per grid column/row; merged cells sum their spans. Format cell padding and top/center/bottom alignment, or table padding and spacing.
+
+These metadata edits preserve text, mixed styles and supported cell pictures. Stored row height is a minimum: content may expand the rendered row. Keep the requested dimensions distinct from a verified rendered layout.
+
+Read `pictures` for version-bound body/cell-picture targets, `picture_index` and exact `expected_properties`. Insert a user-selected local PNG or supported JPEG with its file hash into a plain body or top-level table-cell paragraph. Cell insertion stores an actual inline control in the cell.
+
+A paragraph supports up to 32 pictures; an update, replacement or deletion requires the returned zero-based `picture_index` when there is more than one. Reread after insertion/deletion because indexes can move. Never select a picture by its array position across the whole document.
+
+Replace a supported picture with PNG/JPEG while retaining its frame size, position and rotation and resetting its crop to the whole new image. Change its size/position, four-edge crop or integer-degree rotation, or remove its anchor.
+
+Crop amounts use the original image's `sourceWidth`/`sourceHeight`, not the displayed frame: 75 HWP units per source pixel. Convert the user's requested amounts internally. Rotation adjusts the bounding frame and offsets to keep its center. Other pictures, paragraphs, cells and existing image streams remain exact.
+
+Removal and replacement leave unused previous image bytes and recovery copies; do not describe them as permanent sensitive-data removal. Grouped objects use only the separate complex operations described above. Captions and table structural changes involving picture-bearing cells remain outside this picture profile.
+
+JPEG support is bounded to 8-bit baseline/progressive grayscale or three-component images; binary checks are not a full image-decoder or external-viewer layout certification.
+
+Move a plain body paragraph or a complete supported table after an actual body paragraph in the same section. Confirm both full texts; for a table select one of its actual cell targets. Complete table moves preserve its cells, styles and supported cell pictures.
+
+The first body group stays in place because it carries section settings; a table grouped there cannot be moved by this operation. Cell paragraph reordering and partial control extraction are outside this profile. Original source/anchor IDs can be reused through a verified batch.
+
+Verify `ok`, `saved`, `saved_path`, `output_sha256` and content checks. A byte-identical same-file result returns `saved:false, unchanged:true, save_required:false` with its current hash and no recovery write; report that no change was needed. Reread a changed file at its returned hash.
+
+Report the changed file directly, without a download task. If saving is unconfirmed, inspect the selected file before retrying. A stale-version error requires a new read; an unsupported edit remains unsaved. Restore only on the user's request using the returned backup ID and current hash.
+
+Content checks do not certify every HWP layout or complex object.

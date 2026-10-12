@@ -10,9 +10,11 @@ const root=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'..');
 const out=path.join(root,'outputs','plugin-package','hwp-easy');
 const source=path.join(root,'plugins','hwp-easy');
 const scripts=path.join(out,'skills','edit-local-hwp','scripts');
+const skillPrompt=await fs.readFile(path.join(source,'skills/edit-local-hwp/SKILL.md'));
+if(skillPrompt.byteLength>8000)throw Error('Plugin SKILL.md exceeds the host 8000-byte prompt limit; move details to references');
 await fs.mkdir(scripts,{recursive:true});
 await fs.copyFile(path.join(root,'LICENSE'),path.join(out,'LICENSE'));
-for(const file of ['plugin.json','assets/hwp-easy.svg','skills/edit-local-hwp/SKILL.md','skills/edit-local-hwp/agents/openai.yaml','skills/edit-local-hwp/references/requests.md']) {
+for(const file of ['plugin.json','assets/hwp-easy.svg','skills/edit-local-hwp/SKILL.md','skills/edit-local-hwp/agents/openai.yaml','skills/edit-local-hwp/references/requests.md','skills/edit-local-hwp/references/editing.md']) {
   const destination=path.join(out,file);await fs.mkdir(path.dirname(destination),{recursive:true});await fs.copyFile(path.join(source,file),destination);
 }
 const cfbNotice=localCfbNotices(root);

@@ -32,6 +32,11 @@ def prepare(archive_path: Path, destination: Path) -> dict:
         policy = archive.read("skills/edit-local-hwp/agents/openai.yaml").decode("utf-8")
         if "allow_implicit_invocation: false" not in policy:
             raise ValueError("Explicit-only skill policy is required")
+        if len(archive.read("skills/edit-local-hwp/SKILL.md")) > 8000:
+            raise ValueError("Skill prompt exceeds the host 8000-byte limit")
+        for reference in ("requests.md", "editing.md"):
+            if f"skills/edit-local-hwp/references/{reference}" not in names:
+                raise ValueError("Required skill reference is missing")
         for filename, field in (("local-runner.mjs", "runner_sha256"), ("rhwp_bg.wasm", "wasm_sha256")):
             content = archive.read(f"skills/edit-local-hwp/scripts/{filename}")
             if hashlib.sha256(content).hexdigest() != manifest[field]:
