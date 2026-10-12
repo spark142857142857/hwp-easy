@@ -1,5 +1,7 @@
 # HWP Easy
 
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+
 **한글 설치 없이, 에이전트로 HWP 양식의 필요한 칸을 읽고 수정합니다.**
 
 [English](README.en.md) · [사용 안내](docs/quick-start.md) · [문서 모음](docs/README.md)
@@ -59,4 +61,4 @@ docs/legacy/           이전 Windows COM 개발·배포·형식 안내
 
 일반 버그와 제안은 [Issues](https://github.com/spark142857142857/hwp-easy/issues)에 남겨 주세요. 개인 HWP·토큰·쿠키·인증 코드 대신 개인정보 없는 합성 재현을 사용합니다.
 
-HWP Easy 자체의 라이선스는 아직 확정하지 않았습니다. 외부 엔진의 MIT 고지는 프로젝트 자체의 라이선스와 구분하며 [외부 의존성 고지](THIRD_PARTY_NOTICES.md)를 유지합니다. Dots는 추후 확장 항목입니다.
+HWP Easy 자체 코드는 [MIT 라이선스](LICENSE)로 제공합니다. 외부 엔진·라이브러리에는 각각의 라이선스가 적용되며 [외부 의존성 고지](THIRD_PARTY_NOTICES.md)를 유지합니다. Dots는 추후 확장 항목입니다.

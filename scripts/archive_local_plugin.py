@@ -7,7 +7,7 @@ import zipfile
 ROOT = Path(__file__).resolve().parents[1]
 PACKAGE = ROOT / "outputs/local-plugin-20261011/hwp-easy-local"
 SKILL = "skills/edit-local-hwp"
-FILES = ("plugin.json", "build-manifest.json", f"{SKILL}/SKILL.md", f"{SKILL}/agents/openai.yaml",
+FILES = ("LICENSE", "plugin.json", "build-manifest.json", f"{SKILL}/SKILL.md", f"{SKILL}/agents/openai.yaml",
          f"{SKILL}/references/requests.md", f"{SKILL}/scripts/local-runner.mjs", f"{SKILL}/scripts/rhwp_bg.wasm",
          *(f"{SKILL}/scripts/{name}" for name in ("RHWP-LICENSE.txt", "RHWP-THIRD-PARTY-LICENSES.md", "PAKO-LICENSE.txt",
                                                   "PAKO-ZLIB-LICENSE.txt", "THIRD-PARTY-NOTICES.json")),

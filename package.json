@@ -2,6 +2,7 @@
   "name": "hwp-easy-engine-runtime",
   "private": true,
   "version": "0.1.0",
+  "license": "MIT",
   "description": "Pinned WASM runtime for the HWP Easy document engine; not a user CLI",
   "type": "module",
   "engines": { "node": ">=22" },

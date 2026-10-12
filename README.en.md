@@ -1,5 +1,7 @@
 # HWP Easy
 
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+
 **Read and edit supported HWP form fields with an agent, without installing Hancom.**
 
 [한국어](README.md) · [Documentation](docs/README.md) · [Developer setup](docs/developer-guide.md)
@@ -46,4 +48,4 @@ Developer setup requires Node.js 22+ and Python 3.11+. The new engine path does 
 
 Use [Issues](https://github.com/spark142857142857/hwp-easy/issues) for ordinary bugs and proposals, with synthetic reproductions. Do not post personal HWP files, credentials, cookies or authentication codes.
 
-The license for HWP Easy itself is not yet specified. Upstream engine notices apply to their respective components and do not relicense this project. See [third-party notices](THIRD_PARTY_NOTICES.md). Dots integration remains outside the MVP scope.
+HWP Easy's own code is available under the [MIT License](LICENSE). External engines and libraries retain their respective licenses; see [third-party notices](THIRD_PARTY_NOTICES.md). Dots integration remains outside the MVP scope.

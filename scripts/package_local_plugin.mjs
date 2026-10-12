@@ -11,6 +11,7 @@ const out=path.join(root,'outputs','local-plugin-20261011','hwp-easy-local');
 const source=path.join(root,'plugins','hwp-easy-local');
 const scripts=path.join(out,'skills','edit-local-hwp','scripts');
 await fs.mkdir(scripts,{recursive:true});
+await fs.copyFile(path.join(root,'LICENSE'),path.join(out,'LICENSE'));
 for(const file of ['plugin.json','skills/edit-local-hwp/SKILL.md','skills/edit-local-hwp/agents/openai.yaml','skills/edit-local-hwp/references/requests.md']) {
   const destination=path.join(out,file);await fs.mkdir(path.dirname(destination),{recursive:true});await fs.copyFile(path.join(source,file),destination);
 }

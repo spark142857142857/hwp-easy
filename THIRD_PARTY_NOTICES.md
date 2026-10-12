@@ -1,5 +1,7 @@
 # Third-party engine notices
 
+HWP Easy's own code is licensed under [MIT](LICENSE). The components below retain their respective licenses.
+
 This source repository depends on `@rhwp/core` **0.8.6**, pinned by `package-lock.json`. The npm package provides the HWP parser, writer and SVG renderer reused by the native adapter. It is not an engine authored by HWP Easy.
 
 - Upstream: [edwardkim/rhwp](https://github.com/edwardkim/rhwp)
