@@ -4,6 +4,7 @@ import path from 'node:path';
 import os from 'node:os';
 import {fileURLToPath} from 'node:url';
 import {createHash} from 'node:crypto';
+import {constants} from 'node:fs';
 
 const clients={'claude-code':'.claude',cursor:'.cursor'};
 const sha=bytes=>createHash('sha256').update(bytes).digest('hex');
@@ -50,7 +51,13 @@ export async function installSkill(directory,client,skillsRoot) {
  const target=path.join(parent,'hwp-easy');
  // Exclusive mkdir preserves any existing installation, including a symlink.
  await fs.mkdir(target);
- await fs.cp(path.resolve(directory),target,{recursive:true,errorOnExist:true,force:false});
+ // Copy individual files into our exclusively created directory. Node 22's
+ // recursive cp rejects an existing directory with errorOnExist on Linux.
+ for(const name of [...Object.keys(manifest.files),'build-manifest.json']) {
+  const destination=path.join(target,name);
+  await fs.mkdir(path.dirname(destination),{recursive:true});
+  await fs.copyFile(path.join(path.resolve(directory),name),destination,constants.COPYFILE_EXCL);
+ }
  await inspectSkill(target,client);
  return {status:'INSTALLED',client,version:manifest.version,skill_path:target,invocation:'/hwp-easy',explicit_only:true,
   runner_sha256:manifest.runner_sha256,wasm_sha256:manifest.wasm_sha256,host_settings_changed:false,server_registered:false};
