@@ -8,16 +8,34 @@ Read and edit HWP files with an agent without installing Hancom.
 
 **HWP Easy 0.2.18 is the main local execution package.** The agent edits an accessible HWP and saves verified changes to the same file. Previous bytes are retained for recovery. No HWP Easy server, account or upload is required.
 
-Select **HWP Easy** from the skill menu in a new chat, then specify the file and changes. In Codex CLI, type `$` and search for `HWP`. The skill is not applied automatically. An attached copy is distinct from the original file on your PC; cloud tasks process files available in their own environment.
+Codex, Claude Code and Cursor share the same engine. The skill applies **only when explicitly invoked by the user**.
 
-Claude Code and Cursor use personal skills invoked with **`/hwp-easy`**. Both share the same engine and remain explicit-only. See the [Korean/English installation and verification guide](docs/agent-client-skills.md).
+## Install and use
+
+| App | Installation | Invocation |
+| --- | --- | --- |
+| Codex | Install the HWP Easy plugin. [Installation and checks](docs/local-plugin-installation.md) | Select **HWP Easy** from the skill menu in a new chat. In CLI, type `$` and search for `HWP` |
+| Claude Code | Extract the client ZIP and place its `hwp-easy` folder at `~/.claude/skills/hwp-easy` | `/hwp-easy` |
+| Cursor | Extract the client ZIP and place its `hwp-easy` folder at `~/.cursor/skills/hwp-easy` | `/hwp-easy` |
+
+`~` means your home directory, equivalent to `%USERPROFILE%` on Windows. Check an existing skill's version before overwriting it. See the [Claude Code/Cursor guide](docs/agent-client-skills.md) for ZIP generation and installation details. Public downloads for general users are still being prepared.
+
+In a new Claude Code or Cursor conversation, specify the file path and requested edit:
+
+> /hwp-easy Read C:\Documents\application.hwp, fill the motivation cell with the text below, and save to the same file. Preserve the other cells.
+
+> /hwp-easy Restore C:\Documents\application.hwp to its state before the last edit.
+
+In Codex, select **HWP Easy** from the skill menu, then make the same request. Previous bytes are kept in the adjacent `.hwp-easy-backups` folder, and recovery also retains the current edited version. An attached copy is distinct from your PC original; cloud tasks process files in their own environment. [File selection, saving and recovery](docs/quick-start.md)
 
 ## Current status
 
 | Area | Status |
 | --- | --- |
 | Main package | HWP Easy 0.2.18, with its engine and WASM bundled. Requires filesystem access and Node.js 22+. |
-| Actual local installation | Windows Codex 0.2.17 installation/enabled status and Claude Code/Cursor 0.2.18 personal skill installation were confirmed. Installed runtimes passed synthetic editing, same-file save, history and exact-byte recovery. Runtime checks and actual AI-host invocation are recorded separately. |
+| Codex local installation | Windows Codex 0.2.17 installation/enabled status was confirmed. The installed runtime passed synthetic editing, same-file save, rereading, exact-byte recovery and independent verification. |
+| Claude Code/Cursor | Windows personal skill 0.2.18 installation and **actual `/hwp-easy` invocations in both CLIs** passed. Each used its installed runner to edit body text and a two-paragraph table cell, save in place, reread and restore the original in a separate invocation. Independent verification passed; Cursor IDE chat UI remains unverified. |
+| Automated checks | All [10 Linux/Windows CI jobs for the 0.2.18 code](https://github.com/spark142857142857/hwp-easy/actions/runs/38252416686) passed. |
 | Public directory | Publication of the local main package and installation by other users remain unverified. |
 | Fresh chat | Explicit-only Codex skills are intentionally hidden from the initial model list. CLI selection injected the installed skill body; plain invocation text in an app-tool-created chat did not. User screenshots confirmed desktop menu display and selection, while desktop transmission/execution remains unverified. |
 | Cloud | Compatible with an execution environment in principle; installing this main package and completing file transfer in a new cloud task still needs validation. |
@@ -41,7 +59,7 @@ Version 0.2.16 exposes observable body content as read-only when complex editing
 
 Support depends on document structure and the requested operation. Nested-table structure changes, field creation/deletion, grouped-picture replacement/rotation and unrestricted page-layout editing remain unsupported. Every operation in a batch must pass before a single save. Exact external-viewer page layout is not certified. See [local editing](docs/local-file-editing.md).
 
-HWP processing uses [`@rhwp/core`](https://github.com/edwardkim/rhwp) **0.8.6**. HWP Easy adds target checks, independent preservation validation, conflict-checked saving and recovery.
+HWP processing uses [`@rhwp/core`](https://github.com/edwardkim/rhwp) **0.8.6**. HWP Easy adds target checks, independent preservation validation, conflict-checked saving and recovery. Codex, Claude Code and Cursor distributions contain the same runner and WASM from a shared build, with matching hashes for both files.
 
 ## Repository map
 

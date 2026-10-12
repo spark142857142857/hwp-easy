@@ -8,16 +8,34 @@
 
 **HWP Easy 0.2.18은 로컬 실행 방식의 메인 패키지입니다.** 에이전트가 접근할 수 있는 파일을 읽고 수정한 뒤 **같은 HWP 파일에 저장**합니다. 이전 파일은 복구용으로 보관합니다. HWP Easy 서버, 계정, 웹 업로드는 필요하지 않습니다.
 
-설치한 뒤 새 채팅 입력창의 스킬 메뉴에서 **HWP Easy**를 선택하고 파일과 수정 내용을 알려 주세요. Codex CLI에서는 `$`를 입력한 뒤 `HWP`를 검색해 선택할 수 있습니다. 예: “이 HWP의 지원 동기 칸을 아래 내용으로 채우고 같은 파일에 저장해줘.” [사용과 복구 안내](docs/quick-start.md)
+Codex, Claude Code, Cursor에서 같은 엔진을 사용합니다. 스킬은 **사용자가 명시적으로 호출할 때만** 적용됩니다.
 
-Claude Code와 Cursor에서는 개인 스킬로 설치하고 **`/hwp-easy`**로 호출합니다. 두 앱용 패키지는 Codex와 같은 엔진을 사용하며 자동 적용되지 않습니다. [한국어·영어 설치 안내와 검증 범위](docs/agent-client-skills.md)
+## 설치하고 사용하기
+
+| 앱 | 설치 방법 | 호출 방법 |
+| --- | --- | --- |
+| Codex | HWP Easy 플러그인 설치. [설치·확인 안내](docs/local-plugin-installation.md) | 새 채팅의 스킬 메뉴에서 **HWP Easy** 선택. CLI에서는 `$`를 입력하고 `HWP` 검색 |
+| Claude Code | 앱용 ZIP을 풀고 `hwp-easy` 폴더를 `~/.claude/skills/hwp-easy`에 배치 | `/hwp-easy` |
+| Cursor | 앱용 ZIP을 풀고 `hwp-easy` 폴더를 `~/.cursor/skills/hwp-easy`에 배치 | `/hwp-easy` |
+
+`~`는 사용자 홈 폴더이며 Windows에서는 `%USERPROFILE%`에 해당합니다. 기존 스킬 폴더가 있으면 덮어쓰기 전에 설치 버전을 확인하세요. 앱용 ZIP 생성과 자세한 설치 방법은 [Claude Code·Cursor 안내](docs/agent-client-skills.md)에 있습니다. 일반 사용자용 공개 다운로드 배포는 아직 준비 중입니다.
+
+Claude Code·Cursor의 새 대화에서는 다음처럼 파일 경로와 수정 내용을 지정합니다.
+
+> /hwp-easy C:\문서\지원서.hwp의 지원 동기 칸을 아래 내용으로 채우고 같은 파일에 저장해줘. 다른 칸은 유지해줘.
+
+> /hwp-easy C:\문서\지원서.hwp를 방금 수정하기 전 내용으로 복구해줘.
+
+Codex에서는 스킬 메뉴에서 **HWP Easy**를 선택한 뒤 같은 방식으로 요청합니다. 이전 파일은 옆의 `.hwp-easy-backups` 폴더에 보관하며, 복구할 때도 현재 편집본을 보관합니다. [파일 지정·저장·복구 안내](docs/quick-start.md)
 
 ## 현재 상태
 
 | 구분 | 상태 |
 | --- | --- |
 | 메인 패키지 | HWP Easy 0.2.18. 텍스트, 문단, 표, 글자 서식과 그림의 지원 범위는 아래 표에 정리했습니다. |
-| 실제 로컬 설치 | Windows Codex 0.2.17 설치·활성 확인과 Claude Code/Cursor용 0.2.18 개인 스킬 설치를 확인했습니다. 설치된 실행기의 합성 HWP 편집, 같은 파일 저장, 재읽기, 이전 바이트 복구와 독립 판독을 통과했습니다. 앱별 실제 호출과 파일 검증은 별도로 기록합니다. |
+| Codex 로컬 설치 | Windows Codex 0.2.17 설치·활성 확인과 설치된 실행기의 합성 HWP 편집, 같은 파일 저장, 재읽기, 정확한 원본 복구·독립 판독을 통과했습니다. |
+| Claude Code·Cursor | Windows 개인 스킬 0.2.18 설치와 **두 CLI의 실제 `/hwp-easy` 호출**을 통과했습니다. 설치된 실행기로 본문·두 문단 표 셀 편집 → 같은 파일 저장 → 재읽기 → 별도 호출 원본 복구를 확인했습니다. 독립 판독도 통과했으며 Cursor IDE 채팅 화면 검증은 별도입니다. |
+| 자동 검사 | 0.2.18 코드의 [Linux·Windows CI 10개 작업](https://github.com/spark142857142857/hwp-easy/actions/runs/38252416686)이 모두 통과했습니다. |
 | 공개 배포 | 로컬 메인 패키지의 공개 디렉터리 게시와 일반 사용자 설치 검증은 아직입니다. |
 | 실행 환경 | 파일 접근과 Node.js 22 이상이 필요합니다. Codex가 제공하는 런타임을 사용할 수 있으며 엔진과 WASM은 패키지에 포함됩니다. |
 | Codex Cloud | 실행 환경에서 사용할 수 있는 방식입니다. 이번 로컬 메인 패키지의 새 Cloud 설치와 파일 전달 흐름은 별도 검증이 필요합니다. |
@@ -41,7 +59,7 @@ Claude Code와 Cursor에서는 개인 스킬로 설치하고 **`/hwp-easy`**로 
 
 원격 0.1.9는 서버에 올린 사본을 편집하고 내려받는 이전 방식입니다. [보관 패키지](plugins/archive/README.md), [기존 사용 안내](docs/remote-quick-start.md), [심사 기록](docs/public-plugin-release.md)을 남겼습니다. 운영 사이트 종료나 문서 삭제, 심사 철회는 이번 정리에 포함하지 않았습니다.
 
-HWP 처리에는 [`@rhwp/core`](https://github.com/edwardkim/rhwp) **0.8.6**을 사용합니다. HWP Easy는 이 WASM 엔진에 편집 대상 확인, 독립적인 보존 검사, 저장과 에이전트 연결을 더합니다.
+HWP 처리에는 [`@rhwp/core`](https://github.com/edwardkim/rhwp) **0.8.6**을 사용합니다. HWP Easy는 이 WASM 엔진에 편집 대상 확인, 독립적인 보존 검사, 저장과 에이전트 연결을 더합니다. Codex·Claude Code·Cursor 배포본은 공통 빌드의 실행기와 WASM을 포함하며, 두 파일의 해시가 같습니다.
 
 ## 저장소 구조
 
