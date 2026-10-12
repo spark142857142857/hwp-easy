@@ -1,5 +1,9 @@
 # Codex Cloud의 합성 HWP 파일 왕복 검사
 
+[문서 안내](README.md) · [Cloud 검증 기준](codex-cloud.md) · [현재 상태](project-status.md)
+
+**이전 원격 경로의 개발 검증 절차**입니다. 현재 로컬 메인 0.2.18의 일반 사용자 설치 안내나 새 Cloud 전체 검증 완료로 적용하지 않습니다.
+
 저장소를 준비한 Codex Cloud 작업에서 합성 HWP를 입력하고 결과를 받는 개발 검증 절차다. 로컬 Codex나 Linux CI, ChatGPT Work Cloud의 서버 내부 진단 결과와는 따로 기록한다. 아래 명령은 검증용이며 일반 사용자 설치 방법은 아니다. 개인 HWP나 데스크톱에서 캡처한 응답은 사용하지 않는다.
 
 ## 환경 준비

@@ -1,8 +1,14 @@
 # 한글 없는 HWP 엔진과 로컬 MCP 개발자 안내
 
+[문서 안내](README.md) · [현재 로컬 구조](architecture.md) · [개발 시작](developer-guide.md)
+
+**보관한 Python stdio MCP의 개발 안내**입니다. 현재 메인 0.2.18은 Python 없이 실행하는 Node/WASM 배포본이며 [지원 범위](supported-features.md)도 이 문서의 초기 프로필과 다릅니다. 아래 명령은 일반 사용자 설치 방법이 아닙니다.
+
+본문: [구현 범위](#구현-구조와-지원-범위) · [환경 준비](#개발-환경-준비) · [MCP 실행](#로컬-mcp-실행) · [검사 재현](#테스트-재현과-현재-근거)
+
 상태: 2026년 10월 2일의 1차 개발 구현. 일반 사용자용 설치, 연결 안내가 아니다.
 
-2026년 10월 11일 추가한 **Python 없이 실행하는 로컬 스킬 후보**의 같은 파일 저장, 새 문단/표, 여러 문단 답변은 [로컬 직접 편집](local-file-editing.md)을 따른다. 아래의 보수적인 Python stdio MCP와 지원 프로필이 다르며 기존 MCP의 제한을 해제한 것으로 표시하지 않는다.
+2026년 10월 11일부터 확장한 **Node/WASM 로컬 실행기**의 같은 파일 저장, 새 문단/표, 여러 문단 답변은 [지원 기능](supported-features.md)과 [로컬 편집 상세](local-file-editing.md)를 따른다. 아래의 보수적인 Python stdio MCP와 지원 프로필이 다르며 기존 MCP의 제한을 해제한 것으로 표시하지 않는다.
 
 이 경로는 **바이너리 HWP 5.x를 읽고, 본문 문단이나 표 셀을 지정해 수정하고, 현재 HWP에 저장**한다. 한글, COM, Wine, GUI를 실행하지 않으며 PDF, DOCX, HWPX를 입력, 중간 파일, 출력으로 만들지 않는다. 기존 `one-hwp`와 `one-hwp-mcp` COM 경로는 [이전 안내](legacy/development.md)에 별도로 보존한다.
 

@@ -1,75 +1,121 @@
 # 개발 시작
 
-소스를 실행하거나 변경할 때 필요한 환경과 검사 명령을 정리했습니다. 메인 플러그인의 설치와 실제 확인 상태는 [로컬 설치 검증](local-plugin-installation.md), 일반 사용 흐름은 [사용 안내](quick-start.md)에서 다룹니다.
+[프로젝트 소개](../README.md) · [문서 안내](README.md) · [구조 설명](architecture.md)
+
+소스를 변경하거나 배포 패키지를 생성할 때 필요한 환경과 검사 명령입니다. 현재 메인은 **로컬 HWP Easy 0.2.18**이며, Codex·Claude Code·Cursor가 같은 실행기와 엔진을 사용합니다. 일반 사용자는 [처음 사용하기](quick-start.md), 실제 설치·호출 상태는 [현재 상태](project-status.md)를 먼저 확인하세요.
 
 ## 환경과 구성
 
-Node.js **22 이상**과 Python **3.11 이상**을 사용합니다. `@rhwp/core` 0.8.6과 각 lockfile의 고정 의존성을 유지합니다. 새 엔진의 실제 HWP 검사에는 한글, COM, Wine, GUI가 필요하지 않습니다.
+개발에는 **Node.js 22 이상**, **Python 3.11 이상**이 필요합니다. 문서 실행용 배포본에는 Node 실행 코드·WASM·JS 의존성을 묶으며 Python을 요구하지 않습니다. `@rhwp/core` 0.8.6과 각 lockfile의 고정 의존성을 유지합니다. 엔진 검사에 한글·COM·Wine·GUI가 필요하지 않습니다.
 
-Linux와 macOS에서는 저장소 루트에서 다음을 실행합니다.
+저장소 루트에서 개발 의존성을 설치합니다.
 
 ```bash
-python -m venv .venv
-.venv/bin/python -m pip install -e ".[native,mcp]"
 npm ci --ignore-scripts --no-audit --no-fund
+python -m venv .venv
 ```
 
-Windows PowerShell에서는 Python 실행 경로를 바꿉니다.
+Python의 엔진·MCP 회귀 검사에는 플랫폼에 맞는 명령을 사용합니다.
+
+```bash
+# Linux / macOS
+.venv/bin/python -m pip install -e ".[native,mcp]"
+```
 
 ```powershell
-python -m venv .venv
+# Windows PowerShell
 .\.venv\Scripts\python.exe -m pip install -e ".[native,mcp]"
-npm ci --ignore-scripts --no-audit --no-fund
 ```
 
-원격 Worker를 변경할 때는 `probes/sites-runtime/`에서도 `npm ci --ignore-scripts --no-audit --no-fund`를 실행합니다. 개발 의존성만 설치하며 MCP 등록이나 운영 배포는 하지 않습니다.
+로컬 실행기 번들의 `esbuild`와 일부 의존성 고지도 `probes/sites-runtime/`을 사용합니다. **로컬 패키지를 만들 때도** 다음 설치가 필요합니다. 원격 Worker를 배포하거나 MCP를 등록하는 명령은 아닙니다.
+
+```bash
+npm --prefix probes/sites-runtime ci --ignore-scripts --no-audit --no-fund
+```
+
+이후 Python 검사·압축 명령은 준비한 가상 환경의 Python으로 실행합니다.
 
 ## 변경 위치
 
 | 작업 | 먼저 볼 위치 |
 | --- | --- |
-| 엔진 공통 처리, 언어별 글꼴, 스타일 | `src/one_hwp/*.mjs`와 `tests/test_rhwp_bridge.mjs` |
-| 메인 로컬 실행기, 파일 저장 | `src/one_hwp/local_runner.mjs`, `local_file.mjs`와 `local_*.mjs` |
-| 이전 로컬 Python MCP | `src/one_hwp/native_*.py` |
-| 원격 편집, 독립 보존 검사 | `probes/sites-runtime/engine/`와 `guard/` |
-| MCP, 사용자 신원, 업로드, 브라우저 보기 | `probes/sites-runtime/host/`와 `worker/` |
-| D1/R2 버전, 복구, 삭제 | `probes/sites-runtime/storage/`, `db/`, `drizzle/` |
-| 메인 플러그인과 번들 생성 | `plugins/hwp-easy/`, `scripts/package_local_plugin.mjs`, `scripts/archive_local_plugin.py` |
-| Claude Code·Cursor 개인 스킬 | `scripts/package_agent_skills.mjs`, `install_agent_skill.mjs`, `check-agent-packages.mjs`, [재현 안내](agent-client-skills.md#개발자-재현) |
-| 원격 보관 패키지 | `plugins/archive/hwp-easy-remote-0.1.9/`와 `scripts/package_public_plugin.py` |
-| 제품 범위, 사용 안내 | `docs/PRD.md`, `docs/quick-start.md` |
+| 공통 엔진 처리·글꼴·스타일 | `src/one_hwp/*.mjs`, `tests/test_rhwp_bridge.mjs` |
+| 로컬 실행·같은 파일 저장·복구 | `src/one_hwp/local_runner.mjs`, `local_file.mjs`, `local_*.mjs` |
+| 독립 보존 검사 | `probes/sites-runtime/guard/` |
+| Codex 패키지와 공통 번들 | `plugins/hwp-easy/`, `scripts/package_local_plugin.mjs`, `scripts/archive_local_plugin.py` |
+| Claude Code·Cursor 패키지·설치 검사 | `scripts/package_agent_skills.mjs`, `install_agent_skill.mjs`, `check-agent-packages.mjs` |
+| 사용자 안내·요구사항 | `docs/quick-start.md`, `supported-features.md`, `project-status.md`, `PRD.md` |
+| 이전 Python MCP | `src/one_hwp/native_*.py` |
+| 보관한 원격 엔진·서비스 | `probes/sites-runtime/engine/`, `host/`, `worker/` |
+| 보관한 원격 저장·복구 | `probes/sites-runtime/storage/`, `db/`, `drizzle/` |
+| 보관한 원격 제출 패키지 | `plugins/archive/hwp-easy-remote-0.1.9/`, `scripts/package_public_plugin.py` |
 
-실제 개인 HWP는 테스트 입력으로 커밋하거나 CI에 올리지 않습니다. 합성 파일은 테스트 코드에서 생성합니다. `testdocs/`는 사용자가 제공한 로컬 문서용이며 기본 읽기 전용입니다.
+개인 HWP를 테스트 입력으로 커밋하거나 CI에 올리지 않습니다. 합성 파일은 테스트 코드에서 생성합니다. `testdocs/`는 로컬 문서용이며 기본 읽기 전용입니다.
 
 ## 검사
 
-먼저 문서 링크와 개인 파일 제외 규칙을 확인하고 공통 엔진 검사를 실행합니다.
+문서 링크·개인 파일 제외 규칙과 공통 엔진 검사는 저장소 루트에서 실행합니다.
 
 ```bash
 node scripts/check-repository.mjs
 npm run test:engine
 ```
 
-Python 엔진과 MCP 통합 검사의 실행 조건은 [로컬 엔진 테스트](native-engine.md#테스트-재현과-현재-근거)에 있습니다. 모의 COM 테스트, 실제 WASM 실행, 외부 뷰어 비교는 각각 따로 기록합니다. CI는 Linux와 Windows에서 공통 엔진, Python 회귀, Worker 검사를 실행합니다.
+`check-repository.mjs`는 Git에 추적되는 Markdown 파일과 링크를 검사합니다. 새 문서는 스테이징한 뒤 실행해야 검사 대상에 포함됩니다.
 
-원격 변경에는 해당 디렉터리에서 전체 Worker 검사를 수행합니다.
+로컬 실행기를 바꾸면 관련 `tests/test_local_*.mjs`와 패키지 검사를 수행합니다. Python 엔진·MCP 회귀 검사의 조건은 [이전 Python 경로의 재현 안내](native-engine.md#테스트-재현과-현재-근거)를 참고하세요. 모의 COM, 실제 WASM 실행, 앱의 실제 호출, 외부 뷰어 비교는 서로 다른 검증으로 기록합니다.
+
+## 클라이언트 패키지 생성과 검증
+
+먼저 공통 Node/WASM 실행기를 **한 번** 빌드하고, 그 결과로 세 앱의 배포본을 생성합니다.
 
 ```bash
-cd probes/sites-runtime
-npm test
+node scripts/package_local_plugin.mjs
+python scripts/archive_local_plugin.py
+node scripts/package_agent_skills.mjs
+python scripts/archive_agent_skills.py
 ```
 
-공개 패키지는 저장소 루트에서 다음으로 검사합니다.
+| 배포 대상 | 생성 ZIP |
+| --- | --- |
+| Codex | `outputs/plugin-package/hwp-easy-0.2.18.zip` |
+| Claude Code | `outputs/agent-packages/hwp-easy-claude-code-0.2.18.zip` |
+| Cursor | `outputs/agent-packages/hwp-easy-cursor-0.2.18.zip` |
+
+패키지 생성은 앱 설치나 공개 게시를 수행하지 않습니다. Claude Code·Cursor의 설치 검사와 **격리된 폴더의 실제 실행기** 검증은 다음으로 재현합니다.
 
 ```bash
+node --test tests/test_agent_skill_install.mjs
+node scripts/check-agent-packages.mjs
+python scripts/check-installed-plugin.py outputs/agent-client-check/claude-code
+python scripts/check-installed-plugin.py outputs/agent-client-check/cursor
+```
+
+독립 Python 판독은 합성 HWP 내용·비대상 기록 보존·정확한 복구를 검사합니다. 이 명령이 통과해도 앱의 모델이 스킬을 호출한 결과를 대신하지는 않습니다. 실제 호스트 호출 결과는 [클라이언트 검증](agent-client-skills.md#검증-범위)에 기록합니다.
+
+사용자가 개인 스킬 설치를 요청한 환경에서는 다음 명령을 사용할 수 있습니다. 기존 폴더가 있으면 덮어쓰기를 거부하며 호스트 설정이나 MCP를 등록하지 않습니다.
+
+```bash
+node scripts/install_agent_skill.mjs --client claude-code --package outputs/agent-packages/claude-code/hwp-easy
+node scripts/install_agent_skill.mjs --client cursor --package outputs/agent-packages/cursor/hwp-easy
+```
+
+Codex의 로컬 마켓플레이스 준비·설치·설치본 검사는 [Codex 설치 재현](local-plugin-installation.md#개발자가-재현하기)을 따릅니다. 합성 검증 결과와 생성 ZIP은 `outputs/`에 두고 Git에 넣지 않습니다.
+
+## 보관한 원격 경로 검사
+
+아래 명령은 **원격 0.1.9 계열**을 위한 것입니다. 로컬 메인의 설치·사용에는 필요하지 않습니다.
+
+```bash
+npm --prefix probes/sites-runtime test
 python -m unittest discover -s tests -p test_public_plugin_package.py -v
 python scripts/package_public_plugin.py --draft
 ```
 
-`--draft`는 제출 메타데이터가 아직 부족해도 초안 ZIP을 만듭니다. 이 옵션을 빼면 필수 항목의 누락을 거부합니다. 생성한 ZIP의 포털 검사와 OAuth 연결, 심사, 게시는 별도로 진행해야 합니다.
+원격 패키지의 `--draft`는 제출 메타데이터가 부족해도 초안 ZIP을 만듭니다. 이 옵션을 빼면 필수 항목 누락을 거부합니다. 포털 검사·OAuth 연결·심사·게시는 별도 작업이며 [이전 원격 출시 기록](public-plugin-release.md)을 따릅니다.
 
 ## 변경과 배포
 
-변경 이유와 결과, 검사 방법을 적고 `feat:`, `fix:`, `docs:` 등 Conventional Commits 형식으로 커밋합니다. 다른 작업의 변경은 유지합니다. 현재 저장소 관리 방침에 따라 검증한 변경은 `main`에 직접 반영할 수 있습니다.
+변경 이유·결과·검사 방법을 적고 `feat:`, `fix:`, `docs:` 등 Conventional Commits 형식으로 커밋합니다. 다른 작업의 변경은 유지하며 저장소 관리 방침에 따라 검증한 변경을 `main`에 직접 반영합니다.
 
-GitHub에 코드를 push해도 운영 사이트나 플러그인 디렉터리에 자동 배포되지는 않습니다. 배포는 별도로 요청받았을 때 진행하고 기존 운영 신원과 D1/R2 바인딩을 유지합니다. [구조 설명](architecture.md)과 [공개 출시 준비](public-plugin-release.md)를 참고하세요.
+GitHub push는 운영 사이트 배포나 플러그인 디렉터리 게시와 별개입니다. 배포는 별도 요청에 따라 진행하고 기존 운영 신원과 D1/R2 바인딩을 유지합니다. 현재 준비 상태는 [현재 상태](project-status.md), 이전 구현은 [문서 안내](README.md#보관한-이전-경로)에서 찾을 수 있습니다.
