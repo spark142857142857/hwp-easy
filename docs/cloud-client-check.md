@@ -1,6 +1,6 @@
 # Codex Cloud의 합성 HWP 파일 왕복 검사
 
-[문서 안내](README.md) · [Cloud 검증 기준](codex-cloud.md) · [현재 상태](project-status.md)
+[문서 인덱스](README.md) · [Cloud 검증 기준](codex-cloud.md) · [프로젝트 상태](project-status.md)
 
 **이전 원격 경로의 개발 검증 절차**입니다. 현재 로컬 메인 0.2.18의 일반 사용자 설치 안내나 새 Cloud 전체 검증 완료로 적용하지 않습니다.
 

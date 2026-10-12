@@ -1,8 +1,10 @@
-# 구조 설명
+<a id="구조-설명"></a>
 
-[프로젝트 소개](../README.md) · [문서 안내](README.md) · [개발 시작](developer-guide.md)
+# 아키텍처
 
-HWP Easy는 **하나의 HWP 엔진을 여러 에이전트 앱에서 호출하는 로컬 도구**입니다. 엔진은 문서를 읽고 수정본을 만들며, 로컬 실행기는 대상과 보존 조건을 검사해 같은 파일에 저장합니다. 앱마다 엔진을 따로 유지하지 않습니다.
+[프로젝트 개요](../README.md) · [문서 인덱스](README.md) · [개발 가이드](developer-guide.md)
+
+HWP Easy는 공통 HWP 엔진과 로컬 실행기를 여러 에이전트 클라이언트에 배포합니다. 엔진은 문서를 읽고 수정본을 만들며, 로컬 실행기는 대상과 보존 조건을 검사해 같은 파일에 저장합니다. 앱마다 엔진을 따로 유지하지 않습니다.
 
 ## 메인 로컬 파일 흐름
 
@@ -77,7 +79,7 @@ flowchart LR
 | 원격 서비스 | `host/`, `worker/` | MCP·브라우저 요청, 파일 전송, 사용자 신원 적용 |
 | 지속 저장 | `storage/`, `db/`, `drizzle/` | 버전 보관, 충돌·중복 검사, 복구·삭제 |
 
-보관 패키지는 `plugins/archive/hwp-easy-remote-0.1.9/`에 있습니다. [원격 문서 계약](remote-documents.md), [원격 저장 계약](durable-storage.md)을 참고하세요.
+보관 패키지는 `plugins/archive/hwp-easy-remote-0.1.9/`에 있습니다. [원격 문서 계약](remote-documents.md), [원격 저장 계약](durable-storage.md)에 기록합니다.
 
 ## 저장과 권한
 

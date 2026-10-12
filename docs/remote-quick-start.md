@@ -1,6 +1,6 @@
 # 원격 HWP Easy 0.1.9 사용 기록
 
-[문서 안내](README.md) · [현재 로컬 사용법](quick-start.md) · [현재 상태](project-status.md)
+[문서 인덱스](README.md) · [현재 로컬 사용법](quick-start.md) · [프로젝트 상태](project-status.md)
 
 **보관한 원격 0.1.9의 서버 사본 사용 기록**입니다. 아래 업로드·다운로드는 현재 로컬 메인과 다른 흐름입니다.
 

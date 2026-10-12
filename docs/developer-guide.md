@@ -1,8 +1,10 @@
-# 개발 시작
+<a id="개발-시작"></a>
 
-[프로젝트 소개](../README.md) · [문서 안내](README.md) · [구조 설명](architecture.md)
+# 개발 가이드
 
-소스를 변경하거나 배포 패키지를 생성할 때 필요한 환경과 검사 명령입니다. 현재 메인은 **로컬 HWP Easy 0.2.18**이며, Codex·Claude Code·Cursor가 같은 실행기와 엔진을 사용합니다. 일반 사용자는 [처음 사용하기](quick-start.md), 실제 설치·호출 상태는 [현재 상태](project-status.md)를 먼저 확인하세요.
+[프로젝트 개요](../README.md) · [문서 인덱스](README.md) · [아키텍처](architecture.md)
+
+소스를 변경하거나 배포 패키지를 생성할 때 필요한 환경과 검사 명령입니다. 현재 메인은 **로컬 HWP Easy 0.2.18**이며, Codex·Claude Code·Cursor가 같은 실행기와 엔진을 사용합니다. 파일 편집 절차는 [사용 가이드](quick-start.md), 실제 설치·호출 결과는 [프로젝트 상태](project-status.md)에 정리합니다.
 
 ## 환경과 구성
 
@@ -27,7 +29,7 @@ Python의 엔진·MCP 회귀 검사에는 플랫폼에 맞는 명령을 사용�
 .\.venv\Scripts\python.exe -m pip install -e ".[native,mcp]"
 ```
 
-로컬 실행기 번들의 `esbuild`와 일부 의존성 고지도 `probes/sites-runtime/`을 사용합니다. **로컬 패키지를 만들 때도** 다음 설치가 필요합니다. 원격 Worker를 배포하거나 MCP를 등록하는 명령은 아닙니다.
+로컬 실행기 번들의 `esbuild`와 일부 의존성 고지도 `probes/sites-runtime/`을 사용합니다. 로컬 패키지 생성에도 다음 의존성 설치가 필요합니다. 원격 Worker를 배포하거나 MCP를 등록하는 명령은 아닙니다.
 
 ```bash
 npm --prefix probes/sites-runtime ci --ignore-scripts --no-audit --no-fund
@@ -37,7 +39,7 @@ npm --prefix probes/sites-runtime ci --ignore-scripts --no-audit --no-fund
 
 ## 변경 위치
 
-| 작업 | 먼저 볼 위치 |
+| 영역 | 소스 |
 | --- | --- |
 | 공통 엔진 처리·글꼴·스타일 | `src/one_hwp/*.mjs`, `tests/test_rhwp_bridge.mjs` |
 | 로컬 실행·같은 파일 저장·복구 | `src/one_hwp/local_runner.mjs`, `local_file.mjs`, `local_*.mjs` |
@@ -67,7 +69,7 @@ npm run test:engine
 
 ## 클라이언트 패키지 생성과 검증
 
-먼저 공통 Node/WASM 실행기를 **한 번** 빌드하고, 그 결과로 세 앱의 배포본을 생성합니다.
+먼저 공통 Node/WASM 실행기를 한 번 빌드하고, 그 결과로 세 앱의 배포본을 생성합니다.
 
 ```bash
 node scripts/package_local_plugin.mjs
@@ -82,7 +84,7 @@ python scripts/archive_agent_skills.py
 | Claude Code | `outputs/agent-packages/hwp-easy-claude-code-0.2.18.zip` |
 | Cursor | `outputs/agent-packages/hwp-easy-cursor-0.2.18.zip` |
 
-패키지 생성은 앱 설치나 공개 게시를 수행하지 않습니다. Claude Code·Cursor의 설치 검사와 **격리된 폴더의 실제 실행기** 검증은 다음으로 재현합니다.
+패키지 생성은 앱 설치나 공개 게시를 수행하지 않습니다. Claude Code·Cursor의 설치 검사와 격리된 폴더에 설치한 실행기의 검증은 다음으로 재현합니다.
 
 ```bash
 node --test tests/test_agent_skill_install.mjs
@@ -118,4 +120,4 @@ python scripts/package_public_plugin.py --draft
 
 변경 이유·결과·검사 방법을 적고 `feat:`, `fix:`, `docs:` 등 Conventional Commits 형식으로 커밋합니다. 다른 작업의 변경은 유지하며 저장소 관리 방침에 따라 검증한 변경을 `main`에 직접 반영합니다.
 
-GitHub push는 운영 사이트 배포나 플러그인 디렉터리 게시와 별개입니다. 배포는 별도 요청에 따라 진행하고 기존 운영 신원과 D1/R2 바인딩을 유지합니다. 현재 준비 상태는 [현재 상태](project-status.md), 이전 구현은 [문서 안내](README.md#보관한-이전-경로)에서 찾을 수 있습니다.
+GitHub push는 운영 사이트 배포나 플러그인 디렉터리 게시와 별개입니다. 배포는 별도 요청에 따라 진행하고 기존 운영 신원과 D1/R2 바인딩을 유지합니다. 현재 준비 상태는 [프로젝트 상태](project-status.md), 이전 구현은 [문서 인덱스](README.md#보관-자료)에서 찾을 수 있습니다.

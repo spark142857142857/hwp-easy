@@ -1,6 +1,6 @@
 # HWP Easy 스킬 발견과 명시적 호출
 
-[문서 안내](README.md) · [처음 사용하기](quick-start.md) · [현재 상태](project-status.md)
+[문서 인덱스](README.md) · [사용 가이드](quick-start.md) · [프로젝트 상태](project-status.md)
 
 Codex에서 **HWP Easy가 보이지 않거나 호출이 전달되지 않을 때** 읽는 진단 안내입니다. 아래 설치·전달 실증은 0.2.17을 기준으로 하며 현재 메인 0.2.18의 배포 상태와 구분합니다.
 
