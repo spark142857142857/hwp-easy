@@ -2,6 +2,20 @@
 
 HWP Easy는 WASM 엔진으로 HWP를 처리하고, 에이전트가 선택한 대상만 수정하도록 검사합니다. 엔진 코드는 공통으로 사용하며 파일 접근과 저장은 로컬 실행기와 원격 Worker가 각각 맡습니다.
 
+## 메인 로컬 파일 흐름
+
+2026년 10월 12일부터 로컬 실행 방식의 0.2.15가 HWP Easy 메인입니다. 설치 패키지에 Node 실행 코드와 WASM을 포함하며 HWP Easy 서버나 OAuth 연결을 요구하지 않습니다.
+
+```mermaid
+flowchart LR
+  U[사용자: 스킬 선택과 HWP 지정] --> A[Codex 에이전트]
+  A --> E[설치된 Node/WASM 실행기와 독립 검사]
+  E -->|버전과 저장 결과 확인| F[같은 HWP 파일]
+  E -->|이전 바이트 보관과 복구| B[인접 복구 폴더]
+```
+
+PC 또는 Cloud 실행 환경의 파일 권한을 따릅니다. Cloud와 첨부 사본은 PC 원본과 자동 동기화하지 않습니다. `local_runner.mjs`가 읽기·계획·편집·이력·복구를 제공하고 `local_file.mjs`가 충돌 검사, 복구 사본과 같은 경로 저장을 담당합니다. 원격 0.1.9는 별도 보관 경로입니다.
+
 ## 원격 문서 흐름
 
 ```mermaid
@@ -30,8 +44,10 @@ flowchart LR
 | 원격 엔진 계약 | `probes/sites-runtime/engine/` | 전체/부분 읽기, 대상별 편집 제한, 사전 계획, 입력 작업량 검사 |
 | 원격 서비스 | `host/`, `worker/` | MCP와 브라우저 라우팅, 입력 검증, 파일 전송, 사용자 신원 적용 |
 | 지속 저장 | `storage/`, `db/`, `drizzle/` | 버전 보관, 충돌 검사, 중복 저장 방지, 복구와 삭제 |
-| 로컬 서비스 | `src/one_hwp/native_*.py` | 허용 경로의 로컬 MCP, 별도 백업과 기대 버전 저장 |
-| 배포 패키지 | `plugins/hwp-easy/` | HTTPS MCP와 OAuth를 연결하는 공개 제출 초안 |
+| 메인 로컬 실행기 | `src/one_hwp/local_*.mjs` | 직접 파일 읽기와 편집, 검증된 같은 파일 저장·이력·복구 |
+| 이전 Python 연결 | `src/one_hwp/native_*.py` | 좁은 지원 범위의 로컬 MCP와 저장 |
+| 메인 배포 패키지 | `plugins/hwp-easy/` | 명시적으로 선택하는 스킬과 번들 실행기의 소스 |
+| 보관한 원격 패키지 | `plugins/archive/hwp-easy-remote-0.1.9/` | 기존 HTTPS MCP·OAuth 제출 패키지 |
 
 표에서 `host/`, `worker/`, `storage/` 등의 원격 경로는 모두 `probes/sites-runtime/` 아래입니다. 이 디렉터리는 실험 때 정한 이름을 유지하지만 현재 비공개 운영 Worker의 개발 소스도 포함합니다. 변경 위치는 [개발 시작](developer-guide.md)을 따릅니다.
 

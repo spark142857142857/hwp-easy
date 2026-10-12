@@ -15,7 +15,7 @@ const definitions=[
  {label:'delete_body',steps:[{identity:body,type:'delete_paragraph'},{identity:'마지막',type:'splice_text',start:0,end:0,new_text:'이동 '},{identity:'B',kind:'cell',type:'format_table',props:{paddingLeft:300,cellSpacing:20}}]},
 ];
 try{
- const installed=path.join(temporary,'isolated package');fs.cpSync(path.join(root,'outputs/local-plugin-20261011/hwp-easy-local'),installed,{recursive:true});assert.equal(fs.existsSync(path.join(temporary,'node_modules')),false);const runner=path.join(installed,'skills/edit-local-hwp/scripts/local-runner.mjs');
+ const installed=path.join(temporary,'isolated package');fs.cpSync(path.join(root,'outputs/plugin-package/hwp-easy'),installed,{recursive:true});assert.equal(fs.existsSync(path.join(temporary,'node_modules')),false);const runner=path.join(installed,'skills/edit-local-hwp/scripts/local-runner.mjs');
  const call=request=>{const file=path.join(temporary,'request.json');fs.writeFileSync(file,JSON.stringify(request));const result=spawnSync(process.execPath,[runner,'--request',file],{cwd:temporary,encoding:'utf8',timeout:65000,windowsHide:true,maxBuffer:8*1024*1024,env:{...process.env,NODE_PATH:''}});assert.equal(result.status,0,result.stdout);assert.equal(result.stderr,'');const response=JSON.parse(result.stdout);assert.equal(response.ok,true);return response.result;};
  const read=source=>call({action:'read',source,max_chars:64000,max_blocks:128});
  for(const definition of definitions){

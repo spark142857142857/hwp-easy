@@ -4,7 +4,7 @@ import {fixture} from '../tests/rhwp_fixtures.mjs';import {digest} from '../src/
 const root=process.cwd(),out=process.argv[2]?path.resolve(process.argv[2]):path.join(root,'outputs/local-move-20261011');fs.mkdirSync(out,{recursive:true});
 const temporary=fs.mkdtempSync(path.join(os.tmpdir(),'hwp-easy-move-package-')),cases=[];
 try{
- const installed=path.join(temporary,'isolated package');fs.cpSync(path.join(root,'outputs/local-plugin-20261011/hwp-easy-local'),installed,{recursive:true});assert.equal(fs.existsSync(path.join(temporary,'node_modules')),false);const runner=path.join(installed,'skills/edit-local-hwp/scripts/local-runner.mjs');
+ const installed=path.join(temporary,'isolated package');fs.cpSync(path.join(root,'outputs/plugin-package/hwp-easy'),installed,{recursive:true});assert.equal(fs.existsSync(path.join(temporary,'node_modules')),false);const runner=path.join(installed,'skills/edit-local-hwp/scripts/local-runner.mjs');
  const call=request=>{const file=path.join(temporary,'request.json');fs.writeFileSync(file,JSON.stringify(request));const r=spawnSync(process.execPath,[runner,'--request',file],{cwd:temporary,encoding:'utf8',timeout:65000,windowsHide:true,maxBuffer:8*1024*1024,env:{...process.env,NODE_PATH:''}});assert.equal(r.status,0,r.stdout);assert.equal(r.stderr,'');const response=JSON.parse(r.stdout);assert.equal(response.ok,true);return response.result;};
  const read=source=>call({action:'read',source,max_chars:64000,max_blocks:128});
  for(const spec of [

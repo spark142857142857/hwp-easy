@@ -2,6 +2,8 @@
 
 로컬 편집 패키지의 지원 기능과 저장 방법, 시험 결과를 정리했다. Codex가 접근할 수 있는 HWP 파일을 지정하면 해당 파일을 편집하고 같은 경로에 저장한다. 웹 업로드나 다운로드는 필요하지 않으며 이전 파일은 복구용으로 보관한다.
 
+**2026년 10월 12일 현재:** 이 실행 방식의 **HWP Easy 0.2.15**를 메인으로 선택했다. 정식 Codex 설치 명령으로 실제 설치·활성 확인 후 설치된 실행기의 편집·같은 파일 저장·복구와 독립 판독을 통과했다. [설치 검증](local-plugin-installation.md), [기본 사용법](quick-start.md)을 따른다. 아래 10월 11일 기록의 “후보”, 전역 설치 미실행 표시는 해당 검사를 수행한 당시 상태다.
+
 ## 자주 쓰는 양식과 여러 줄 답변
 
 로컬 패키지 후보 **0.2.15**는 누름틀이나 중첩 표, 그림 그룹이 있는 문서에서 선택한 글자의 서식을 변경할 수 있다. 굵게, 기울임, 밑줄, 취소선, 크기, 색, 글꼴을 지원한다. 문서별 조건과 시험 결과는 아래에 정리했다.
@@ -36,7 +38,7 @@
 
 로컬 후보 **0.2.13**은 `read`에서 누름틀 `fields`, 그림 `picture_groups`와 중첩 셀의 `cell_path`를 반환한다. 동일 이름의 필드는 이름 대신 반환된 필드 대상 ID와 기존 전체 값을 사용한다.
 
-누름틀 값 수정, 비우기는 `set_field`, 안쪽 셀의 부분 수정은 `splice_text`, 그룹 전체 이동은 `move_picture_group`, 자식 그림 하나의 자르기는 `crop_group_picture`이다. 작업 형식은 [로컬 요청 형식](../plugins/hwp-easy-local/skills/edit-local-hwp/references/requests.md)에 설명한다.
+누름틀 값 수정, 비우기는 `set_field`, 안쪽 셀의 부분 수정은 `splice_text`, 그룹 전체 이동은 `move_picture_group`, 자식 그림 하나의 자르기는 `crop_group_picture`이다. 작업 형식은 [로컬 요청 형식](../plugins/hwp-easy/skills/edit-local-hwp/references/requests.md)에 설명한다.
 
 사용자가 내부 JSON을 작성할 필요는 없다.
 
@@ -278,6 +280,6 @@ python scripts/check-local-text.py outputs/local-find-20261011
 python scripts/archive_local_plugin.py
 ```
 
-생성 패키지는 ignored `outputs/local-plugin-20261011/hwp-easy-local`에 있다. [스킬 소스](../plugins/hwp-easy-local/skills/edit-local-hwp/SKILL.md)는 명시적으로 선택하는 `edit-local-hwp`이며 `allow_implicit_invocation: false`를 유지한다. 개발 후보의 분리 실행 검증과 실제 디렉터리 설치, 업데이트, 심사는 별개의 단계다. 전역 Codex 설정/MCP 등록, 운영 Sites 배포 및 기존 심사본은 변경하지 않았다.
+현재 생성 패키지는 ignored `outputs/plugin-package/hwp-easy/`, ZIP은 `outputs/plugin-package/hwp-easy-0.2.15.zip`에 있다. [스킬 소스](../plugins/hwp-easy/skills/edit-local-hwp/SKILL.md)는 명시적으로 선택하는 `edit-local-hwp`이며 `allow_implicit_invocation: false`를 유지한다. 10월 11일의 분리 실행 검사는 전역 설치, MCP 등록, 운영 Sites와 심사본을 바꾸지 않았다. 10월 12일 사용자 요청에 따른 실제 로컬 플러그인 설치는 [설치 기록](local-plugin-installation.md)과 구분한다. 공개 디렉터리 게시와 심사는 별개의 단계다.
 
 공식 문서는 스킬의 실행 코드, 자원을 패키지에 포함하는 방식을 제공하며, 공개 제출의 로컬 MCP에는 별도 지원 경로를 안내한다. 따라서 로컬 stdio MCP가 누구나 설치하는 디렉터리에 그대로 등록되었다고 주장하지 않는다. [패키지 안내](https://developers.openai.com/plugins/build/plugins), [스킬 안내](https://developers.openai.com/plugins/build/skills).

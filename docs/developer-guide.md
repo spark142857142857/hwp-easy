@@ -1,6 +1,6 @@
 # 개발 시작
 
-소스를 실행하거나 변경할 때 필요한 환경과 검사 명령을 정리했습니다. 일반 사용자의 플러그인 설치 방법은 [공개 출시 준비](public-plugin-release.md)에서 다룹니다.
+소스를 실행하거나 변경할 때 필요한 환경과 검사 명령을 정리했습니다. 메인 플러그인의 설치와 실제 확인 상태는 [로컬 설치 검증](local-plugin-installation.md), 일반 사용 흐름은 [사용 안내](quick-start.md)에서 다룹니다.
 
 ## 환경과 구성
 
@@ -29,11 +29,13 @@ npm ci --ignore-scripts --no-audit --no-fund
 | 작업 | 먼저 볼 위치 |
 | --- | --- |
 | 엔진 공통 처리, 언어별 글꼴, 스타일 | `src/one_hwp/*.mjs`와 `tests/test_rhwp_bridge.mjs` |
-| 로컬 Python MCP, 안전한 파일 저장 | `src/one_hwp/native_*.py` |
+| 메인 로컬 실행기, 파일 저장 | `src/one_hwp/local_runner.mjs`, `local_file.mjs`와 `local_*.mjs` |
+| 이전 로컬 Python MCP | `src/one_hwp/native_*.py` |
 | 원격 편집, 독립 보존 검사 | `probes/sites-runtime/engine/`와 `guard/` |
 | MCP, 사용자 신원, 업로드, 브라우저 보기 | `probes/sites-runtime/host/`와 `worker/` |
 | D1/R2 버전, 복구, 삭제 | `probes/sites-runtime/storage/`, `db/`, `drizzle/` |
-| 공개 플러그인 | `plugins/hwp-easy/`와 `scripts/package_public_plugin.py` |
+| 메인 플러그인과 번들 생성 | `plugins/hwp-easy/`, `scripts/package_local_plugin.mjs`, `scripts/archive_local_plugin.py` |
+| 원격 보관 패키지 | `plugins/archive/hwp-easy-remote-0.1.9/`와 `scripts/package_public_plugin.py` |
 | 제품 범위, 사용 안내 | `docs/PRD.md`, `docs/quick-start.md` |
 
 실제 개인 HWP는 테스트 입력으로 커밋하거나 CI에 올리지 않습니다. 합성 파일은 테스트 코드에서 생성합니다. `testdocs/`는 사용자가 제공한 로컬 문서용이며 기본 읽기 전용입니다.

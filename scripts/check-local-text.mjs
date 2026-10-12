@@ -8,7 +8,7 @@ const out=process.argv[2]?path.resolve(process.argv[2]):path.join(root,'outputs/
 const temporary=fs.mkdtempSync(path.join(os.tmpdir(),'hwp-easy-text-package-'));
 const cases=[];
 try{
- const packageDir=path.join(temporary,'isolated package');fs.cpSync(path.join(root,'outputs/local-plugin-20261011/hwp-easy-local'),packageDir,{recursive:true});
+ const packageDir=path.join(temporary,'isolated package');fs.cpSync(path.join(root,'outputs/plugin-package/hwp-easy'),packageDir,{recursive:true});
  const runner=path.join(packageDir,'skills/edit-local-hwp/scripts/local-runner.mjs'),source=path.join(temporary,'selected.hwp');
  const call=request=>{const file=path.join(temporary,'request.json');fs.writeFileSync(file,JSON.stringify(request));const response=spawnSync(process.execPath,[runner,'--request',file],{cwd:temporary,encoding:'utf8',windowsHide:true,timeout:65000,env:{...process.env,NODE_PATH:''}});assert.equal(response.status,0,response.stdout);assert.equal(response.stderr,'');const r=JSON.parse(response.stdout);assert.equal(r.ok,true);return r.result;};
  const read=()=>{let cursor,version,blocks=[];do{const r=call({action:'read',source,max_chars:64000,max_blocks:128,...(cursor?{cursor,expected_sha256:version}:{})});version=r.source_sha256;blocks.push(...r.blocks);cursor=r.next_cursor;}while(cursor);return {source_sha256:version,blocks};};

@@ -1,15 +1,17 @@
 # 문서 모음
 
-처음이라면 저장소 [README](../README.md)에서 지원 기능과 배포 상태를 확인하세요. 로컬 파일을 편집하는 방법과 원격 MCP를 사용하는 방법은 아래에 나누어 정리했습니다.
+처음이라면 저장소 [README](../README.md)에서 지원 기능과 배포 상태를 확인하세요. 로컬 HWP Easy 0.2.15가 메인이며 원격 0.1.9 자료는 보관 기록입니다.
 
 ## 사용 안내
 
 | 문서 | 알 수 있는 내용 |
 | --- | --- |
-| [사용 안내](quick-start.md) | 비공개 연결의 업로드, 요청, 다운로드, 복구, 삭제 |
+| [사용 안내](quick-start.md) | 설치한 HWP Easy 선택, 파일 지정, 같은 파일 저장과 복구 |
+| [실제 로컬 설치 검증](local-plugin-installation.md) | Windows Codex 설치·활성 확인과 설치된 실행기의 전체 파일 처리 |
 | [로컬 직접 편집](local-file-editing.md) | 로컬 파일에 직접 저장, 새 문단/표, 여러 문단 답변과 패키지 검증 |
 | [MVP 상태](mvp-status.md) | 확인한 실제 흐름과 미검증 범위 |
-| [공개 플러그인 준비](public-plugin-release.md) | 누구나 설치하는 공개 배포의 남은 조건 |
+| [기존 원격 사용 기록](remote-quick-start.md) | 보관한 0.1.9의 서버 업로드와 다운로드 |
+| [원격 공개 플러그인 기록](public-plugin-release.md) | 기존 OAuth·심사·게시 준비의 관측 기록 |
 | [개인정보처리방침](privacy-policy.md) | 처리 정보, 보관, 삭제와 개인정보 문의 |
 | [이용약관](terms-of-service.md) | 제공 기능, 문서 권한, 저장과 이용 조건 |
 

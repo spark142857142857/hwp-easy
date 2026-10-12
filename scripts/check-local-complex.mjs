@@ -10,7 +10,7 @@ const root=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'..');
 const report=path.resolve(process.argv[2]??path.join(root,'outputs','local-complex-check'));
 const real=process.argv[3]=== '--testdocs',originals=real?fs.readdirSync(path.join(root,'testdocs')).filter(n=>n.endsWith('.hwp')).map(n=>({file:path.join(root,'testdocs',n),bytes:fs.readFileSync(path.join(root,'testdocs',n))})):[];
 const temporary=fs.mkdtempSync(path.join(os.tmpdir(),'hwp-complex-package-')),runner=path.join(temporary,'plugin','skills','edit-local-hwp','scripts','local-runner.mjs');
-fs.mkdirSync(report,{recursive:true});fs.cpSync(path.join(root,'outputs','local-plugin-20261011','hwp-easy-local'),path.join(temporary,'plugin'),{recursive:true});
+fs.mkdirSync(report,{recursive:true});fs.cpSync(path.join(root,'outputs','plugin-package','hwp-easy'),path.join(temporary,'plugin'),{recursive:true});
 const source=path.join(temporary,'selected.hwp'),request=path.join(temporary,'request.json'),cases=[];
 function call(input){fs.writeFileSync(request,JSON.stringify(input));const result=spawnSync(process.execPath,[runner,'--request',request],{encoding:'utf8',timeout:65000,windowsHide:true});assert.equal(result.status,0,'Packaged operation failed');const answer=JSON.parse(result.stdout);assert.equal(answer.ok,true);return answer.result;}
 function read(){let cursor,first,blocks=[];do{const page=call({action:'read',source,max_chars:64000,max_blocks:128,...(cursor?{cursor}:{})});first??=page;blocks.push(...page.blocks);cursor=page.next_cursor;}while(cursor);assert.ok(blocks.every(b=>b.start_offset===0&&b.fragment_complete));return {...first,blocks};}

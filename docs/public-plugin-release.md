@@ -1,5 +1,7 @@
 # HWP Easy 공개 플러그인 출시 준비
 
+**보관 기록 · 2026년 10월 12일:** 원격 0.1.9는 보관용으로 전환했다. 현재 메인은 로컬 HWP Easy 0.2.15이며 [실제 설치 검증](local-plugin-installation.md)을 따른다. 아래 포털·OAuth·Sites 항목은 기존 원격 경로의 기록이다. 이번 정리로 운영 사이트, 저장 문서나 기존 제출 상태를 변경하지 않았다.
+
 2026년 10월 10일 공개 플러그인 배포를 목표로 정했다. 사용자가 ChatGPT나 Codex의 디렉터리에서 HWP Easy를 찾아 설치할 수 있어야 한다. 지인 초대나 소유자 전용 사이트의 업데이트만으로 배포가 끝난 것은 아니다.
 
 Dots는 이번 범위에서 제외했다. 전체 플랫폼 백업과 재해 복원, 외부 키 보관은 후순위로 두었다.
@@ -17,7 +19,7 @@ Dots는 이번 범위에서 제외했다. 전체 플랫폼 백업과 재해 복�
 
 ## 준비한 패키지와 검사
 
-`plugins/hwp-easy/`는 공식 제출 문서가 지원하는 Codex 호환 `.codex-plugin/plugin.json`, `.mcp.json`, SVG 아이콘으로 된 MCP 전용 초안이다. Agent Plugins 1.0.0의 실제 MCP JSON Schema는 OpenAI 문서가 설명하는 서버별 OAuth `extensions`를 추가 속성으로 거부해, 초안을 호환 형식으로 준비했다. 실제 포털의 최초 업로드는 필수 `interface.developerName` 누락으로 거부됐고, 검증된 게시자 이름을 반영한 ZIP은 초안으로 수락됐다.
+`plugins/archive/hwp-easy-remote-0.1.9/`는 공식 제출 문서가 지원하는 Codex 호환 `.codex-plugin/plugin.json`, `.mcp.json`, SVG 아이콘으로 된 MCP 전용 초안이다. Agent Plugins 1.0.0의 실제 MCP JSON Schema는 OpenAI 문서가 설명하는 서버별 OAuth `extensions`를 추가 속성으로 거부해, 초안을 호환 형식으로 준비했다. 실제 포털의 최초 업로드는 필수 `interface.developerName` 누락으로 거부됐고, 검증된 게시자 이름을 반영한 ZIP은 초안으로 수락됐다.
 
 개인 스킬, hooks, 비공개 등록 App ID, 토큰, 클라이언트 시크릿, 개인 문서를 포함하지 않는다. 실제 `/mcp` URL과 정확한 OAuth resource를 유지하고, 미확인 grant, client ID, scope, token endpoint 인증 방법을 만들지 않는다. 기본 영문 소개와 한국어 번역에는 파일, 텍스트 한도, PC 원본과 원격 저장의 차이, 서식, 인증 갱신의 제한을 명시했다. `author.name`과 `interface.developerName`은 선택한 검증 신원과 일치한다.
 
@@ -61,7 +63,7 @@ Sites가 반환한 실제 `auth_client_id`를 확인했다. 플랫폼의 사이�
 
 현재 저장된 검사 초안은 portable 0.1.2이며 Domain verified / Authorization required / Not submitted / Not published 상태다. 인증 화면과 도구 스캔은 완료되지 않았다.
 
-portable 검사본은 root `plugin.json`, `mcp.json`과 명시적인 `streamable-http`를 사용했다. OAuth 설정은 0.1.1과 같고, Secret, scope, 등록 방법을 추측해 추가하지 않았다. 선택 사항인 `tokenEndpointAuthMethod`를 생략한 것은 실제 등록 방법을 확인한 뜻이 아니다. 원래 `plugins/hwp-easy/`와 최종 패키징의 미완료 차단은 유지한다. 별도 검사본의 포털 수락은 Agent Plugins 기본 JSON Schema 통과나 공개 연결 성공을 인증하지 않는다.
+portable 검사본은 root `plugin.json`, `mcp.json`과 명시적인 `streamable-http`를 사용했다. OAuth 설정은 0.1.1과 같고, Secret, scope, 등록 방법을 추측해 추가하지 않았다. 선택 사항인 `tokenEndpointAuthMethod`를 생략한 것은 실제 등록 방법을 확인한 뜻이 아니다. 원래 `plugins/archive/hwp-easy-remote-0.1.9/`와 최종 패키징의 미완료 차단은 유지한다. 별도 검사본의 포털 수락은 Agent Plugins 기본 JSON Schema 통과나 공개 연결 성공을 인증하지 않는다.
 
 | 조사한 경로 | 실제 확인과 한계 |
 | --- | --- |

@@ -4,7 +4,7 @@ import {fixture} from '../tests/rhwp_fixtures.mjs';
 const root=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'..'),out=process.argv[2]?path.resolve(process.argv[2]):path.join(root,'outputs/local-find-20261011');fs.mkdirSync(out,{recursive:true});
 const temp=fs.mkdtempSync(path.join(os.tmpdir(),'hwp-easy-find-package-')),cases=[];
 try{
- const pkg=path.join(temp,'isolated package');fs.cpSync(path.join(root,'outputs/local-plugin-20261011/hwp-easy-local'),pkg,{recursive:true});
+ const pkg=path.join(temp,'isolated package');fs.cpSync(path.join(root,'outputs/plugin-package/hwp-easy'),pkg,{recursive:true});
  const runner=path.join(pkg,'skills/edit-local-hwp/scripts/local-runner.mjs'),source=path.join(temp,'same selected.hwp');
  const call=request=>{const file=path.join(temp,'request.json');fs.writeFileSync(file,JSON.stringify(request));const r=spawnSync(process.execPath,[runner,'--request',file],{cwd:temp,encoding:'utf8',timeout:65000,windowsHide:true,maxBuffer:8*1024*1024,env:{...process.env,NODE_PATH:''}});assert.equal(r.status,0,r.stdout);assert.equal(r.stderr,'');const data=JSON.parse(r.stdout);assert.equal(data.ok,true);return data.result;};
  const read=()=>{let cursor,state,blocks=[];do{const r=call({action:'read',source,max_chars:64000,max_blocks:128,...(cursor?{cursor,expected_sha256:state.source_sha256}:{})});state=r;for(const part of r.blocks){if(part.start_offset===0)blocks.push({...part});else{const old=blocks.at(-1);assert.equal(old.target_id,part.target_id);assert.equal(old.end_offset,part.start_offset);old.text+=part.text;old.end_offset=part.end_offset;old.fragment_complete=part.fragment_complete;}}cursor=r.next_cursor;}while(cursor);return {...state,blocks};};

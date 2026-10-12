@@ -1,5 +1,5 @@
 interface:
-  display_name: "HWP Easy Local"
+  display_name: "HWP Easy"
   short_description: "Read and edit a selected HWP in the same file"
   default_prompt: "Use $edit-local-hwp to edit the HWP I select and save it in place."
 policy:

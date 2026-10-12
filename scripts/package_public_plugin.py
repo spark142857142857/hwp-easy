@@ -9,7 +9,7 @@ from urllib.parse import urlsplit
 import zipfile
 
 ROOT = Path(__file__).resolve().parents[1]
-PACKAGE = ROOT / "plugins" / "hwp-easy"
+PACKAGE = ROOT / "plugins" / "archive" / "hwp-easy-remote-0.1.9"
 FILES = (".codex-plugin/plugin.json", ".mcp.json", "assets/hwp-easy.svg")
 # Public identifier returned by Sites. Actual consent, callback and discovery
 # succeeded with this declaration on 2026-10-10; it is not a client secret.

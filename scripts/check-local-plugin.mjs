@@ -9,9 +9,10 @@ import { createHash } from 'node:crypto';
 import { fixture } from '../tests/rhwp_fixtures.mjs';
 import {deflateSync} from 'node:zlib';
 const root=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'..');
-const built=path.join(root,'outputs/local-plugin-20261011/hwp-easy-local');
+const built=path.join(root,'outputs/plugin-package/hwp-easy');
 const temporary=fs.mkdtempSync(path.join(os.tmpdir(),'hwp-easy-package-test-'));
 const reportDir=path.join(root,'outputs/local-plugin-20261011');
+fs.mkdirSync(reportDir,{recursive:true});
 const hash=bytes=>createHash('sha256').update(bytes).digest('hex');
 try {
  const packageDir=path.join(temporary,'installed package');fs.cpSync(built,packageDir,{recursive:true});

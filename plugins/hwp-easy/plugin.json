@@ -1,6 +1,6 @@
 {
   "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
-  "name": "hwp-easy-local",
+  "name": "hwp-easy",
   "version": "0.2.15",
   "description": "Read and edit a selected local HWP, saving verified changes to the same file.",
   "author": { "name": "원석 유" },
@@ -9,9 +9,11 @@
   "extensions": {
     "com.openai": {
       "interface": {
-        "displayName": "HWP Easy Local",
+        "displayName": "HWP Easy",
         "shortDescription": "Edit your selected HWP in place",
-        "longDescription": "Read a selected local HWP and save checked edits to the same file. Supports multiline answers, paragraph and merged-table changes, font formatting and multiple PNG/JPEG pictures in body or cell paragraphs, including replacement, resizing, cropping, rotation and removal. Runs in an agent environment with local filesystem and Node.js access and retains private recovery copies. No document upload, external browser or HWP Easy account is needed. This is a local development candidate, separate from the remote package under directory review.",
+        "longDescription": "Read an HWP file accessible to your agent and save verified edits to the same file, with previous bytes retained for recovery. Supports text, paragraphs, supported merged tables, character formatting and body/cell PNG/JPEG pictures. Selected field values, nested-cell text and character formatting, and picture-group moves and crops are also supported. Requires filesystem access and Node.js 22+ in the agent execution environment. The document engine is bundled; no HWP Easy server, account or upload is required. Support depends on document structure; exact external-viewer page layout is not certified.",
+        "composerIcon": "./assets/hwp-easy.svg",
+        "logo": "./assets/hwp-easy.svg",
         "category": "Productivity",
         "capabilities": ["Read local HWP", "Save to the same file", "Edit paragraphs", "Edit simple tables", "Restore previous bytes"],
         "websiteURL": "https://github.com/spark142857142857/hwp-easy",

@@ -7,12 +7,12 @@ import { build } from '../probes/sites-runtime/node_modules/esbuild/lib/main.js'
 import { copyRuntimeNotices, verifyRuntimeNotices } from '../probes/sites-runtime/scripts/runtime-notices.mjs';
 import {localCfbNotices} from './local-cfb-notices.mjs';
 const root=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'..');
-const out=path.join(root,'outputs','local-plugin-20261011','hwp-easy-local');
-const source=path.join(root,'plugins','hwp-easy-local');
+const out=path.join(root,'outputs','plugin-package','hwp-easy');
+const source=path.join(root,'plugins','hwp-easy');
 const scripts=path.join(out,'skills','edit-local-hwp','scripts');
 await fs.mkdir(scripts,{recursive:true});
 await fs.copyFile(path.join(root,'LICENSE'),path.join(out,'LICENSE'));
-for(const file of ['plugin.json','skills/edit-local-hwp/SKILL.md','skills/edit-local-hwp/agents/openai.yaml','skills/edit-local-hwp/references/requests.md']) {
+for(const file of ['plugin.json','assets/hwp-easy.svg','skills/edit-local-hwp/SKILL.md','skills/edit-local-hwp/agents/openai.yaml','skills/edit-local-hwp/references/requests.md']) {
   const destination=path.join(out,file);await fs.mkdir(path.dirname(destination),{recursive:true});await fs.copyFile(path.join(source,file),destination);
 }
 const cfbNotice=localCfbNotices(root);
@@ -34,7 +34,7 @@ for(const [file,from] of [
 ])await fs.copyFile(path.join(root,from),path.join(out,'licenses',file));
 const hash=data=>createHash('sha256').update(data).digest('hex');
 const metadata=JSON.parse(await fs.readFile(path.join(source,'plugin.json'),'utf8'));
-const manifest={package:'hwp-easy-local',version:metadata.version,runtime:'Node >=22; bundled JS and WASM; no npm or Python at execution time',
+const manifest={package:metadata.name,version:metadata.version,runtime:'Node >=22; bundled JS and WASM; no npm or Python at execution time',
   local_cfb_writer:cfbNotice,
   engine:'@rhwp/core 0.8.6',wasm_sha256:hash(await fs.readFile(path.join(scripts,'rhwp_bg.wasm'))),
   runner_sha256:hash(await fs.readFile(path.join(scripts,'local-runner.mjs'))),
