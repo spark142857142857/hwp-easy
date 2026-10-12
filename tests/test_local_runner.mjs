@@ -7,6 +7,7 @@ import { fixture } from './rhwp_fixtures.mjs';
 import { initializeLocal, runLocal } from '../src/one_hwp/local_runner.mjs';
 import { readLocal, saveLocal, digest } from '../src/one_hwp/local_file.mjs';
 import { withPageNumber } from '../probes/sites-runtime/tests/page-number-fixtures.mjs';
+import {readCfb} from '../probes/sites-runtime/guard/container.mjs';
 initializeLocal(fs.readFileSync(new URL('../node_modules/@rhwp/core/rhwp_bg.wasm',import.meta.url)));
 function workspace(t) {
  const dir=fs.mkdtempSync(path.join(os.tmpdir(),'hwp-easy-local-test-'));
@@ -117,6 +118,20 @@ test('pagination is version bound across independent runner calls',async t=>{
  const next=await runLocal({action:'read',source,expected_sha256:first.source_sha256,cursor:first.next_cursor,max_chars:3});
  assert.deepEqual(next.page_starts_at,{block_index:first.next_cursor.block_index,offset:first.next_cursor.offset});
  await assert.rejects(runLocal({action:'read',source,cursor:{...first.next_cursor,sha256:'0'.repeat(64)}}),/CURSOR_VERSION_CONFLICT/);
+});
+
+test('preview renders current saved bytes without using or changing embedded preview caches',async t=>{
+ const {source}=workspace(t),read=await runLocal({action:'read',source,max_chars:64000}),original=fs.readFileSync(source);
+ const before=await runLocal({action:'preview',source,expected_sha256:read.source_sha256});
+ const saved=await runLocal({action:'edit',source,expected_sha256:read.source_sha256,operations:[replacement(read,'중간 합성 문단','현재 미리보기 본문')]});
+ const bytes=fs.readFileSync(source),mtime=fs.statSync(source).mtimeMs;
+ const after=await runLocal({action:'preview',source,expected_sha256:saved.output_sha256});
+ assert.equal(after.preview_source,'current_document_render');assert.equal(after.embedded_preview_cache,'not_used');assert.equal(after.saved,false);
+ assert.notEqual(after.svg,before.svg);assert.ok(after.svg.startsWith('<svg'));
+ const oldStreams=readCfb(original),newStreams=readCfb(bytes);
+ for(const name of ['PrvText','PrvImage'])if(oldStreams.has(name))assert.deepEqual(newStreams.get(name),oldStreams.get(name));
+ assert.deepEqual(fs.readFileSync(source),bytes);assert.equal(fs.statSync(source).mtimeMs,mtime);
+ await assert.rejects(runLocal({action:'preview',source,expected_sha256:read.source_sha256}),/VERSION_CONFLICT/);
 });
 
 test('identical publication verifies current identity without creating recovery files',t=>{

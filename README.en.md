@@ -6,22 +6,24 @@ Read and edit HWP files with an agent without installing Hancom.
 
 [한국어](README.md) | [Usage](docs/quick-start.md) | [Documentation](docs/README.md)
 
-**HWP Easy 0.2.15 is the main local execution package.** The agent edits an accessible HWP and saves verified changes to the same file. Previous bytes are retained for recovery. No HWP Easy server, account or upload is required.
+**HWP Easy 0.2.16 is the main local execution package.** The agent edits an accessible HWP and saves verified changes to the same file. Previous bytes are retained for recovery. No HWP Easy server, account or upload is required.
 
-Select **HWP Easy** from the skill menu, or explicitly invoke `$edit-local-hwp`, then specify the file and changes. The skill is not applied automatically. An attached copy is distinct from the original file on your PC; cloud tasks process files available in their own environment.
+Select **HWP Easy** from the skill menu, or explicitly invoke `$hwp-easy:edit-local-hwp`, then specify the file and changes. The skill is not applied automatically. An attached copy is distinct from the original file on your PC; cloud tasks process files available in their own environment.
 
 ## Current status
 
 | Area | Status |
 | --- | --- |
-| Main package | HWP Easy 0.2.15, with its engine and WASM bundled. Requires filesystem access and Node.js 22+. |
+| Main package | HWP Easy 0.2.16, with its engine and WASM bundled. Requires filesystem access and Node.js 22+. |
 | Actual local installation | Installed through Codex's supported CLI on Windows on October 12, 2026, and confirmed installed and enabled. The installed runtime passed synthetic read, edit, same-file save, history and exact-byte recovery checks. |
 | Public directory | Publication of the local main package and installation by other users remain unverified. |
-| Fresh chat | Start a new chat to refresh the pre-install skill list. Skill-menu selection in a fresh chat was not part of the runtime check. |
+| Fresh chat | The installed skill was missing from the initial supplied list. Explicit use of the installed skill found through the official discovery API passed edit/save/recovery checks; initial injection and menu selection remain unverified. |
 | Cloud | Compatible with an execution environment in principle; installing this main package and completing file transfer in a new cloud task still needs validation. |
 | Remote 0.1.9 | Archived separately and excluded from the main installation. Existing deployment and submission records are retained. |
 
 [Installation evidence and reproduction](docs/local-plugin-installation.md) distinguish the installed runtime check from public distribution and visual layout certification.
+
+Version 0.2.16 exposes observable body content as read-only when complex editing targets cannot be verified. Twelve public complex HWP files passed reading, including eight partial read-only results; four supported files passed edit/save/recovery and independent raw-record checks. See [follow-up quality evidence](docs/local-plugin-quality.md).
 
 ## Supported local editing
 

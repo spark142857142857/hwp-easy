@@ -79,10 +79,28 @@ export async function runLocal(request) {
   if(request.action==='find')validateFind(request,snapshot.sha256);
   const engine=createDocumentEngine(HwpDocument,{includeTableMetadata:request.action!=='find',plainStyleInspection:true});
   const complex=hasLocalComplexContent(readHwp(snapshot.bytes));
-  const document=complex&&!['preview','restore'].includes(request.action)?createLocalComplexSnapshot(HwpDocument,snapshot.bytes,snapshot.sha256):await engine.open(snapshot.bytes),version=document.source_sha256;
+  let document,complexReadFailure;
+  try {
+    document=complex&&!['preview','restore'].includes(request.action)?createLocalComplexSnapshot(HwpDocument,snapshot.bytes,snapshot.sha256):await engine.open(snapshot.bytes);
+  } catch(error) {
+    // Unsupported lists or drawings must not hide every readable body block.
+    // This fallback is exclusively read-only: never reuse its targets to edit.
+    const readOnlyFailures=['COMPLEX_LIST_UNSUPPORTED','COMPLEX_LIST_UNVERIFIED','TARGET_MAPPING_UNVERIFIED','GROUP_PROFILE_UNSUPPORTED','GROUP_IMAGE_UNVERIFIED'];
+    if(request.action!=='read'||!(error instanceof GuardError)||!readOnlyFailures.includes(error.code))throw error;
+    complexReadFailure=error.code;
+    document=await engine.open(snapshot.bytes);
+  }
+  const version=document.source_sha256;
   if(request.action==='find')return {...findLocalDocument(document,request),source:snapshot.source};
   if(request.action==='read') {
     const result=document.read({expected_sha256:version,...Object.fromEntries(['cursor','max_chars','max_blocks'].filter(k=>Object.hasOwn(request,k)).map(k=>[k,request[k]]))});
+    if(complexReadFailure)return {...result,
+      blocks:result.blocks.map(block=>({...block,target_id:null,editable:false,structural_editable:false,text_range_editable:false,character_format_editable:false})),
+      fields:[],picture_groups:[],complex_profile:true,partial_read_only:true,partial_read_reason:complexReadFailure,
+      target_mapping_verified:false,all_content_supported:false,content_complete:false,
+      unsupported:[...result.unsupported,{kind:'complex_read_only_fallback',reason:complexReadFailure}],
+      notice:'확인 가능한 본문과 표 셀만 읽기 전용으로 표시합니다. 머리말·글상자 등 다른 개체의 내용은 빠질 수 있으며 이 조회 결과로는 편집할 수 없습니다.',
+      source:snapshot.source,persistence:'local_file',saved:false};
     if(complex)return {...result,source:snapshot.source,persistence:'local_file',saved:false};
     let structural;
     if(!result.all_content_supported || result.blocks.some(b=>!b.editable||b.style.profile==='existing_line_breaks_not_editable')) {
@@ -98,7 +116,7 @@ export async function runLocal(request) {
     try{pictures=localPictures(HwpDocument,snapshot.bytes,version);}catch(error){if(!(error instanceof GuardError))throw error;picture_profile_supported=false;}
     return {...result,pictures,picture_profile_supported,source:snapshot.source,persistence:'local_file',saved:false};
   }
-  if(request.action==='preview')return {...document.preview({expected_sha256:version,page:request.page??0}),source:snapshot.source,saved:false};
+  if(request.action==='preview')return {...document.preview({expected_sha256:version,page:request.page??0}),preview_source:'current_document_render',embedded_preview_cache:'not_used',source:snapshot.source,saved:false};
   if(request.action==='restore') {
     const recovery=restoreLocal(snapshot,request.backup_id);
     await engine.open(recovery.bytes);

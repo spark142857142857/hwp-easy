@@ -5,6 +5,8 @@ description: Read and edit an explicitly selected local HWP, change supported pa
 
 Use only when explicitly invoked for the current task. The user's instructions take precedence over this workflow.
 
+The installed plugin's qualified skill name is `hwp-easy:edit-local-hwp`. Use the installed skill entry supplied by the host; never infer its cache path from a version number.
+
 Use this package's `scripts/local-runner.mjs` with a Node.js 22+ executable in the agent's execution environment. If available, `load_workspace_dependencies` supplies the bundled Node path.
 
 The package includes the engine and WASM; do not ask the user to install Python, pip or npm. If the environment has no local file access or suitable Node runtime, state that limitation; do not claim to edit a PC file from a remote-only chat.
@@ -20,6 +22,10 @@ Move an existing picture group with `move_picture_group`, confirming the group's
 `crop_group_picture` selects an explicit returned leaf picture number, including a group inside a group, with that picture's full crop/source-size properties; other images and group transforms remain unchanged. Group resize, rotation and child image replacement remain unsupported.
 
 The complex read is a verified body/cell text map, not a claim that every opaque object's content has been read. Reread after saving and report the actual edited file.
+
+When `partial_read_only:true` is returned, explain that only observable body/top-level cell content is available and other object content may be missing. Its blocks have no edit targets; do not plan an edit or treat cursor exhaustion as full-document coverage. The source was not saved.
+
+`preview` renders the current HWP bytes directly. It does not use or refresh the file's embedded preview text/thumbnail, which external applications can display from an older version.
 
 Read [request format](references/requests.md) when constructing requests. Write JSON to a task-local request file using a file tool; pass that file as a separate quoted argument to `node <absolute scripts/local-runner.mjs> --request <absolute request.json>`. Do not interpolate document text into shell commands.
 

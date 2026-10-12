@@ -4,9 +4,11 @@
 
 ## 실제 확인한 설치
 
+후속 메인 **0.2.16**도 새 영구 폴더의 ZIP을 정식 CLI로 설치했고 `installed:true`, `enabled:true`를 확인했다. 같은 이름의 로컬 마켓플레이스 경로 갱신은 기존 등록을 제거하고 새 경로를 등록한 뒤 같은 플러그인을 설치하는 순서로 수행했다. 이전 0.2.15 패키지와 원격 보관본은 유지했다. 설치된 0.2.16 실행기의 파일 처리와 독립 판독도 통과했다. [후속 품질 검증과 남은 항목](local-plugin-quality.md)
+
 ZIP을 새로운 영구 로컬 폴더에 풀고 `.agents/plugins/marketplace.json`을 만들었다. Codex의 `plugin marketplace add`와 `plugin add`를 사용했으며 설치 결과는 `hwp-easy@hwp-easy`, 버전 `0.2.15`였다. 이어 `plugin list --marketplace hwp-easy --json`에서 `installed: true`, `enabled: true`를 확인했다.
 
-이는 유지관리자의 Windows Codex에 실제 설치한 결과다. 공개 디렉터리 게시, 다른 계정 설치나 새 Cloud 작업 설치를 완료한 뜻은 아니다. 현재 채팅의 설치 전 스킬 목록은 새 채팅에서 갱신해야 할 수 있다. 새 채팅의 스킬 메뉴에서 **HWP Easy**를 선택하거나 `$edit-local-hwp`로 명시해서 사용한다. 자동 적용 금지 설정은 유지한다.
+이는 유지관리자의 Windows Codex에 실제 설치한 결과다. 공개 디렉터리 게시, 다른 계정 설치나 새 Cloud 작업 설치를 완료한 뜻은 아니다. 별도 새 채팅의 최초 스킬 목록에 나타나지 않는 문제가 관측됐다. 공식 발견 목록의 설치 스킬을 명시적으로 적용한 파일 처리만 통과했으며 메뉴 선택 성공으로 취급하지 않는다. 설치된 정식 이름은 `$hwp-easy:edit-local-hwp`이며 자동 적용 금지 설정을 유지한다.
 
 실행 환경에 파일 접근 권한과 Node.js 22 이상이 필요하다. Codex의 번들 런타임을 사용할 수 있다. HWP 엔진, JS 의존성과 WASM은 설치 패키지에 들어 있으며 문서 처리 시 Python, pip, npm 설치나 HWP Easy 서버·계정·업로드가 필요하지 않다.
 
@@ -38,10 +40,10 @@ node scripts/package_local_plugin.mjs
 python scripts/archive_local_plugin.py
 ```
 
-출력은 `outputs/plugin-package/hwp-easy/`와 `outputs/plugin-package/hwp-easy-0.2.15.zip`이다. `prepare_local_marketplace.py`는 ZIP의 경로, 런타임 해시와 명시적 호출 정책을 확인한 뒤 **새로운 폴더**에 로컬 마켓플레이스를 준비한다. 기존 설치 폴더는 덮어쓰지 않으며 설치·등록을 수행하지 않는다.
+출력은 `outputs/plugin-package/hwp-easy/`와 `outputs/plugin-package/hwp-easy-0.2.16.zip`이다. `prepare_local_marketplace.py`는 ZIP의 경로, 런타임 해시와 명시적 호출 정책을 확인한 뒤 **새로운 폴더**에 로컬 마켓플레이스를 준비한다. 기존 설치 폴더는 덮어쓰지 않으며 설치·등록을 수행하지 않는다.
 
 ```powershell
-python scripts/prepare_local_marketplace.py outputs/plugin-package/hwp-easy-0.2.15.zip '<새 마켓플레이스 경로>'
+python scripts/prepare_local_marketplace.py outputs/plugin-package/hwp-easy-0.2.16.zip '<새 마켓플레이스 경로>'
 codex plugin marketplace add '<새 마켓플레이스 경로>' --json
 codex plugin add hwp-easy@hwp-easy --json
 codex plugin list --marketplace hwp-easy --json
