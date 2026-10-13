@@ -1,4 +1,4 @@
-"""Independent table metadata patches; all other stream bytes must stay exact."""
+"""Independent table metadata patches and separately derived preview caches."""
 from pathlib import Path
 import importlib.util
 import json
@@ -13,7 +13,8 @@ spec.loader.exec_module(reader)
 def verify_case(folder, case):
     old, blocks, cells = reader.decode(folder / (case['name'] + '-before.hwp'))
     saved, after, new_cells = reader.decode(folder / (case['name'] + '-after.hwp'))
-    assert set(old) == set(saved)
+    previews = {'PrvText', 'PrvImage'}
+    assert set(old) - previews == set(saved) - previews
     index, op = case['target_raw_index'], case['type']
     target = blocks[index]
     host, row, col = target['cell']
@@ -21,8 +22,23 @@ def verify_case(folder, case):
     assert len(cells) == len(new_cells)
     assert [(b['host'], b['cell']) for b in after] == [(b['host'], b['cell']) for b in blocks]
     for name in old:
-        if name != 'BodyText/Section0':
+        if name != 'BodyText/Section0' and name not in previews:
             assert old[name] == saved[name]
+    saved['PrvText'].decode('utf-16-le')  # Strict UTF-16, including surrogate pairs.
+    assert len(saved['PrvText']) <= 8192
+    expected_preview = ''.join(b['text'] + '\r\n' for b in after
+                              if any(tag == 67 for tag, _, _ in b['records'])).encode('utf-16-le')[:8192]
+    if expected_preview and 0xD800 <= struct.unpack_from('<H', expected_preview, len(expected_preview) - 2)[0] <= 0xDBFF:
+        expected_preview = expected_preview[:-2]
+    assert saved['PrvText'] == expected_preview
+    image = saved['PrvImage']
+    if image:  # A bounded renderer failure may intentionally clear the image.
+        assert image[:2] == b'BM' and len(image) >= 54
+        width, height = struct.unpack_from('<ii', image, 18)
+        assert 1 <= width <= 180 and 1 <= height <= 180
+        assert struct.unpack_from('<HHI', image, 26) == (1, 24, 0)
+        assert struct.unpack_from('<I', image, 2)[0] == len(image)
+        assert len(image) == 54 + ((width * 3 + 3) & ~3) * height
     for coordinate, payload in cells.items():
         expected = bytearray(payload)
         if coordinate[0] == host:
