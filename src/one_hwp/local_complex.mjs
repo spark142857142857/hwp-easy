@@ -1,5 +1,6 @@
 /** Local-only fields, recursive table text and grouped-picture preservation. */
 import {readHwp,inflateBoundedRaw} from '../../probes/sites-runtime/guard/container.mjs';
+import {objectFlow} from './local_flow_records.mjs';
 import {parseRecords,GuardError} from '../../probes/sites-runtime/guard/records.mjs';
 import {enforceRawTextBudget} from '../../probes/sites-runtime/guard/text-budget.mjs';
 import {imageSize} from './local_image.mjs';
@@ -70,7 +71,7 @@ function inspection(HwpDocument,bytes,{includeDocumentInfo=true,verifyCharacterM
    const value=range.map(t=>t.text).join('');if(value!==f.value)continue;
    fields.push({id:`${b.id}:f${f.fieldId}`,block_id:b.id,field_id:f.fieldId,name:f.name,guide:f.guide,value:f.value,field_type:f.fieldType,editable:b.text_range_editable&&range.every(t=>t.text),section:b.section,cell_path:b.cell_path,start:f.startCharIdx,end:f.endCharIdx,from,to});
   }
-  const pictures=blocks.filter(b=>b.text_mapping_verified).flatMap(b=>complexPictures(raw,recordSets.get(b.section),b).map(p=>({...p,block_id:b.id,section:b.section,cell_path:b.cell_path})));
+  const pictures=blocks.filter(b=>b.text_mapping_verified).flatMap(b=>complexPictures(raw,recordSets.get(b.section),b).map(p=>({...p,flow:objectFlow(recordSets.get(b.section)[p.record_index]),block_id:b.id,section:b.section,cell_path:b.cell_path})));
   const groups=[];let unhandledGroups=0;
   for(const b of blocks){if(!b.text_mapping_verified)continue;const records=recordSets.get(b.section);let index=0;
    for(let i=b.record_index+1;i<b.records_end;i++){const r=records[i];if(r.tag!==71||r.level!==b.raw_level+1||Buffer.from(r.payload.subarray(0,4)).toString('ascii')!==' osg')continue;
@@ -87,7 +88,7 @@ function inspection(HwpDocument,bytes,{includeDocumentInfo=true,verifyCharacterM
     }
     if(!children.length||children.length>32)fail('GROUP_PROFILE_UNSUPPORTED');const p=view(r.payload);
     const properties={width:p.getUint32(16,true),height:p.getUint32(20,true),horzOffset:p.getInt32(12,true),vertOffset:p.getInt32(8,true)},geometry=groupFrame(records[i+1],properties);
-    groups.push({id:`${b.id}:g${index++}`,block_id:b.id,section:b.section,record_index:i,rotationAngle:geometry.v.getInt16(geometry.base+32,true),frame_size:geometry.frame_size,properties,pictures:children,editable:true});
+    groups.push({id:`${b.id}:g${index++}`,block_id:b.id,section:b.section,record_index:i,rotationAngle:geometry.v.getInt16(geometry.base+32,true),frame_size:geometry.frame_size,properties,flow:objectFlow(r),pictures:children,editable:true});
     }catch(error){if(!(error instanceof GuardError)||!['GROUP_PROFILE_UNSUPPORTED','GROUP_IMAGE_UNVERIFIED','INVALID_IMAGE_FILE','GROUP_TRANSFORM_PROFILE_UNSUPPORTED'].includes(error.code))throw error;unhandledGroups++;}
    }
   }

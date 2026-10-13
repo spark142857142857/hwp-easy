@@ -350,7 +350,22 @@ To shrink an overflowing nested table, use any cell paragraph target of that tab
 {"type":"fit_table_to_cell","target_id":"<nested cell paragraph ID>","expected_old":"<cell text>","expected_dimensions":{"rowCount":1,"colCount":2,"cellCount":2},"expected_properties":{"tableWidth":40000,"tableHeight":1282,"cellSpacing":0,"paddingLeft":510,"paddingRight":510,"paddingTop":141,"paddingBottom":141}}
 ```
 
-It retains column ratios with integer rounding, cell spans, text, styles and child objects. It never enlarges an already-contained table or changes fonts. `LAYOUT_CANNOT_FIT_WITHOUT_REFLOW` means the available width is insufficient for the checked content; other existing object/track guards can also refuse the request. Page boundaries, multi-line text height and floating-object overlap are outside these diagnostics.
+It retains column ratios with integer rounding, cell spans, text, styles and child objects. It never enlarges an already-contained table or changes fonts. `LAYOUT_CANNOT_FIT_WITHOUT_REFLOW` means the available width is insufficient for the checked content; other existing object/track guards can also refuse the request. This default geometry scope does not measure page boundaries, multi-line text height or floating-object overlap.
+
+## Selected paragraph and object reflow
+
+`action:"layout", scope:"rendered"` inspects current WASM text/control bounding boxes for text-line intersections, floating-object/text intersections and body overflow. Limits are 32 pages, 20,000 items, 200,000 intersection checks and 2,000 issues. It is read-only. Font substitution and renderer pagination can differ from Hancom; intentional overlays remain possible. This scope is separate from the horizontal geometry save policy and keeps `layout_verified:false`.
+
+```json
+{"type":"reflow_paragraph","target_id":"<paragraph ID>","expected_old":"<full text>","expected_properties":"<complete returned paragraph_properties object>"}
+{"type":"reflow_object","target_id":"<group ID or picture host paragraph ID>","expected_old":"<full host text>","expected_properties":"<complete returned object properties>","expected_flow":"<complete returned object flow>"}
+```
+
+The values shown as placeholders above must be JSON objects copied from `read`. `reflow_paragraph` uses the paragraph target, including a paragraph containing a field, rather than the field-value target. It changes fixed/minimum/space-only line height to 160% of character height; an existing percentage is retained within 100–1000%. It enables font-aware height and widow/orphan protection and clears keep-lines/keep-next. It preserves explicit page/column breaks, text, character runs, numbering and outline-tail bytes. Cells grow according to their reader's table flow rules; stored minimum row heights are preserved. Vertical cells and legacy ambiguous break flags are refused.
+
+`reflow_object` converts the selected floating picture or **whole outer group** to inline (`treatAsChar:true`, affects line height), keeping image bytes, crop, matrices, size and text-anchor order. This reserves paragraph height and lets it move with text across pages. It resets floating offsets to zero and removes overlap permission. Select one picture with `picture_index` when necessary; this key is not valid for a whole group. Absolute sizes and a verified portrait page definition are required. An object wider than its container or taller than the body is refused as `OBJECT_TOO_LARGE_FOR_FLOW`; no silent resizing occurs. This changes the selected object's floating behavior, so use it when flow adjustment is requested, not to alter a watermark or fixed logo. `flow_editable:true` on a `raw_flow_only_picture` permits this operation only, even if general picture editing is unavailable.
+
+Both operations invalidate mapped body/cell line caches across the affected section, retaining opaque header/footer lists and all other content. This allows following paragraphs and ancestor cells to reflow. Repeating canonical settings with no caches is a true no-op. A batch can edit text/size first and then reflow using the properties expected at that step; target IDs still come from the initial read.
 
 Complex `tables` return `axis_editable`, `layout_editable`, cell geometry and `subtree_sha256`. Verified rectangular and merged nested tables support row/column insertion and deletion. Crossing merged cells expand or shrink without deleting their paragraphs. Inserted positions already covered by an expanded merge require an empty text slot. Deletion `expected_cells` includes all affected cells, including retained crossing merges, in storage order.
 

@@ -9,10 +9,11 @@ import {definitionBytes} from './local_complex_format.mjs';
 import {rawPictureRecords} from './local_picture.mjs';
 import {pictureAnchor,changedPictureProperties} from './local_picture_records.mjs';
 import {fail,view,equal,equalBytes,encodeRecords,textTokens} from './local_complex_records.mjs';
+import {validObjectHeader} from './local_flow_records.mjs';
 
 const id=r=>Buffer.from(r.payload.subarray(0,4)).toString('ascii');
 export function complexPictureProperties(raw,group){
- if(group.some((r,i)=>r.tag!==[71,76,85][i]||r.level!==group[0].level+i)||group[0].payload.length!==46||group[1].payload.length!==196||group[2].payload.length!==91||id(group[0])!==' osg'||Buffer.from(group[1].payload.subarray(0,8)).toString('ascii')!=='cip$cip$'||view(group[1].payload).getUint16(16,true)!==0)fail('PICTURE_PROFILE_UNSUPPORTED');
+ if(group.some((r,i)=>r.tag!==[71,76,85][i]||r.level!==group[0].level+i)||!validObjectHeader(group[0].payload)||group[1].payload.length!==196||group[2].payload.length!==91||id(group[0])!==' osg'||Buffer.from(group[1].payload.subarray(0,8)).toString('ascii')!=='cip$cip$'||view(group[1].payload).getUint16(16,true)!==0)fail('PICTURE_PROFILE_UNSUPPORTED');
  const h=view(group[0].payload),s=view(group[1].payload),p=view(group[2].payload),binId=p.getUint16(71,true);
  const names=[...raw.streams.keys()].filter(n=>new RegExp(`^BinData/BIN${binId.toString(16).padStart(4,'0')}\\.(png|jpe?g)$`,'i').test(n));
  if(names.length!==1)fail('PICTURE_BINARY_MISMATCH');let bytes=raw.streams.get(names[0]),pixels;

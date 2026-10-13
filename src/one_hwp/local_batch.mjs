@@ -8,6 +8,7 @@ import {pictureEdit} from './local_picture.mjs';
 import {tableFormatEdit} from './local_table_format.mjs';
 import {moveLocalBlock} from './local_move.mjs';
 import {hasLocalComplexContent,editLocalComplex} from './local_complex.mjs';
+import {reflowLocal} from './local_reflow.mjs';
 
 const fail=code=>{throw new GuardError(code);};
 const pictureTypes=new Set(['insert_picture','update_picture','delete_picture','replace_picture']);
@@ -21,6 +22,7 @@ function rawTarget(value,version){
 const target=(id,version)=>`hwp5:${version}:${Buffer.from(id).toString('base64url')}`;
 
 export async function applyLocalOperation(HwpDocument,bytes,version,operation){
+  if(['reflow_paragraph','reflow_object'].includes(operation.type))return reflowLocal(HwpDocument,bytes,version,operation);
   if(['insert_field','delete_field'].includes(operation.type)||Object.hasOwn(operation,'expected_cell_sha256'))return editLocalComplex(HwpDocument,bytes,version,operation);
   if(hasLocalComplexContent(readHwp(bytes)))return editLocalComplex(HwpDocument,bytes,version,operation);
   if(['insert_table_row','delete_table_row','insert_table_column','delete_table_column'].includes(operation.type)&&readHwp(bytes).profile.unsupported.some(x=>[76,85].includes(x.record_tag)))return editLocalComplex(HwpDocument,bytes,version,operation);

@@ -8,7 +8,7 @@ HWP Easy는 공통 HWP 엔진과 로컬 실행기를 여러 에이전트 클라�
 
 ## 메인 로컬 파일 흐름
 
-메인 소스·검증 패키지는 **0.2.22**, Codex 설치는 **0.2.20**, Claude Code·Cursor 실제 설치와 공개 ZIP은 **0.2.19**입니다. 같은 버전의 앱별 패키지는 공통 Node 실행기와 WASM을 포함합니다. HWP Easy 서버나 OAuth 연결이 필요하지 않습니다.
+메인 소스·검증 패키지는 **0.2.23**, Codex 설치는 **0.2.20**, Claude Code·Cursor 실제 설치와 공개 ZIP은 **0.2.19**입니다. 같은 버전의 앱별 패키지는 공통 Node 실행기와 WASM을 포함합니다. HWP Easy 서버나 OAuth 연결이 필요하지 않습니다.
 
 ```mermaid
 flowchart LR
@@ -31,7 +31,8 @@ flowchart LR
 | 독립 검사 | `probes/sites-runtime/guard/` | CFB·레코드·대상 매핑·비대상 바이트·변경 조건 확인 |
 | 로컬 실행기 | `src/one_hwp/local_runner.mjs`, `local_*.mjs` | 읽기·계획·편집·이력·복구 명령 |
 | 복잡한 개체 편집 | `local_complex_picture.mjs`, `local_complex_table.mjs`, `local_complex_field.mjs`, `local_complex_group.mjs`, `local_complex_boundary.mjs` | 검증한 raw 기록 변경, 중첩 그룹 합성 변환과 개체 문단 경계 이동·대상 재매핑 |
-| 배치 진단 | `local_layout.mjs` | 매핑된 셀의 폭·개체·글자 추정 진단, 새 기하학적 넘침 저장 조건, 비율을 유지한 중첩 표 맞추기. 쪽 나눔·문단 높이·부동 개체 겹침은 검사 범위 밖 |
+| 자동 흐름 조정 | `local_reflow.mjs`, `local_flow_records.mjs` | 선택 문단의 글자 크기별 높이·쪽 이어짐, 선택 개체 inline 전환, 영향 구역 줄 캐시 무효화. 내용·그림·기존 쪽 나눔 보존 |
+| 배치 진단 | `local_layout.mjs` | 매핑된 셀의 폭·개체·글자 추정 진단, 새 기하학적 넘침 저장 조건, 비율을 유지한 중첩 표 맞추기. 가로 기하학 검사. 현재 쪽의 텍스트·부동 개체 바운딩 박스는 `local_rendered_layout.mjs`에서 명시적 조회로 별도 진단 |
 | 로컬 파일 저장 | `src/one_hwp/local_file.mjs` | 충돌 검사·이전 바이트 보관·같은 경로 저장 |
 | 내장 미리보기 | `local_preview_cache.mjs`, resvg WASM·폰트 | 검증된 저장 후보의 UTF-16 텍스트·BMP 갱신, 실패 시 오래된 이미지 제거 |
 | 로컬 컨테이너 쓰기 | `local_container_write.mjs` | 재배치 후 비대상 압축 스트림의 정확한 보존 |

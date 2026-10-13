@@ -10,7 +10,8 @@ export function complexParagraphProperties(raw,records,block){
  if(!shape||![46,54,58].includes(shape.payload.length))fail('PARA_SHAPE_PROFILE_UNSUPPORTED');
  const p=view(shape.payload),alignment=['justify','left','right','center'][(p.getUint32(0,true)>>2)&7];
  if(!alignment)fail('PARA_SHAPE_PROFILE_UNSUPPORTED');
- return {paraShapeId:id,alignment,lineSpacingType:p.getUint32(0,true)&3,...Object.fromEntries(positions.map(([key,offset])=>[key,p.getInt32(offset,true)]))};
+ const flags=p.getUint32(0,true),modern=shape.payload.length>=54&&p.getUint32(50,true)>0;
+ return {paraShapeId:id,alignment,lineSpacingType:modern?p.getUint32(46,true)&31:flags&3,...Object.fromEntries(positions.map(([key,offset])=>[key,p.getInt32(key==='lineSpacing'&&modern?50:offset,true)])),widowOrphan:Boolean(flags&1<<16),keepWithNext:Boolean(flags&1<<17),keepLines:Boolean(flags&1<<18),pageBreakBefore:Boolean(flags&1<<19),fontLineHeight:Boolean(flags&1<<22)};
 }
 export function prepareComplexParagraphFormat(raw,records,block,op){
  const props=validateFormatProperties(op.props,false);if(!block.text_mapping_verified)fail('TARGET_NOT_EDITABLE');
@@ -19,6 +20,7 @@ export function prepareComplexParagraphFormat(raw,records,block,op){
  const wanted=shapes[before.paraShapeId].payload.slice(),p=view(wanted);
  if(Object.hasOwn(props,'alignment'))p.setUint32(0,(p.getUint32(0,true)&~28)|(['justify','left','right','center'].indexOf(props.alignment)<<2),true);
  for(const [key,offset]of positions)if(Object.hasOwn(props,key))p.setInt32(offset,props[key],true);
+ if(wanted.length>=54&&Object.hasOwn(props,'lineSpacing')&&p.getUint32(50,true)>0)p.setInt32(50,props.lineSpacing,true);
  if(equalBytes(wanted,shapes[before.paraShapeId].payload))return {unchanged:true};
  let id=shapes.findIndex(r=>equalBytes(r.payload,wanted));const replacements=new Map(),additions=new Map();
  if(id<0){id=shapes.length;additions.set(shapes.at(-1).index,[{tag:25,level:shapes.at(-1).level,payload:wanted}]);const map=maps[0].payload.slice();view(map).setUint32(52,shapes.length+1,true);replacements.set(maps[0].index,map);}

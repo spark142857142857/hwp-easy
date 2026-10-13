@@ -118,4 +118,6 @@ Report the changed file directly, without a download task. If saving is unconfir
 
 Content checks do not certify every HWP layout or complex object.
 
+For requested overlap/height adjustment, see the selected reflow operations in `references/requests.md`. Inspect `layout` with `scope:"rendered"` when current page geometry is needed. Reflow a selected paragraph to font-aware height and automatic page continuation, or convert a selected floating picture/outer group to inline so its paragraph reserves the object height. Copy complete current properties/flow conditions. Preserve intentional fixed overlays unless the user requests changing them; report that object reflow changes floating behavior. Oversized objects remain unsaved. Native and WASM pagination can differ; do not present a warning-free preview as print-layout certification.
+
 Complex table axes, cell boundaries, sizing and padding follow `references/requests.md`. For an explicitly requested controlled-cell deletion, use the returned subtree hashes to confirm all affected cell contents. Never use this path to drop controls that the user asked to retain. Empty cells produced by a split can be filled or receive a field/picture through their returned target IDs.

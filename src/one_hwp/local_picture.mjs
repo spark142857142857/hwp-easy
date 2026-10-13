@@ -7,6 +7,7 @@ import {structuralProfileSupported,recordsByBlock,compareRecords,verifyCellHeade
 import {cellPicturePath} from './local_cell_picture.mjs';
 import {imageSize} from './local_image.mjs';
 import {anchors,objectGroups,rewritePictureBlock,changedPictureProperties} from './local_picture_records.mjs';
+import {validObjectHeader} from './local_flow_records.mjs';
 const fail=code=>{throw new GuardError(code);},equal=(a,b)=>JSON.stringify(a)===JSON.stringify(b);
 const bytesEqual=(a,b)=>a.length===b.length&&a.every((n,i)=>n===b[i]),view=b=>new DataView(b.buffer,b.byteOffset,b.byteLength);
 const group=data=>{const m=new Map();for(const r of parseRecords(data)){if(!m.has(r.tag))m.set(r.tag,[]);m.get(r.tag).push(r);}return m;};
@@ -26,7 +27,7 @@ export function pictureProfile(raw,model,records) {
  if(raw.profile.sections.length!==1)fail('PICTURE_PROFILE_UNSUPPORTED');const images=[];
  for(const b of model.blocks){const list=records.get(b.id);if(!list.some(r=>[76,85].includes(r.tag)))continue;const groups=objectGroups(list),level=b.kind==='cell'?3:1,text=list.find(r=>r.tag===67)?.payload;
   if(!text||groups.length>32||anchors(text).length!==groups.length)fail('PICTURE_PROFILE_UNSUPPORTED');
-  groups.forEach((g,index)=>{if(g.some((r,i)=>r.tag!==[71,76,85][i]||r.level!==level+i)||g[0].payload.length!==46||Buffer.from(g[0].payload.subarray(0,4)).toString('ascii')!==' osg'
+  groups.forEach((g,index)=>{if(g.some((r,i)=>r.tag!==[71,76,85][i]||r.level!==level+i)||!validObjectHeader(g[0].payload)||Buffer.from(g[0].payload.subarray(0,4)).toString('ascii')!==' osg'
    ||g[1].payload.length!==196||Buffer.from(g[1].payload.subarray(0,8)).toString('ascii')!=='cip$cip$'||view(g[1].payload).getUint16(16,true)!==0||g[2].payload.length!==91)fail('PICTURE_PROFILE_UNSUPPORTED');images.push({...b,picture_index:index});});
  }
  const unsupported=model.unsupported.filter(x=>!(x.kind==='control'&&x.control_id==='gso'&&images.some(b=>b.kind==='paragraph'?x.list===0&&b.paragraph===x.paragraph:x.list>0&&b.cell_paragraph===x.paragraph)));
