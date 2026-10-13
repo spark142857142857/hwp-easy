@@ -25,6 +25,8 @@ Eligibility flags are candidates; a plan must prove serialization. A paragraph w
 
 When `partial_read_only:true`, only observable body/top-level cell content is available. Other object content may be missing, no edit targets exist, and cursor exhaustion does not prove full coverage. Do not plan an edit of these blocks. Complex-profile reads also do not certify every opaque object's content.
 
+An individually unverified complex block has `target_id:null` and `text_mapping_verified:false`; never forge its ID. Other structurally verified targets may remain editable. Header/footer/textbox contents can be opaque and preserved without being exposed as edit targets.
+
 Use read-only `find` for exact-phrase selection, following its own cursors at the same hash and query. Read the whole matched block for `expected_old`; search matches can remain outside edit support. For several replacements in one paragraph, work from last range to first and update full expected text at each step. Keep the user's requested occurrence scope.
 
 ## Plan, save and verify
@@ -33,7 +35,7 @@ Plan requested changes, then edit at that same source hash. Omitting `output` sa
 
 Combine related operations into one checked atomic batch when useful. Select initial targets from one read; original IDs remain tracked through supported moves. Expected text/properties must match each step's state. New blocks require another read before selection. Removing a selected target or any failed step rejects the whole batch before saving. Never partly apply a failed batch or bypass guards by flattening a table or changing an unrelated structure.
 
-Inspect recursive `cell_path`, `fields` and `picture_groups` for `complex_profile`. Use returned targets and expected values. This profile supports field values, nested-cell text/character formatting, group movement and selected group-picture crops; field creation/removal, nested-table structure/paragraph formatting, group resize/rotation/replacement remain unsupported. Read the detailed reference before using these operations.
+Inspect recursive `cell_path`, `fields` and `picture_groups` for `complex_profile`. Use returned targets and expected values. This profile supports field values, mapped body/nested-cell text, character and paragraph formatting, group movement and selected group-picture crops; field creation/removal, nested-table structure/layout changes, group resize/rotation/replacement remain unsupported. Paragraph formatting requires `paragraph_format_editable:true` and a block target, not a field ID. Read the detailed reference before using these operations.
 
 Ordinary `replace_text`/`splice_text` newlines can create real paragraphs. Complex field/nested-cell LF stays within its existing paragraph. Text offsets are code points, including emoji. Preserve untouched mixed styles and all opaque anchors. Use the references for table geometry, complete affected-cell texts, picture indexes/hashes, expected properties and operation limits.
 
@@ -47,4 +49,4 @@ Restore only when the user requests it. If the backup ID is unavailable, call re
 
 Use the runner and raw checks for ordinary file access, editing, saving and recovery; computer-use is unnecessary for these. Use an external viewer only for requested visual checking or a specific layout problem. Content checks, font names and stored dimensions do not certify final page layout or install fonts. Image removal/replacement leaves old image bytes and recovery copies; it does not permanently erase sensitive data.
 
-`preview` renders current HWP bytes. It does not use or refresh embedded preview text/thumbnails, which external applications may show from an older version.
+`preview` renders current HWP bytes without saving. Changed edits refresh embedded preview text and a first-page BMP before publication; inspect `preview_cache`. If rendering fails or exceeds its limit, stale image bytes are cleared and `text_updated_image_unavailable` is reported. Thumbnail font substitution is possible; it does not certify Hancom layout. No-op edits and exact restoration do not regenerate caches.

@@ -2,7 +2,7 @@
 import fs from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { spawnSync } from 'node:child_process';
-import { HwpDocument, initSync } from '@rhwp/core';
+import { HwpDocument as UpstreamHwpDocument, initSync } from '@rhwp/core';
 import { createDocumentEngine } from '../../probes/sites-runtime/engine/document.mjs';
 import {createLocalEngineApi as createEngineApi} from './local_api.mjs';
 import { preservableStructuralProfile,recordsByBlock } from './local_structure.mjs';
@@ -14,6 +14,9 @@ import { GuardError } from '../../probes/sites-runtime/guard/records.mjs';
 import {textControlBytes} from '../../probes/sites-runtime/guard/preservation.mjs';
 import {findLocalDocument,validateFind} from './local_find.mjs';
 import {hasLocalComplexContent,createLocalComplexSnapshot} from './local_complex.mjs';
+import {refreshLocalPreview,renderPreviewWorker} from './local_preview_cache.mjs';
+import {createLocalDocumentClass} from './local_container_write.mjs';
+const HwpDocument=createLocalDocumentClass(UpstreamHwpDocument);
 
 let initialized = false;
 export function initializeLocal(wasmBytes) { if (!initialized) { initSync({module:wasmBytes}); initialized=true; } }
@@ -66,13 +69,14 @@ export async function runLocal(request) {
     split_merge_table_cells:true,format_text:true,format_paragraph:true,
     resize_table_columns_rows:true,format_cell_layout:true,format_table_padding:true,
     atomic_operation_batches:true,max_operations:100,batch_target_ids:'initial_read; stable identity through verified position changes',
-    complex_local:{recursive_table_cell_text:true,max_cell_depth:8,clickhere_field_values:true,character_formatting:['bold','italic','underline','strikethrough','fontSize','textColor','fontFamily'],field_format_offsets:'relative to explicit field value, Unicode code points',line_breaks:'HWP character 10 within same paragraph; up to 100 lines per inserted value',duplicate_field_names:'explicit field target ID',picture_groups:'move whole group; crop a selected PNG/JPEG child; preserve transforms',complex_structure_changes:false},
+    complex_local:{recursive_table_cell_text:true,max_cell_depth:8,clickhere_field_values:true,character_formatting:['bold','italic','underline','strikethrough','fontSize','textColor','fontFamily'],paragraph_formatting:['alignment','lineSpacing','marginLeft','marginRight','indent','spacingBefore','spacingAfter'],opaque_lists_preserved:true,field_format_offsets:'relative to explicit field value, Unicode code points',line_breaks:'HWP character 10 within same paragraph; up to 100 lines per inserted value',duplicate_field_names:'explicit field target ID',picture_groups:'move whole group; crop a selected PNG/JPEG child; preserve transforms',complex_structure_changes:false},
     pictures:{insert:'local PNG/JPEG, body paragraph or top-level table cell',replace:'local PNG/JPEG, retain frame size and position',update:'size, position, four-edge crop and integer-degree rotation',multiple_per_paragraph:32,picture_index_required_when_multiple:true,delete:true,delete_cleans_unused_embedded_data:false},
     edit_profiles:{existing_text:'guarded paragraph/cell replacement; selected range insertion/deletion/replacement preserves retained mixed character styles',
       structure:'uniform-style targets; paragraphs, simple or merged table rows/columns and verified cell split/merge; opaque page numbers and supported pictures preserved',
       formatting:'selected plain character ranges; font family/size/color/decorations and paragraph alignment/spacing; exact raw definition patches',
       table_layout:'plain or merged tables: column widths, stored row heights, cell padding/vertical alignment and table padding/spacing; text and pictures preserved',
       pictures:'up to 32 supported pictures per plain body paragraph or top-level cell paragraph; selected local PNG/JPEG insertion/replacement, size/position/crop/rotation/removal'},
+    embedded_preview_refresh:{text:'bounded UTF-16 excerpt',image:'first-page BMP',on:'verified changed edit, before publication',font_substitution_possible:true},
     layout_verified:false,requires:'Node.js 22 or newer with local file permissions',max_input_bytes:4194304};
   const snapshot=readLocal(request.source,request.expected_sha256);
   if(request.action==='history')return localHistory(snapshot,request.limit);
@@ -136,13 +140,22 @@ export async function runLocal(request) {
     });
     candidate=await document.edit({expected_sha256:version,operations});
   }
-  const {bytes,...verification}=candidate;
+  let {bytes,...verification}=candidate;
+  // The candidate above still validates every target and expected value. An
+  // identical text request must not save serializer/container normalization.
+  if(request.operations.every(op=>op.type==='replace_text'&&op.expected_old===op.new_text)){
+    bytes=snapshot.bytes;verification.output_sha256=snapshot.sha256;
+  }
+  if(!Buffer.from(bytes).equals(Buffer.from(snapshot.bytes))){
+    const preview=await refreshLocalPreview(HwpDocument,bytes);bytes=preview.bytes;verification.preview_cache=preview.preview_cache;
+  }else verification.preview_cache={status:'unchanged',document_streams_preserved:true};
   if(request.action==='plan')return {...verification,source:snapshot.source,source_sha256:version,valid:true,serialization_checked:true,saved:false};
   return {...verification,...saveLocal(snapshot,bytes,{output:request.output,expected_output_sha256:request.expected_output_sha256})};
 }
 
 async function main() {
   const [mode,requestFile]=process.argv.slice(2);
+  if(mode==='--preview-worker'&&process.argv.length===3){const bytes=fs.readFileSync(0);if(bytes.length>4194304)fail('INPUT_LIMIT_EXCEEDED');process.stdout.write(JSON.stringify(await renderPreviewWorker(bytes)));return;}
   if(!['--request','--worker'].includes(mode)||!requestFile||process.argv.length!==4)fail('INVALID_ARGUMENTS');
   if(mode==='--request') {
     const result=spawnSync(process.execPath,['--max-old-space-size=256',fileURLToPath(import.meta.url),'--worker',requestFile],

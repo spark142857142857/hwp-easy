@@ -1,6 +1,6 @@
 /** Selected paragraph/object rewrites; all other raw records remain exact. */
 import {GuardError,parseRecords} from '../../probes/sites-runtime/guard/records.mjs';
-import {packLocalBodyRewrite} from '../../probes/sites-runtime/engine/structural-body-repair.mjs';
+import {packLocalBodyRewrite} from './local_body_write.mjs';
 const fail=code=>{throw new GuardError(code);},view=b=>new DataView(b.buffer,b.byteOffset,b.byteLength);
 export const pictureAnchor=Uint8Array.from([11,0,32,111,115,103,0,0,0,0,0,0,0,0,11,0]);
 export function anchors(text){const list=[];let visible=0;for(let p=0;p<text.length;p+=2){const code=view(text).getUint16(p,true);if(code===11){if(p+16>text.length||!pictureAnchor.every((n,i)=>text[p+i]===n))fail('PICTURE_ANCHOR_PROFILE_UNSUPPORTED');list.push({raw:p/2,visible});p+=14;}else if(code>=32||code===9||code===10)visible++;else if(code!==13)fail('PICTURE_ANCHOR_PROFILE_UNSUPPORTED');}return list;}

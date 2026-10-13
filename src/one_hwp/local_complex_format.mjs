@@ -8,7 +8,7 @@ import {fail,view,equal,equalBytes,encodeRecords} from './local_complex_records.
 
 // Retain even noncanonical envelopes of existing definitions. New records use
 // the standard envelope; source payload views locate the exact original bytes.
-function definitionBytes(stream,records,replacements,additions) {
+export function definitionBytes(stream,records,replacements,additions) {
  const parts=[];let offset=0;
  for(const r of records){const end=r.payload.byteOffset-stream.byteOffset+r.payload.length;
   const payload=replacements.get(r.index);

@@ -26,9 +26,9 @@ def groups(body):
 def verify_case(folder, case):
     old, before, _ = reader.decode(folder / (case['name'] + '-before.hwp'))
     saved, after, _ = reader.decode(folder / (case['name'] + '-after.hwp'))
-    assert set(old) == set(saved)
+    assert set(old) - {'PrvText', 'PrvImage'} == set(saved) - {'PrvText', 'PrvImage'}
     for name in old:
-        if name != 'BodyText/Section0':
+        if name not in ('BodyText/Section0', 'PrvText', 'PrvImage'):
             assert old[name] == saved[name]
     prior = groups(old['BodyText/Section0'])
     order = list(range(len(prior)))

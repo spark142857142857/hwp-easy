@@ -54,10 +54,10 @@ def tokens(data):
 
 def verify(folder, case):
     a, b = (streams(folder / (case['name'] + suffix + '.hwp')) for suffix in ('-before', '-after'))
-    assert set(a) == set(b)
+    assert set(a) - {'PrvText', 'PrvImage'} == set(b) - {'PrvText', 'PrvImage'}
     body = 'BodyText/Section0'
     for name in a:
-        if name != body:
+        if name not in (body, 'PrvText', 'PrvImage'):
             assert a[name] == b[name]
     old, new = records(a[body]), records(b[body])
     heads = [i for i, (tag, _, _) in enumerate(old) if tag == 66]

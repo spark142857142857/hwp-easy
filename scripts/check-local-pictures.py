@@ -96,7 +96,7 @@ def verify_case(before_file, after_file, meta):
     extra = set(saved) - set(old)
     assert set(old) <= set(saved) and len(extra) == int(adding)
     for name, value in old.items():
-        if name != 'BodyText/Section0' and not (adding and name in ('DocInfo', 'PrvText', 'PrvImage')):
+        if name not in ('BodyText/Section0', 'PrvText', 'PrvImage') and not (adding and name == 'DocInfo'):
             assert saved[name] == value
     for i, (x, y) in enumerate(zip(before, after)):
         assert x['text'] == y['text'] and x['cell'] == y['cell']

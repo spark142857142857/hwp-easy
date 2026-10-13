@@ -19,6 +19,7 @@ It uses an engine built on [`@rhwp/core`](https://github.com/edwardkim/rhwp), wi
 - Ordinary PNG/JPEG picture insertion, replacement, resizing, cropping and rotation at supported body and table-cell locations
 - Same-file saving with conflict detection and preservation checks for untargeted content
 - Recovery history, previous-version restoration and retention of the edited version before recovery
+- Updated embedded preview text and first-page thumbnails after saving
 
 Supported edits depend on the document structure and target. Nested-table structure changes, field creation/deletion and grouped-picture replacement/rotation remain unsupported. Documents whose structure cannot be verified are handled through partial read-only results or rejected operations. Partial reads may omit some object content.
 
@@ -34,6 +35,7 @@ SVG previews of the current document and rereading after saving do not guarantee
 | `references/` | Supported operations, request formats and operation-specific constraints |
 | `scripts/local-runner.mjs` | JavaScript bundle that calls the engine, checks edits and handles local saving, backups and recovery |
 | `scripts/rhwp_bg.wasm` | Engine that reads HWP structure and produces edited documents and SVG previews |
+| Preview WASM, font and notices | Embedded BMP thumbnail generation and preview font fallback |
 
 The Codex plugin packages this skill and its runtime resources with `plugin.json` and listing metadata such as the name, icon, description and version. All three clients use the same source, runner and WASM, with the same editing scope. Copying `SKILL.md` alone is insufficient to run HWP Easy. See [architecture](docs/architecture.md) for details.
 
@@ -49,7 +51,7 @@ Install the complete package for your client, including the runner and engine. T
 | Claude Code | Personal skill package | [Installation and invocation](docs/agent-client-skills.md#설치와-호출) |
 | Cursor | Personal skill package | [Installation and invocation](docs/agent-client-skills.md#설치와-호출) |
 
-The current source and generated package version is **0.2.18**. Public downloads and directory publication are being prepared. See [project status](docs/project-status.md) for installed versions and verified scope.
+The current version is **0.2.19**. Download client ZIPs and SHA-256 checksums from the [public release](https://github.com/spark142857142857/hwp-easy/releases/tag/hwp-easy-local-v0.2.19). OpenAI directory publication is a separate process. See [project status](docs/project-status.md) for installations and verified scope.
 
 <a id="install-and-use"></a>
 <a id="how-does-it-work"></a>
@@ -92,7 +94,7 @@ See the [developer guide](docs/developer-guide.md) for setup, source organizatio
 
 ## Project status
 
-Actual Claude Code and Cursor CLI invocations passed editing, same-file saving, rereading and exact original recovery. Codex's installed runner checks and the 0.2.18 code's [Linux/Windows CI](https://github.com/spark142857142857/hwp-easy/actions/runs/38252416686) also passed. Cursor IDE chat UI, execution after desktop skill selection in Codex, the complete flow in a new Cloud task and other-user installation require additional verification.
+Installed 0.2.19 runners in all three clients passed editing, same-file saving, rereading and exact recovery. A fresh Codex app-server conversation executed the selected skill through the actual model; Claude Code and Cursor CLI model invocations were verified on 0.2.18. Selected edits in 12 public documents and Hancom layout checks on two representative documents also passed. See the [0.2.19 verification record](docs/local-release-0.2.19.md) and [current CI](https://github.com/spark142857142857/hwp-easy/actions). Other-user installation and the complete Cloud flow remain follow-up work.
 
 Remote **0.1.9** and the Windows COM prototype are retained earlier implementations. Their code, packages and review records are indexed under [archived material](docs/README.md#보관-자료).
 

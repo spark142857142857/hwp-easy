@@ -41,6 +41,11 @@ def prepare(archive_path: Path, destination: Path) -> dict:
             content = archive.read(f"skills/edit-local-hwp/scripts/{filename}")
             if hashlib.sha256(content).hexdigest() != manifest[field]:
                 raise ValueError("Runtime hash mismatch")
+        if 'local_preview' in manifest:
+            preview = manifest['local_preview']
+            for filename, digest in (("resvg_bg.wasm", preview['renderer']['wasm_sha256']), ("NanumGothic-Regular.ttf", preview['font']['sha256'])):
+                if hashlib.sha256(archive.read(f"skills/edit-local-hwp/scripts/{filename}")).hexdigest() != digest:
+                    raise ValueError("Preview resource hash mismatch")
         # Every entry was checked before creating any files.
         plugin = destination / "plugins" / metadata["name"]
         plugin.mkdir(parents=True)

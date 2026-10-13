@@ -19,6 +19,7 @@ HWP Easy는 Codex, Claude Code, Cursor에서 HWP(한글 문서)를 읽고 편집
 - 지원하는 본문·표 셀 위치의 일반 PNG/JPEG 그림 삽입·교체·크기 조정·자르기·회전
 - 충돌 검사와 비대상 내용 보존 검사를 거친 같은 파일 저장
 - 복구 이력 조회, 이전 버전 복구, 복구 전 편집본 보관
+- 저장 후 내장 미리보기 텍스트와 첫 쪽 썸네일 갱신
 
 편집 지원 범위는 문서 구조와 대상에 따라 다릅니다. 중첩 표 구조 변경, 누름틀 생성·삭제, 그룹 그림 교체·회전 등은 미지원입니다. 구조를 검증하지 못하는 문서는 부분 읽기 전용으로 처리하거나 작업을 거부하며, 부분 읽기 결과에는 일부 개체의 내용이 빠질 수 있습니다.
 
@@ -34,6 +35,7 @@ HWP Easy는 Codex, Claude Code, Cursor에서 HWP(한글 문서)를 읽고 편집
 | `references/` | 지원 작업, 요청 형식과 작업별 제한 |
 | `scripts/local-runner.mjs` | 엔진 호출, 편집 검사, 로컬 저장·백업·복구를 수행하는 JS 번들 |
 | `scripts/rhwp_bg.wasm` | HWP 내부 구조를 읽고 수정본과 SVG를 만드는 엔진 |
+| 미리보기 WASM·폰트·고지 | 저장 후 내장 BMP 썸네일 생성과 미리보기 글꼴 대체 |
 
 Codex 플러그인은 이 스킬과 실행 자원에 `plugin.json`, 이름·아이콘·설명·버전 등 설치 목록용 정보를 더한 패키지입니다. 세 앱은 같은 소스·실행기·WASM을 사용하며 편집 지원 범위도 같습니다. `SKILL.md` 하나만 복사해서는 HWP Easy를 실행할 수 없습니다. 세부 구조는 [아키텍처](docs/architecture.md)를 참조하세요.
 
@@ -49,7 +51,7 @@ Codex 플러그인은 이 스킬과 실행 자원에 `plugin.json`, 이름·아�
 | Claude Code | 개인 스킬 패키지 | [설치와 호출](docs/agent-client-skills.md#설치와-호출) |
 | Cursor | 개인 스킬 패키지 | [설치와 호출](docs/agent-client-skills.md#설치와-호출) |
 
-현재 소스·생성 패키지 버전은 **0.2.18**입니다. 일반 사용자용 공개 다운로드와 디렉터리 게시는 준비 중이며, 실제 설치 버전과 검증 범위는 [프로젝트 상태](docs/project-status.md)에서 확인할 수 있습니다.
+현재 버전은 **0.2.19**입니다. [공개 릴리스](https://github.com/spark142857142857/hwp-easy/releases/tag/hwp-easy-local-v0.2.19)에서 앱별 ZIP과 SHA-256을 받을 수 있습니다. OpenAI 디렉터리 게시는 별도 진행하며, 실제 설치와 검증 범위는 [프로젝트 상태](docs/project-status.md)에서 확인할 수 있습니다.
 
 <a id="설치하고-사용하기"></a>
 <a id="어떻게-사용하나요"></a>
@@ -91,7 +93,7 @@ Claude Code·Cursor 요청 예시:
 
 ## 프로젝트 상태
 
-Claude Code와 Cursor CLI의 실제 호출에서 편집·같은 파일 저장·재읽기·정확한 원본 복구를 검증했습니다. Codex 설치본의 실행기 검사와 0.2.18 코드의 [Linux·Windows CI](https://github.com/spark142857142857/hwp-easy/actions/runs/38252416686)도 통과했습니다. Cursor IDE 채팅 화면, Codex 데스크톱의 선택 후 실행, 새 Cloud 작업의 전체 흐름과 다른 사용자의 설치는 추가 검증 대상입니다.
+세 앱의 0.2.19 설치 실행기에서 편집·같은 파일 저장·재읽기·정확한 원본 복구를 검증했습니다. Codex는 새 app-server 대화의 실제 모델 실행, Claude Code·Cursor CLI는 이전 0.2.18의 실제 호출을 확인했습니다. 공개 양식 12개의 선택 편집과 대표 두 문서의 한컴 배치도 확인했습니다. 자세한 범위는 [0.2.19 검증 기록](docs/local-release-0.2.19.md), 현재 CI는 [Actions](https://github.com/spark142857142857/hwp-easy/actions)를 참조하세요. 다른 사용자의 설치와 Cloud 전체 흐름은 후속 작업입니다.
 
 원격 **0.1.9**와 Windows COM 프로토타입은 이전 구현으로 보관합니다. 코드·패키지·심사 기록은 [보관 자료](docs/README.md#보관-자료)에 있습니다.
 

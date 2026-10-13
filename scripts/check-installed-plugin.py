@@ -55,7 +55,7 @@ edited = (folder / "synthetic-edited.hwp").read_bytes()
 assert (folder / "synthetic-restored.hwp").read_bytes() == original
 before_streams, before = decode(original)
 after_streams, after = decode(edited)
-assert set(before_streams) == set(after_streams)
+assert set(before_streams) - {'PrvText', 'PrvImage'} == set(after_streams) - {'PrvText', 'PrvImage'}
 assert "합성 답변 원문" in before and "중간 합성 문단" in before
 assert "설치된 HWP Easy로 수정한 본문" in after
 assert "첫째 답변" in after and "둘째 답변 😀" in after
@@ -64,7 +64,7 @@ assert len(after) == len(before) + 1
 for text in ("첫 합성 문단", "마지막 합성 문단", "문항", "반복 문구"):
     assert before.count(text) == after.count(text)
 for name in before_streams:
-    if not name.startswith("BodyText/") and name != "DocInfo":
+    if not name.startswith("BodyText/") and name not in ("DocInfo", "PrvText", "PrvImage"):
         assert before_streams[name] == after_streams[name]
 for tag in (19, 21, 25):
     assert [(level, payload) for kind, level, payload in records(before_streams["DocInfo"]) if kind == tag] == [

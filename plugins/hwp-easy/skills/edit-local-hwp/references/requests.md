@@ -6,7 +6,13 @@ Repeated names require the exact field ID; `expected_old` is the field value for
 
 LF in these operations or `set_field` stores HWP character 10 line breaks inside the existing paragraph, preserving its paragraph count and anchors. Empty lines and up to 100 lines per inserted value are supported; CR, tab and other control inputs and ranges consuming anchors are refused.
 
-No-op field/text edits leave bytes, timestamps and recovery storage unchanged. The complex profile does not accept paragraph/table structure changes or new formatting definitions.
+No-op field/text edits leave bytes, timestamps and recovery storage unchanged. The complex profile does not accept paragraph/table structure changes. Verified character and paragraph formatting can append or reuse derived definitions while retaining existing definitions exactly.
+
+Complex blocks expose `text_mapping_verified`; unverified blocks have no edit target. Opaque headers/footers/textboxes and unsupported drawing groups can coexist with proven body/cell targets, without becoming readable or editable themselves.
+
+Complex `format_paragraph` requires a block's `paragraph_format_editable:true` and whole `expected_old` text. Properties are `alignment` (`justify`, `left`, `right`, `center`), `lineSpacing` (integer stored value, 1–720000), `marginLeft`, `marginRight`, `spacingBefore`, `spacingAfter` (integer raw HWP units, 0–720000), and `indent` (raw HWP units, −72000–720000). **Complex margins/spacing use stored HWP units (100 per point)**; do not apply the ordinary model's doubled-margin scaling. The existing line-spacing type is retained, so read the document's properties rather than assuming every stored value is a percentage. Read `paragraph_properties` for the original stored values. Field IDs and group IDs cannot select paragraph formatting.
+
+Changed plan/edit results include `preview_cache`. `updated` means a bounded UTF-16 excerpt and first-page BMP were regenerated from the checked candidate; `text_updated_image_unavailable` means the stale image was cleared after bounded rendering failed. The preview cache is derived data and does not certify page layout. No-op edits and exact recovery preserve the prior caches.
 
 ```json
 {"action":"edit","source":"<path>","expected_sha256":"<hash>","operations":[{"type":"set_field","target_id":"<returned field target>","expected_old":"<old field value>","new_text":"New value"}]}

@@ -6,6 +6,7 @@ import { createHash } from 'node:crypto';
 import { build } from '../probes/sites-runtime/node_modules/esbuild/lib/main.js';
 import { copyRuntimeNotices, verifyRuntimeNotices } from '../probes/sites-runtime/scripts/runtime-notices.mjs';
 import {localCfbNotices} from './local-cfb-notices.mjs';
+import {localPreviewNotices} from './local-preview-notices.mjs';
 const root=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'..');
 const out=path.join(root,'outputs','plugin-package','hwp-easy');
 const source=path.join(root,'plugins','hwp-easy');
@@ -18,10 +19,13 @@ for(const file of ['plugin.json','assets/hwp-easy.svg','skills/edit-local-hwp/SK
   const destination=path.join(out,file);await fs.mkdir(path.dirname(destination),{recursive:true});await fs.copyFile(path.join(source,file),destination);
 }
 const cfbNotice=localCfbNotices(root);
+const previewNotice=localPreviewNotices(root);
 const built=await build({entryPoints:[path.join(root,'src/one_hwp/local_runner.mjs')],outfile:path.join(scripts,'local-runner.mjs'),bundle:true,
   platform:'node',format:'esm',target:'node22',logLevel:'warning',legalComments:'eof',metafile:true});
 if(Object.keys(built.metafile.inputs).some(file=>/node_modules\/(adler-32|crc-32)\//.test(file)))throw Error('Unexpected CFB transitive dependency in local bundle');
 await fs.copyFile(path.join(root,'node_modules/@rhwp/core/rhwp_bg.wasm'),path.join(scripts,'rhwp_bg.wasm'));
+await fs.copyFile(path.join(root,'node_modules/@resvg/resvg-wasm/index_bg.wasm'),path.join(scripts,'resvg_bg.wasm'));
+await fs.copyFile(path.join(root,'vendor/local-preview/NanumGothic-Regular.ttf'),path.join(scripts,'NanumGothic-Regular.ttf'));
 copyRuntimeNotices({rhwpDir:path.join(root,'node_modules/@rhwp/core'),pakoDir:path.join(root,'probes/sites-runtime/node_modules/pako'),
   outputDir:scripts,root:path.join(root,'probes/sites-runtime')});
 verifyRuntimeNotices(scripts);
@@ -33,11 +37,14 @@ for(const [file,from] of [
   ['PAKO-LICENSE.txt','probes/sites-runtime/node_modules/pako/LICENSE'],
   ['PAKO-ZLIB-LICENSE.txt','probes/sites-runtime/guard/ZLIB-LICENSE.txt'],
   ['CFB-LICENSE.txt','probes/sites-runtime/licenses/cfb/LICENSE.txt'],
+  ['RESVG-LICENSE.txt','vendor/local-preview/RESVG-LICENSE.txt'],
+  ['NANUM-OFL.txt','vendor/local-preview/OFL.txt'],
 ])await fs.copyFile(path.join(root,from),path.join(out,'licenses',file));
 const hash=data=>createHash('sha256').update(data).digest('hex');
 const metadata=JSON.parse(await fs.readFile(path.join(source,'plugin.json'),'utf8'));
 const manifest={package:metadata.name,version:metadata.version,runtime:'Node >=22; bundled JS and WASM; no npm or Python at execution time',
   local_cfb_writer:cfbNotice,
+  local_preview:previewNotice,
   engine:'@rhwp/core 0.8.6',wasm_sha256:hash(await fs.readFile(path.join(scripts,'rhwp_bg.wasm'))),
   runner_sha256:hash(await fs.readFile(path.join(scripts,'local-runner.mjs'))),
   global_registration_changed:false,remote_deployment_changed:false,portal_submission:'NOT_RUN',directory_publication:'NOT_DONE'};

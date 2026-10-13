@@ -12,7 +12,7 @@ For a `complex_profile` document, inspect the returned recursive `cell_path`, `f
 
 Field values and nested-cell `splice_text` accept LF line breaks, including blank lines: these are HWP character 10 inside the same existing paragraph, not new paragraphs. Up to 100 lines per inserted value are allowed. Retained character styles and all anchors remain exact.
 
-A range crossing a field/table/drawing anchor is refused. Field insertion/removal/formulas and nested-table structure/format changes are outside this profile. Such documents use the complex operation path; do not attempt an unrelated structural operation to bypass its guards.
+A range crossing a field/table/drawing anchor is refused. Field insertion/removal/formulas and nested-table structure/layout changes are outside this profile. `format_paragraph` supports a verified body/cell block with `paragraph_format_editable:true`, preserving field and drawing anchors; its units are specified in the request reference. Such documents use the complex operation path; do not attempt an unrelated structural operation to bypass its guards.
 
 Move an existing picture group with `move_picture_group`, confirming the group's complete expected geometry and host paragraph text. Only its horizontal/vertical offsets change.
 
@@ -20,9 +20,11 @@ Move an existing picture group with `move_picture_group`, confirming the group's
 
 The complex read is a verified body/cell text map, not a claim that every opaque object's content has been read. Reread after saving and report the actual edited file.
 
+Non-cell lists such as headers/footers/textboxes and unsupported drawing groups can be retained as opaque records while verified body/cell targets remain available. Their text is not necessarily exposed. A block with `text_mapping_verified:false` has no target; never synthesize one, even if its displayed text looks plausible.
+
 When `partial_read_only:true` is returned, explain that only observable body/top-level cell content is available and other object content may be missing. Its blocks have no edit targets; do not plan an edit or treat cursor exhaustion as full-document coverage. The source was not saved.
 
-`preview` renders the current HWP bytes directly. It does not use or refresh the file's embedded preview text/thumbnail, which external applications can display from an older version.
+`preview` renders the current HWP bytes directly without saving. Changed edits update derived UTF-16 preview text and a first-page BMP before saving, then prove all non-preview streams unchanged from the verified candidate. Inspect `preview_cache.status`: `updated` includes the raster dimensions; `text_updated_image_unavailable` clears the stale image if rendering fails or exceeds its 5-second/256-MiB JS-heap worker limit. A Korean fallback font is bundled for thumbnails only and may differ from document fonts. No-op edits preserve bytes; recovery restores the exact previous caches along with the document.
 
 Read [request format](requests.md) when constructing requests. Write JSON to a task-local request file using a file tool; pass that file as a separate quoted argument to `node <absolute scripts/local-runner.mjs> --request <absolute request.json>`. Do not interpolate document text into shell commands.
 

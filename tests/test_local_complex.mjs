@@ -12,7 +12,7 @@ for(const cell of [false,true])for(const mixed of [false,true])test(`named field
  const f=state.fields[0];assert.equal(f.editable,true);const op={type:'set_field',target_id:f.target_id,expected_old:f.value,new_text:'새 답변 🚀 longer'};
  const plan=await runLocal({action:'plan',source,expected_sha256:state.source_sha256,operations:[op]});assert.equal(plan.saved,false);assert.deepEqual(fs.readFileSync(source),original);
  const saved=await edit(source,state,op),after=await read(source);assert.equal(saved.selected_file_updated,true);assert.equal(after.fields[0].value,op.new_text);assert.deepEqual(after.fields[1],{...state.fields[1],target_id:after.fields[1].target_id});
- const old=readHwp(original),now=readHwp(fs.readFileSync(source));for(const [n,v] of old.streams)if(!n.startsWith('BodyText/'))assert.deepEqual(now.streams.get(n),v);
+ const old=readHwp(original),now=readHwp(fs.readFileSync(source));for(const [n,v] of old.streams)if(!n.startsWith('BodyText/')&&!['PrvText','PrvImage'].includes(n))assert.deepEqual(now.streams.get(n),v);
  const controlRecords=raw=>[...parseRecords(raw.streams.get('BodyText/Section0'))].filter(r=>![66,67,68,69].includes(r.tag)).map(r=>({tag:r.tag,level:r.level,payload:r.payload}));assert.deepEqual(controlRecords(now),controlRecords(old));
  await runLocal({action:'restore',source,expected_sha256:after.source_sha256,backup_id:saved.backup_id});assert.deepEqual(fs.readFileSync(source),original);
 });
@@ -47,7 +47,7 @@ test('two grouped JPEGs retain child transforms and bytes through group move and
  const original=fs.readFileSync(source),saved=await edit(source,state,{type:'move_picture_group',target_id:g.target_id,expected_old:state.blocks.find(b=>b.id===g.block_id).text,expected_properties:g.properties,props:{horzOffset:500,vertOffset:200}}),moved=await read(source),group=moved.picture_groups[0];assert.equal(group.properties.horzOffset,500);assert.deepEqual(group.pictures,g.pictures);
  const {picture_index,...props}=group.pictures[1];await edit(source,moved,{type:'crop_group_picture',target_id:group.target_id,expected_old:moved.blocks.find(b=>b.id===g.block_id).text,picture_index,expected_properties:props,props:{cropLeft:75,cropBottom:150}});
  const after=await read(source);assert.equal(after.picture_groups[0].pictures[1].cropLeft,75);assert.deepEqual(after.picture_groups[0].pictures[0],g.pictures[0]);
- const old=readHwp(original),now=readHwp(fs.readFileSync(source));for(const [n,v] of old.streams)if(!n.startsWith('BodyText/'))assert.deepEqual(now.streams.get(n),v);
+ const old=readHwp(original),now=readHwp(fs.readFileSync(source));for(const [n,v] of old.streams)if(!n.startsWith('BodyText/')&&!['PrvText','PrvImage'].includes(n))assert.deepEqual(now.streams.get(n),v);
  const shapes=raw=>[...parseRecords(raw.streams.get('BodyText/Section0'))].filter(r=>r.tag===76).map(r=>r.payload);assert.deepEqual(shapes(now),shapes(old));
  await runLocal({action:'restore',source,expected_sha256:after.source_sha256,backup_id:saved.backup_id});assert.deepEqual(fs.readFileSync(source),original);
 });

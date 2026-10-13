@@ -4,7 +4,7 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import os from 'node:os';
 import {createHash} from 'node:crypto';
-import {inspectSkill,installSkill} from '../scripts/install_agent_skill.mjs';
+import {inspectSkill,installSkill,updateSkill} from '../scripts/install_agent_skill.mjs';
 
 const sha=value=>createHash('sha256').update(value).digest('hex');
 async function fixture(t) {
@@ -57,4 +57,34 @@ test('rejects an unlisted executable',async t=>{
 });
 test('rejects unsafe manifest paths without reading outside the package',async t=>{
  const f=await fixture(t);f.manifest.files['../outside.txt']=sha('outside');await f.save();await assert.rejects(inspectSkill(f.source,'cursor'),/extra or missing|Unsafe/);
+});
+
+test('a checked update retains the entire prior installation outside skill discovery',async t=>{
+ const f=await fixture(t);await installSkill(f.source,'cursor',f.parent);await fs.writeFile(path.join(f.parent,'hwp-easy','personal-note.txt'),'keep');f.manifest.version='0.2.19';await f.save();
+ const result=await updateSkill(f.source,'cursor',f.parent);assert.equal(result.status,'UPDATED');assert.equal(result.previous_version,'0.2.18');assert.equal(result.version,'0.2.19');
+ assert.equal(await fs.readFile(path.join(result.previous_installation,'personal-note.txt'),'utf8'),'keep');assert.equal(path.dirname(result.previous_installation),path.resolve(f.parent,'..','hwp-easy-install-backups'));
+ assert.deepEqual(await fs.readdir(f.parent),['hwp-easy']);assert.equal((await inspectSkill(result.skill_path,'cursor')).version,'0.2.19');
+});
+test('a byte-identical update does not create a backup or duplicate skill',async t=>{const f=await fixture(t);await installSkill(f.source,'cursor',f.parent);const result=await updateSkill(f.source,'cursor',f.parent);assert.equal(result.status,'UNCHANGED');await assert.rejects(fs.stat(path.resolve(f.parent,'..','hwp-easy-install-backups')),{code:'ENOENT'});});
+test('update rejects a downgrade and preserves the current runtime',async t=>{const f=await fixture(t);await installSkill(f.source,'cursor',f.parent);f.manifest.version='0.2.17';await f.save();await assert.rejects(updateSkill(f.source,'cursor',f.parent),/downgrade/);assert.equal((await inspectSkill(path.join(f.parent,'hwp-easy'),'cursor')).version,'0.2.18');});
+test('a corrupt update fails before moving the installed skill',async t=>{const f=await fixture(t);await installSkill(f.source,'cursor',f.parent);await fs.writeFile(path.join(f.source,'scripts/rhwp_bg.wasm'),'bad');await assert.rejects(updateSkill(f.source,'cursor',f.parent),/hash mismatch/);assert.equal((await inspectSkill(path.join(f.parent,'hwp-easy'),'cursor')).version,'0.2.18');});
+test('update installs into an empty client directory',async t=>{const f=await fixture(t);const result=await updateSkill(f.source,'cursor',f.parent);assert.equal(result.status,'INSTALLED');});
+
+test('a failed update publication restores the prior installation and user files',async t=>{
+ const f=await fixture(t);await installSkill(f.source,'cursor',f.parent);const target=path.join(f.parent,'hwp-easy');
+ await fs.writeFile(path.join(target,'personal-note.txt'),'keep');f.manifest.version='0.2.19';await f.save();
+ const rename=fs.rename;fs.rename=async(from,to)=>{if(from.includes('.staging-')&&to===target)throw Object.assign(Error('injected publish failure'),{code:'EACCES'});return rename(from,to);};
+ try{await assert.rejects(updateSkill(f.source,'cursor',f.parent),/injected publish failure/);}finally{fs.rename=rename;}
+ assert.equal(JSON.parse(await fs.readFile(path.join(target,'build-manifest.json'),'utf8')).version,'0.2.18');
+ assert.equal(await fs.readFile(path.join(target,'personal-note.txt'),'utf8'),'keep');
+ assert.equal(await fs.readFile(path.join(target,'scripts/local-runner.mjs'),'utf8'),await fs.readFile(path.join(f.source,'scripts/local-runner.mjs'),'utf8'));
+});
+
+test('a concurrent replacement is retained without overwriting it during rollback',async t=>{
+ const f=await fixture(t);await installSkill(f.source,'cursor',f.parent);const target=path.join(f.parent,'hwp-easy');f.manifest.version='0.2.19';await f.save();
+ const rename=fs.rename;fs.rename=async(from,to)=>{if(from.includes('.staging-')&&to===target){await fs.mkdir(target);await fs.writeFile(path.join(target,'concurrent.txt'),'keep concurrent');throw Object.assign(Error('injected concurrent replacement'),{code:'EEXIST'});}return rename(from,to);};
+ try{await assert.rejects(updateSkill(f.source,'cursor',f.parent),/injected concurrent replacement/);}finally{fs.rename=rename;}
+ assert.equal(await fs.readFile(path.join(target,'concurrent.txt'),'utf8'),'keep concurrent');
+ const root=path.resolve(f.parent,'..','hwp-easy-install-backups'),prior=(await fs.readdir(root)).find(n=>n.startsWith('hwp-easy-0.2.18-'));
+ assert.ok(prior);assert.equal((await inspectSkill(path.join(root,prior),'cursor')).version,'0.2.18');
 });

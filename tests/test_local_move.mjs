@@ -15,7 +15,7 @@ for(const [from,to,expected] of [[1,4,['시작','셋','넷','끝','둘 😀']],[
  const {source,read}=workspace(t),before=fs.readFileSync(source),s=await read(),operation=move(s.blocks[from],s.blocks[to]);
  const plan=await runLocal({action:'plan',source,expected_sha256:s.source_sha256,operations:[operation]});assert.equal(plan.saved,false);assert.deepEqual(fs.readFileSync(source),before);
  const saved=await edit(source,s,[operation]),after=await read();assert.equal(saved.saved,true);assert.equal(saved.paragraph_order_changed,true);assert.deepEqual(after.blocks.map(b=>b.text),expected);
- const a=readHwp(before),b=readHwp(fs.readFileSync(source));for(const [key,value] of a.streams)if(!key.startsWith('BodyText/'))assert.deepEqual(b.streams.get(key),value);
+ const a=readHwp(before),b=readHwp(fs.readFileSync(source));for(const [key,value] of a.streams)if(!key.startsWith('BodyText/')&&!['PrvText','PrvImage'].includes(key))assert.deepEqual(b.streams.get(key),value);
  await runLocal({action:'restore',source,expected_sha256:after.source_sha256,backup_id:saved.backup_id});assert.deepEqual(fs.readFileSync(source),before);
 });
 test('mixed character styles travel with the moved body paragraph',async t=>{

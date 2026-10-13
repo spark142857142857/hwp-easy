@@ -47,9 +47,9 @@ def verify(folder, case):
     pa, a = load(folder / (case['name'] + '-before.hwp'))
     pb, b = load(folder / (case['name'] + '-after.hwp'))
     body = 'BodyText/Section' + str(case['section'])
-    assert set(pa) == set(pb)
+    assert set(pa) - {'PrvText', 'PrvImage'} == set(pb) - {'PrvText', 'PrvImage'}
     for name in pa:
-        if name not in ('DocInfo', body):
+        if name not in ('DocInfo', body, 'PrvText', 'PrvImage'):
             assert pa[name] == pb[name]
     da, db = raw.records(a['DocInfo']), raw.records(b['DocInfo'])
     group = lambda rs, tag: [r for r in rs if r[0] == tag]

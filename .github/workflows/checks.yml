@@ -50,7 +50,7 @@ jobs:
         run: node probes/sites-runtime/scripts/check-python-guard.mjs
       - name: Verify local same-file edits, structural changes and isolated plugin runtime
         run: |
-          node --test tests/test_local_runner.mjs tests/test_local_structure.mjs tests/test_local_advanced.mjs tests/test_local_extended.mjs tests/test_local_pictures.mjs tests/test_local_text.mjs tests/test_local_table_format.mjs tests/test_local_batch.mjs tests/test_local_move.mjs tests/test_local_style.mjs tests/test_local_history.mjs tests/test_local_find.mjs tests/test_local_complex.mjs tests/test_local_complex_format.mjs tests/test_local_partial_read.mjs
+          node --test --test-concurrency=2 tests/test_local_runner.mjs tests/test_local_structure.mjs tests/test_local_advanced.mjs tests/test_local_extended.mjs tests/test_local_pictures.mjs tests/test_local_text.mjs tests/test_local_table_format.mjs tests/test_local_batch.mjs tests/test_local_move.mjs tests/test_local_style.mjs tests/test_local_history.mjs tests/test_local_find.mjs tests/test_local_complex.mjs tests/test_local_complex_format.mjs tests/test_local_partial_read.mjs tests/test_local_complex_mapping.mjs tests/test_local_preview.mjs
           node scripts/package_local_plugin.mjs
           python scripts/archive_local_plugin.py
           node scripts/check-local-plugin.mjs
@@ -144,7 +144,7 @@ jobs:
         run: python -m pip install olefile==0.47
       - name: Verify fields, nested cells and grouped pictures in isolated runtime
         run: |
-          node --test tests/test_local_complex.mjs tests/test_local_complex_format.mjs tests/test_local_partial_read.mjs
+          node --test --test-concurrency=2 tests/test_local_complex.mjs tests/test_local_complex_format.mjs tests/test_local_partial_read.mjs tests/test_local_complex_mapping.mjs tests/test_local_preview.mjs
           node scripts/package_local_plugin.mjs
           node scripts/check-local-complex.mjs
           python scripts/check-local-complex.py

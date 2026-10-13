@@ -2,7 +2,7 @@
 import {createLocalEngineApi as createEngineApi} from './local_api.mjs';
 import {readHwp} from '../../probes/sites-runtime/guard/container.mjs';
 import {GuardError,parseRecords} from '../../probes/sites-runtime/guard/records.mjs';
-import {packLocalBodyRewrite} from '../../probes/sites-runtime/engine/structural-body-repair.mjs';
+import {packLocalBodyRewrite} from './local_body_write.mjs';
 import {recordsByBlock,preservableStructuralProfile,verifyListCounts} from './local_structure.mjs';
 const fail=code=>{throw new GuardError(code);},equal=(a,b)=>JSON.stringify(a)===JSON.stringify(b);
 const bytesEqual=(a,b)=>a.length===b.length&&a.every((v,i)=>v===b[i]),view=b=>new DataView(b.buffer,b.byteOffset,b.byteLength);

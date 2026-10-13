@@ -120,7 +120,7 @@ test('pagination is version bound across independent runner calls',async t=>{
  await assert.rejects(runLocal({action:'read',source,cursor:{...first.next_cursor,sha256:'0'.repeat(64)}}),/CURSOR_VERSION_CONFLICT/);
 });
 
-test('preview renders current saved bytes without using or changing embedded preview caches',async t=>{
+test('preview reads current bytes while a changed edit refreshes embedded preview caches',async t=>{
  const {source}=workspace(t),read=await runLocal({action:'read',source,max_chars:64000}),original=fs.readFileSync(source);
  const before=await runLocal({action:'preview',source,expected_sha256:read.source_sha256});
  const saved=await runLocal({action:'edit',source,expected_sha256:read.source_sha256,operations:[replacement(read,'중간 합성 문단','현재 미리보기 본문')]});
@@ -129,7 +129,9 @@ test('preview renders current saved bytes without using or changing embedded pre
  assert.equal(after.preview_source,'current_document_render');assert.equal(after.embedded_preview_cache,'not_used');assert.equal(after.saved,false);
  assert.notEqual(after.svg,before.svg);assert.ok(after.svg.startsWith('<svg'));
  const oldStreams=readCfb(original),newStreams=readCfb(bytes);
- for(const name of ['PrvText','PrvImage'])if(oldStreams.has(name))assert.deepEqual(newStreams.get(name),oldStreams.get(name));
+ assert.equal(saved.preview_cache.status,'updated');assert.ok(Buffer.from(newStreams.get('PrvText')).toString('utf16le').includes('현재 미리보기 본문'));
+ assert.equal(Buffer.from(newStreams.get('PrvImage')).subarray(0,2).toString(),'BM');
+ for(const [name,value]of oldStreams)if(!name.startsWith('BodyText/')&&!['DocInfo','PrvText','PrvImage'].includes(name))assert.deepEqual(newStreams.get(name),value);
  assert.deepEqual(fs.readFileSync(source),bytes);assert.equal(fs.statSync(source).mtimeMs,mtime);
  await assert.rejects(runLocal({action:'preview',source,expected_sha256:read.source_sha256}),/VERSION_CONFLICT/);
 });

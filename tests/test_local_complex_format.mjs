@@ -11,7 +11,7 @@ function workspace(t,bytes){const dir=fs.mkdtempSync(path.join(os.tmpdir(),'hwp-
 const read=source=>runLocal({action:'read',source,max_chars:64000});
 const format=(target,props,start=0,end=[...(target.value??target.text)].length)=>({type:'format_text',target_id:target.target_id,expected_old:target.value??target.text,start,end,props});
 const edit=(source,state,operations)=>runLocal({action:'edit',source,expected_sha256:state.source_sha256,operations});
-function preserved(a,z){const old=readCfb(a),now=readCfb(z);assert.deepEqual([...now.keys()].sort(),[...old.keys()].sort());for(const [name,value] of old)if(name!=='DocInfo'&&!name.startsWith('BodyText/'))assert.deepEqual(now.get(name),value);
+function preserved(a,z){const old=readCfb(a),now=readCfb(z);assert.deepEqual([...now.keys()].filter(n=>!['PrvText','PrvImage'].includes(n)).sort(),[...old.keys()].filter(n=>!['PrvText','PrvImage'].includes(n)).sort());for(const [name,value] of old)if(!['DocInfo','PrvText','PrvImage'].includes(name)&&!name.startsWith('BodyText/'))assert.deepEqual(now.get(name),value);
  const defs=bytes=>[...parseRecords(readHwp(bytes).streams.get('DocInfo'))];const before=defs(a),after=defs(z);
  for(const r of before.filter(r=>![17,19,21].includes(r.tag)))assert.ok(after.some(s=>s.tag===r.tag&&s.level===r.level&&Buffer.from(s.payload).equals(Buffer.from(r.payload))));
  const controls=bytes=>[...parseRecords(readHwp(bytes).streams.get('BodyText/Section0'))].filter(r=>![66,68,69].includes(r.tag)).map(r=>({tag:r.tag,level:r.level,payload:r.payload}));assert.deepEqual(controls(z),controls(a));

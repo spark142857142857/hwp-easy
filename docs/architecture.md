@@ -8,7 +8,7 @@ HWP Easy는 공통 HWP 엔진과 로컬 실행기를 여러 에이전트 클라�
 
 ## 메인 로컬 파일 흐름
 
-현재 메인 **0.2.18**은 Codex·Claude Code·Cursor용 배포본에 같은 Node 실행기와 WASM을 포함합니다. HWP Easy 서버나 OAuth 연결이 필요하지 않습니다.
+현재 메인 **0.2.19**은 Codex·Claude Code·Cursor용 배포본에 같은 Node 실행기와 WASM을 포함합니다. HWP Easy 서버나 OAuth 연결이 필요하지 않습니다.
 
 ```mermaid
 flowchart LR
@@ -31,6 +31,8 @@ flowchart LR
 | 독립 검사 | `probes/sites-runtime/guard/` | CFB·레코드·대상 매핑·비대상 바이트·변경 조건 확인 |
 | 로컬 실행기 | `src/one_hwp/local_runner.mjs`, `local_*.mjs` | 읽기·계획·편집·이력·복구 명령 |
 | 로컬 파일 저장 | `src/one_hwp/local_file.mjs` | 충돌 검사·이전 바이트 보관·같은 경로 저장 |
+| 내장 미리보기 | `local_preview_cache.mjs`, resvg WASM·폰트 | 검증된 저장 후보의 UTF-16 텍스트·BMP 갱신, 실패 시 오래된 이미지 제거 |
+| 로컬 컨테이너 쓰기 | `local_container_write.mjs` | 재배치 후 비대상 압축 스트림의 정확한 보존 |
 | 공통 배포 소스 | `plugins/hwp-easy/` | 핵심 스킬 지침·참조·명시적 호출 정책 |
 | 패키지 생성 | `scripts/package_local_plugin.mjs`, `package_agent_skills.mjs` | 한 번 만든 실행기로 Codex·Claude Code·Cursor 배포본 생성 |
 
@@ -40,7 +42,7 @@ flowchart LR
 
 1. 접근 가능한 HWP의 현재 해시와 대상·기존 내용을 확인합니다.
 2. 요청한 수정 전체를 계획하고 지원 조건을 검사합니다.
-3. 수정본을 생성하고 재열기·비대상 보존 검사를 수행합니다.
+3. 수정본을 생성하고 재열기·비대상 보존 검사를 수행한 뒤 내장 미리보기 캐시를 갱신합니다.
 4. 현재 파일이 바뀌지 않았는지 확인한 뒤 이전 바이트를 보관하고 같은 경로에 저장합니다.
 
 한 작업이라도 실패하면 일부만 저장하지 않습니다. 실제 변화가 없으면 새 저장과 백업을 만들지 않습니다. 복구할 때도 현재 편집본을 보관하므로 다시 복구할 수 있습니다. [사용자 저장·복구 안내](quick-start.md)

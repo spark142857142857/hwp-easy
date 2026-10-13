@@ -96,7 +96,8 @@ function verifyDocInfo(a, b, allowBorders) {
   }
 }
 export function verifyOutsideBody(before, after, tableAdded, definitions) {
-  if (!equal([...before.streams.keys()].sort(), [...after.streams.keys()].sort())) fail('STREAM_SET_CHANGED');
+  const retained=streams=>[...streams.keys()].filter(n=>n!=='PrvText'&&n!=='PrvImage').sort();
+  if (!equal(retained(before.streams), retained(after.streams))) fail('STREAM_SET_CHANGED');
   for (const [name, original] of before.streams) {
     if (name.startsWith('BodyText/') || name === 'PrvText' || name === 'PrvImage') continue;
     const saved = after.streams.get(name);

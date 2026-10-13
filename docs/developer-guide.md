@@ -4,7 +4,7 @@
 
 [프로젝트 개요](../README.md) · [문서 인덱스](README.md) · [아키텍처](architecture.md)
 
-소스를 변경하거나 배포 패키지를 생성할 때 필요한 환경과 검사 명령입니다. 현재 메인은 **로컬 HWP Easy 0.2.18**이며, Codex·Claude Code·Cursor가 같은 실행기와 엔진을 사용합니다. 파일 편집 절차는 [사용 가이드](quick-start.md), 실제 설치·호출 결과는 [프로젝트 상태](project-status.md)에 정리합니다.
+소스를 변경하거나 배포 패키지를 생성할 때 필요한 환경과 검사 명령입니다. 현재 메인은 **로컬 HWP Easy 0.2.19**이며, Codex·Claude Code·Cursor가 같은 실행기와 엔진을 사용합니다. 파일 편집 절차는 [사용 가이드](quick-start.md), 실제 설치·호출 결과는 [프로젝트 상태](project-status.md)에 정리합니다.
 
 ## 환경과 구성
 
@@ -80,9 +80,9 @@ python scripts/archive_agent_skills.py
 
 | 배포 대상 | 생성 ZIP |
 | --- | --- |
-| Codex | `outputs/plugin-package/hwp-easy-0.2.18.zip` |
-| Claude Code | `outputs/agent-packages/hwp-easy-claude-code-0.2.18.zip` |
-| Cursor | `outputs/agent-packages/hwp-easy-cursor-0.2.18.zip` |
+| Codex | `outputs/plugin-package/hwp-easy-0.2.19.zip` |
+| Claude Code | `outputs/agent-packages/hwp-easy-claude-code-0.2.19.zip` |
+| Cursor | `outputs/agent-packages/hwp-easy-cursor-0.2.19.zip` |
 
 패키지 생성은 앱 설치나 공개 게시를 수행하지 않습니다. Claude Code·Cursor의 설치 검사와 격리된 폴더에 설치한 실행기의 검증은 다음으로 재현합니다.
 
@@ -95,12 +95,14 @@ python scripts/check-installed-plugin.py outputs/agent-client-check/cursor
 
 독립 Python 판독은 합성 HWP 내용·비대상 기록 보존·정확한 복구를 검사합니다. 이 명령이 통과해도 앱의 모델이 스킬을 호출한 결과를 대신하지는 않습니다. 실제 호스트 호출 결과는 [클라이언트 검증](agent-client-skills.md#검증-범위)에 기록합니다.
 
-사용자가 개인 스킬 설치를 요청한 환경에서는 다음 명령을 사용할 수 있습니다. 기존 폴더가 있으면 덮어쓰기를 거부하며 호스트 설정이나 MCP를 등록하지 않습니다.
+사용자가 개인 스킬 설치를 요청한 환경에서는 다음 명령을 사용할 수 있습니다. 기본 설치는 기존 폴더가 있으면 거부하며 호스트 설정이나 MCP를 등록하지 않습니다. 업데이트에는 아래 명령의 `--mode update`를 사용합니다. 먼저 새 패키지를 검증하고 기존 폴더 전체를 스킬 검색 경로 밖의 `hwp-easy-install-backups/`에 보관합니다. 같은 패키지는 변경하지 않으며 버전 다운그레이드·변조·연결 경로를 거부합니다.
 
 ```bash
 node scripts/install_agent_skill.mjs --client claude-code --package outputs/agent-packages/claude-code/hwp-easy
 node scripts/install_agent_skill.mjs --client cursor --package outputs/agent-packages/cursor/hwp-easy
 ```
+
+공개 양식은 고정 원본·출처 해시를 갖춘 별도 입력 폴더에서 `check-local-public-corpus.mjs`와 `check-local-public-corpus.py`로 검사합니다. 개인 문서나 원시 호스트 로그를 공개 릴리스에 포함하지 않습니다.
 
 Codex의 로컬 마켓플레이스 준비·설치·설치본 검사는 [Codex 설치 재현](local-plugin-installation.md#개발자가-재현하기)을 따릅니다. 합성 검증 결과와 생성 ZIP은 `outputs/`에 두고 Git에 넣지 않습니다.
 

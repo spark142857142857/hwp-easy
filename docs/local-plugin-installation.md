@@ -2,7 +2,7 @@
 
 [프로젝트 개요](../README.md) · [문서 인덱스](README.md) · [프로젝트 상태](project-status.md)
 
-이 문서는 **Codex용 로컬 플러그인의 실제 설치 기록과 개발자 재현 절차**입니다. 현재 소스·생성 패키지는 0.2.18이고, 실제 Codex에 설치해 확인한 HWP Easy는 0.2.17입니다. Claude Code·Cursor의 0.2.18 설치는 [별도 안내](agent-client-skills.md)를 따릅니다.
+이 문서는 **Codex용 로컬 플러그인의 실제 설치 기록과 개발자 재현 절차**입니다. 2026년 10월 13일 소스·패키지·실제 설치본을 모두 0.2.19로 맞췄습니다. 새 app-server 대화의 명시적 선택 참조로 실제 모델 편집·같은 파일 저장·정확한 복구를 확인했습니다. [현재 검증 기록](local-release-0.2.19.md), [Claude Code·Cursor 설치](agent-client-skills.md)를 참조하세요.
 
 파일 지정·편집·저장·복구 절차는 [사용 가이드](quick-start.md)에 정리합니다. 공개 다운로드와 다른 사용자의 설치 검증 상태는 [프로젝트 상태](project-status.md)를 따릅니다.
 
@@ -11,6 +11,10 @@
 2026년 10월 12일 로컬 실행 방식의 **HWP Easy 0.2.15**를 메인으로 선택했다. 패키지 식별자는 `hwp-easy`, 표시 이름은 **HWP Easy**다. 이전 로컬 후보의 실행기와 WASM은 동일하며 원격 MCP를 묶지 않는다. 원격 0.1.9의 세 패키지 파일은 내용 변경 없이 `plugins/archive/hwp-easy-remote-0.1.9/`로 옮겼다.
 
 ## 실제 확인한 설치
+
+0.2.19 ZIP의 25개 파일과 실제 설치 캐시의 실행 자원을 확인했습니다. `installed:true`, `enabled:true`이며 설치 실행기·독립 판독이 통과했습니다. 데스크톱 클릭 검사가 아닌 정식 app-server 선택·실행 검사입니다. 공개 ZIP은 [릴리스](https://github.com/spark142857142857/hwp-easy/releases/tag/hwp-easy-local-v0.2.19)에서 받을 수 있습니다.
+
+## 이전 설치 기록
 
 Codex용 **0.2.17 설치본**을 정식 CLI 절차로 설치·활성 확인했다. 8,000바이트를 넘던 스킬 본문을 6,282바이트로 줄이고 기존 상세 지침은 참조 파일에 모두 보존했다. 설치된 21개 파일과 ZIP을 대조하고 명시적 선택 후 본문 전체 전달을 확인했다. 실행기·WASM은 0.2.16과 동일하며, 설치 실행기의 합성 파일 수정·같은 파일 저장·복구와 독립 Python 판독을 다시 통과했다. 기본 목록 숨김은 자동 호출 금지 설정에 따른 정상 동작이다. [호출 진단](local-skill-discovery.md)
 
@@ -43,17 +47,17 @@ ZIP을 새로운 영구 로컬 폴더에 풀고 `.agents/plugins/marketplace.jso
 
 ## 개발자가 재현하기
 
-아래는 현재 소스에서 **0.2.18 패키지를 생성·설치·검사하는 절차**다. 이 절차를 적은 것만으로 Codex 0.2.18 실제 설치를 완료했다는 뜻은 아니다. [개발 환경](developer-guide.md#환경과-구성)을 먼저 준비하며 패키지 생성은 설치와 분리한다.
+아래는 현재 소스에서 **0.2.19 패키지를 생성·설치·검사하는 절차**다. 공개 ZIP은 빌드 명령 없이 설치 준비 입력으로 사용할 수 있다. [개발 환경](developer-guide.md#환경과-구성)을 먼저 준비하며 패키지 생성은 설치와 분리한다.
 
 ```powershell
 node scripts/package_local_plugin.mjs
 python scripts/archive_local_plugin.py
 ```
 
-출력은 `outputs/plugin-package/hwp-easy/`와 `outputs/plugin-package/hwp-easy-0.2.18.zip`이다. `prepare_local_marketplace.py`는 ZIP의 경로, 런타임 해시와 명시적 호출 정책을 확인한 뒤 **새로운 폴더**에 로컬 마켓플레이스를 준비한다. 기존 설치 폴더는 덮어쓰지 않으며 설치·등록을 수행하지 않는다.
+출력은 `outputs/plugin-package/hwp-easy/`와 `outputs/plugin-package/hwp-easy-0.2.19.zip`이다. `prepare_local_marketplace.py`는 ZIP의 경로, 런타임 해시와 명시적 호출 정책을 확인한 뒤 **새로운 폴더**에 로컬 마켓플레이스를 준비한다. 기존 설치 폴더는 덮어쓰지 않으며 설치·등록을 수행하지 않는다.
 
 ```powershell
-python scripts/prepare_local_marketplace.py outputs/plugin-package/hwp-easy-0.2.18.zip '<새 마켓플레이스 경로>'
+python scripts/prepare_local_marketplace.py outputs/plugin-package/hwp-easy-0.2.19.zip '<새 마켓플레이스 경로>'
 codex plugin marketplace add '<새 마켓플레이스 경로>' --json
 codex plugin add hwp-easy@hwp-easy --json
 codex plugin list --marketplace hwp-easy --json

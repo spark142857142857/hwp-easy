@@ -1,6 +1,6 @@
 /** Local raw text edits: retain control anchors, definitions and every other record. */
 import {GuardError} from '../../probes/sites-runtime/guard/records.mjs';
-import {packLocalBodyRewrite} from '../../probes/sites-runtime/engine/structural-body-repair.mjs';
+import {packLocalBodyRewrite} from './local_body_write.mjs';
 export const fail=code=>{throw new GuardError(code);};
 export const view=b=>new DataView(b.buffer,b.byteOffset,b.byteLength);
 export const equalBytes=(a,b)=>a.length===b.length&&a.every((v,i)=>v===b[i]);
