@@ -13,7 +13,8 @@ const plugin=path.resolve(pluginArgument),reportDir=path.resolve(reportArgument)
 const manifest=JSON.parse(fs.readFileSync(path.join(plugin,'build-manifest.json'),'utf8'));
 const standalone=manifest.distribution?.type==='agent_skill';
 const metadata=standalone?{name:manifest.package,version:manifest.version}:JSON.parse(fs.readFileSync(path.join(plugin,'plugin.json'),'utf8'));
-assert.equal(metadata.name,'hwp-easy');assert.equal(manifest.package,metadata.name);assert.equal(manifest.version,metadata.version);
+const directoryPackage=!standalone&&manifest.distribution?.type==='openai_directory'&&manifest.distribution?.source_package==='hwp-easy';
+assert.equal(metadata.name,directoryPackage?'hwp-easy-local':'hwp-easy');assert.equal(manifest.package,metadata.name);assert.equal(manifest.version,metadata.version);
 if(!standalone)assert.equal(metadata.extensions['com.openai'].interface.displayName,'HWP Easy');
 const skill=standalone?plugin:path.join(plugin,'skills/edit-local-hwp');
 if(standalone) {
@@ -72,7 +73,7 @@ try {
  const finalRestore=call({action:'restore',source,expected_sha256:hash(editedBytes),backup_id:edited.backup_id});
  assert.equal(finalRestore.restored,true);assert.deepEqual(fs.readFileSync(source),original);
  for(const [name,bytes]of [['synthetic-original.hwp',original],['synthetic-edited.hwp',editedBytes],['synthetic-restored.hwp',fs.readFileSync(source)]])fs.writeFileSync(path.join(reportDir,name),bytes);
- const report={status:'PASS',scope:`Installed ${standalone?manifest.distribution.client:'codex'} runtime on ${process.platform}; synthetic HWP only`,
+ const report={status:'PASS',scope:`${directoryPackage?'Extracted directory package':`Installed ${standalone?manifest.distribution.client:'codex'}`} runtime on ${process.platform}; synthetic HWP only`,
   client:standalone?manifest.distribution.client:'codex',
   plugin:metadata.name,version:metadata.version,installed_plugin_path:plugin,node_executable:node,
   runner_sha256:manifest.runner_sha256,wasm_sha256:manifest.wasm_sha256,

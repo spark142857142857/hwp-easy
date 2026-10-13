@@ -104,6 +104,14 @@ node scripts/install_agent_skill.mjs --client cursor --package outputs/agent-pac
 
 공개 양식은 고정 원본·출처 해시를 갖춘 별도 입력 폴더에서 `check-local-public-corpus.mjs`와 `check-local-public-corpus.py`로 검사합니다. 개인 문서나 원시 호스트 로그를 공개 릴리스에 포함하지 않습니다.
 
+OpenAI 포털의 기존 MCP 등록은 서버 없는 패키지로 변경할 수 없어, 로컬판에는 별도 식별자 `hwp-easy-local`을 사용합니다. 다음 명령은 검증한 ZIP에서 등록 이름·호출 안내·표시 필드만 조정하고 모든 실행 자원의 바이트 일치를 검사합니다. 업로드·설치·심사 제출을 수행하지 않습니다.
+
+```bash
+python scripts/package_directory_plugin.py outputs/plugin-package/hwp-easy-0.2.19.zip outputs/directory-package
+```
+
+포털 관측과 남은 차단 항목은 [로컬 디렉터리 등록 기록](local-directory-submission.md)에 정리합니다.
+
 Codex의 로컬 마켓플레이스 준비·설치·설치본 검사는 [Codex 설치 재현](local-plugin-installation.md#개발자가-재현하기)을 따릅니다. 합성 검증 결과와 생성 ZIP은 `outputs/`에 두고 Git에 넣지 않습니다.
 
 ## 보관한 원격 경로 검사

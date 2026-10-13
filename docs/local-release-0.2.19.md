@@ -61,4 +61,4 @@ Codex 모델 실행은 사용자의 전체 접근 실행 환경에서 확인했�
 
 합성·공개 사본, 앱 실행 기록과 한컴 결과는 ignored `outputs/progress-20261013/`에 보관합니다. 계정 정보가 들어갈 수 있는 원시 호스트 로그는 공개하지 않습니다. ZIP은 실행 자원·지침·고지·빌드 명세만 포함합니다.
 
-[공개 사전 릴리스](https://github.com/spark142857142857/hwp-easy/releases/tag/hwp-easy-local-v0.2.19)에 Codex·Claude Code·Cursor ZIP과 체크섬을 게시했습니다. 게시 후 인증 정보 없이 세 ZIP과 체크섬을 내려받아 앞서 새 설치를 검증한 패키지와 SHA-256이 같음을 확인했습니다. 디렉터리 승인과는 별개이며 포털 진행 상태는 [프로젝트 상태](project-status.md)를 따릅니다. 원격 0.1.9 코드와 ZIP은 보관하며 Cloud는 후순위입니다.
+[공개 사전 릴리스](https://github.com/spark142857142857/hwp-easy/releases/tag/hwp-easy-local-v0.2.19)에 Codex·Claude Code·Cursor ZIP과 체크섬을 게시했습니다. 게시 후 인증 정보 없이 세 ZIP과 체크섬을 내려받아 앞서 새 설치를 검증한 패키지와 SHA-256이 같음을 확인했습니다. 디렉터리 승인과는 별개이며 포털 진행 상태는 [프로젝트 상태](project-status.md)와 [로컬 등록 기록](local-directory-submission.md)을 따릅니다. 원격 0.1.9 코드와 ZIP은 보관하며 Cloud는 후순위입니다.

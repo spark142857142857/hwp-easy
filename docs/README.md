@@ -44,6 +44,7 @@ HWP Easy의 사용, 개발 및 검증 문서입니다. 현재 기능은 지원 �
 | [Codex 로컬 설치](local-plugin-installation.md) | 설치·활성 상태, 설치된 실행기의 편집·저장·복구 |
 | [Claude Code·Cursor 호출](agent-client-skills.md#검증-범위) | 두 CLI의 실제 호출과 독립 판독 |
 | [로컬 품질 검사](local-plugin-quality.md) | 공개 복잡한 양식, 읽기 전용 처리, 지침 전달 |
+| [로컬 디렉터리 등록](local-directory-submission.md) | 별도 등록 식별자, 포털 자동 검사와 접수 제한 |
 | [로컬 편집 상세](local-file-editing.md) | 작업별 계약과 버전별 검사 |
 | [개발·검증 이력](mvp-status.md) | 로컬 확장과 이전 원격 MVP의 진행 기록 |
 | [양식 검사](first-form-check.md) | 합성·공개 양식과 외부 HWP 프로그램 비교 |
