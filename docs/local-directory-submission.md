@@ -18,7 +18,7 @@
 | --- | --- |
 | 업로드 | 새 로컬 등록과 0.2.19 초안 생성 |
 | 표시 필드 | 설명 길이·줄바꿈과 기능 요약의 초기 오류를 보완한 ZIP 재업로드 |
-| 스킬 검사 | `edit-local-hwp` 검사 진행 중. 통과로 표시하지 않음 |
+| 스킬 검사 | 재확인 결과 `edit-local-hwp`의 상태가 `Checks passed`로 변경됨 |
 | 정책 URL | 개인정보처리방침·이용약관 URL 누락을 차단 항목으로 표시 |
 | 접수 제한 | “We are not accepting more skills-only submissions at this time.”를 차단 항목으로 표시 |
 | 심사·게시 | 미제출·미게시 |
