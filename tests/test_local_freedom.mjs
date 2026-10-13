@@ -2,6 +2,7 @@ import test from 'node:test';import assert from 'node:assert/strict';import fs f
 import {HwpDocument} from '@rhwp/core';import {initializeLocal,runLocal} from '../src/one_hwp/local_runner.mjs';
 import {groupFixture,fieldFixture,nestedFixture,checkedExport} from './local_complex_fixtures.mjs';
 import {progressiveJpeg} from './local_image_fixtures.mjs';import {digest} from '../src/one_hwp/local_file.mjs';
+import {inspectLocalComplex} from '../src/one_hwp/local_complex.mjs';
 initializeLocal(fs.readFileSync(new URL('../node_modules/@rhwp/core/rhwp_bg.wasm',import.meta.url)));
 const read=source=>runLocal({action:'read',source,max_chars:64000,max_blocks:128});
 function workspace(t,bytes){const dir=fs.mkdtempSync(path.join(os.tmpdir(),'hwp-freedom-'));t.after(()=>{assert.equal(path.dirname(dir),os.tmpdir());assert.ok(path.basename(dir).startsWith('hwp-freedom-'));fs.rmSync(dir,{recursive:true,force:true});});const source=path.join(dir,'test.hwp');fs.writeFileSync(source,bytes);return {source,bytes};}
@@ -58,4 +59,8 @@ test('strict overflow matching follows paragraph identities through boundary shi
 test('fixing one overflow does not hide an equal new overflow in another cell',async t=>{
  const {w,image,s}=await overflowingPicture(t),picture=s.pictures[0],old=s.blocks.find(b=>b.id===picture.block_id),other=s.blocks.find(b=>b.cell_path.length===1&&b.text==='합성 답변 원문'),prior=fs.readFileSync(w.source);
  await assert.rejects(runLocal({action:'edit',source:w.source,expected_sha256:s.source_sha256,operations:[{type:'delete_picture',target_id:old.target_id,expected_old:old.text,expected_properties:picture.properties},{type:'insert_picture',target_id:other.target_id,expected_old:other.text,offset:0,image,width:30000,height:1800}],layout_policy:'reject_new_overflow'}),/NEW_LAYOUT_OVERFLOW/);assert.deepEqual(fs.readFileSync(w.source),prior);
+});
+test('geometry inspection verifies mapped cells without requesting whole-document pagination',()=>{
+ class NoPagination extends HwpDocument{getDocumentInfo(){throw new Error('Pagination is outside geometry scope');}getCharPropertiesAt(){throw new Error('Font rendering is outside geometry scope');}getCellCharPropertiesAtByPath(){throw new Error('Font rendering is outside geometry scope');}}
+ const state=inspectLocalComplex(NoPagination,nestedFixture(),{includeDocumentInfo:false,verifyCharacterModel:false});assert.equal(state.tables.length,2);assert.equal(state.blocks.some(b=>b.text==='inner answer 😀'&&b.text_mapping_verified&&b.character_runs?.[0]?.properties.fontSize===1000),true);assert.equal(Object.hasOwn(state,'info'),false);
 });

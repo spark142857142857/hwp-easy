@@ -161,7 +161,8 @@ jobs:
   local-large-text:
     name: Local large text / ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 12
+    # Both checks finished near the old 12-minute boundary; allow runner cleanup.
+    timeout-minutes: 18
     strategy:
       fail-fast: false
       matrix:

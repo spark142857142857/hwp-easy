@@ -20,12 +20,12 @@ export function hasLocalComplexContent(raw){
  return false;
 }
 const quiet=fn=>{const prior=console.error;try{console.error=()=>{};return fn();}catch(e){if(e instanceof GuardError)throw e;fail('ENGINE_OPERATION_FAILED');}finally{console.error=prior;}};
-function inspection(HwpDocument,bytes){return quiet(()=>{
+function inspection(HwpDocument,bytes,{includeDocumentInfo=true,verifyCharacterModel=true}={}){return quiet(()=>{
  const raw=readHwp(bytes);enforceRawTextBudget(raw);const doc=new HwpDocument(new Uint8Array(bytes));
  try{
  const cursor=JSON.parse(doc.getCursorModel()),allFields=JSON.parse(doc.getFieldList()),blocks=[];
   if(cursor.lists.length>4096||allFields.length>4096||doc.getSectionCount()>64)fail('COMPLEX_LIST_UNSUPPORTED');
-  const definitions=[...parseRecords(raw.streams.get('DocInfo'))].filter(r=>r.tag===21).length;
+  const definitionRecords=[...parseRecords(raw.streams.get('DocInfo'))].filter(r=>r.tag===21),definitions=definitionRecords.length;
   let total=0;const visited=new Set();
   function children(section,rootParagraph,hostListId,hostPara,path){
    const lists=cursor.lists.filter(l=>l.isCell&&l.sectionIndex===section&&l.hostListId===hostListId&&l.hostPara===hostPara);
@@ -53,8 +53,9 @@ function inspection(HwpDocument,bytes){return quiet(()=>{
      // Compare model shapes at every run boundary and midpoint. Exact raw runs
      // and definitions remain authoritative and are preserved across publication.
      const visibleTokens=tokens.filter(t=>t.text),ids=visibleTokens.map(t=>b.unit_styles[t.unit]);b.character_runs=[];
-     for(let start=0;start<ids.length;){let end=start+1;while(end<ids.length&&ids[end]===ids[start])end++;for(const pos of new Set([start,Math.floor((start+end-1)/2),end-1])){
-      const props=JSON.parse(b.cell_path.length?doc.getCellCharPropertiesAtByPath(section,b.paragraph,JSON.stringify(b.cell_path),pos):doc.getCharPropertiesAt(section,b.paragraph,pos));if(props.charShapeId!==ids[pos])fail('COMPLEX_STYLE_UNVERIFIED');if(pos===start)b.character_runs.push({start,end,properties:props});}start=end;}
+     for(let start=0;start<ids.length;){let end=start+1;while(end<ids.length&&ids[end]===ids[start])end++;
+      if(!verifyCharacterModel){const payload=definitionRecords[ids[start]].payload;if(payload.length<46)fail('COMPLEX_STYLE_UNVERIFIED');b.character_runs.push({start,end,properties:{charShapeId:ids[start],fontSize:view(payload).getUint32(42,true),ratios:[...payload.subarray(14,21)],relativeSizes:[...payload.subarray(28,35)]}});}
+      else for(const pos of new Set([start,Math.floor((start+end-1)/2),end-1])){const props=JSON.parse(b.cell_path.length?doc.getCellCharPropertiesAtByPath(section,b.paragraph,JSON.stringify(b.cell_path),pos):doc.getCharPropertiesAt(section,b.paragraph,pos));if(props.charShapeId!==ids[pos])fail('COMPLEX_STYLE_UNVERIFIED');if(pos===start)b.character_runs.push({start,end,properties:props});}start=end;}
     }catch(e){if(!(e instanceof GuardError))throw e;b.text_range_editable=false;delete b.unit_styles;delete b.character_runs;}
     try{b.paragraph_properties=complexParagraphProperties(raw,records,b);b.paragraph_format_editable=b.text_mapping_verified;}catch(error){if(!(error instanceof GuardError))throw error;b.paragraph_format_editable=false;}
     b.structural_editable=boundaryEligible(records,b);
@@ -91,7 +92,7 @@ function inspection(HwpDocument,bytes){return quiet(()=>{
    }
   }
   const opaqueParagraphs=[...recordSets.values()].reduce((n,records)=>n+records.filter(r=>r.tag===66).length,0)-blocks.length;
-  return {raw,blocks,fields,groups,pictures,character_definition_count:definitions,tables:complexTables(recordSets,blocks),recordSets,unhandled_fields:allFields.length-fields.length,unhandled_groups:unhandledGroups,opaque_paragraphs:opaqueParagraphs,info:JSON.parse(doc.getDocumentInfo())};
+  return {raw,blocks,fields,groups,pictures,character_definition_count:definitions,tables:complexTables(recordSets,blocks),recordSets,unhandled_fields:allFields.length-fields.length,unhandled_groups:unhandledGroups,opaque_paragraphs:opaqueParagraphs,...(includeDocumentInfo?{info:JSON.parse(doc.getDocumentInfo())}:{})};
  }finally{doc.free();}
 });}
 export {inspection as inspectLocalComplex};

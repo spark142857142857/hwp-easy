@@ -10,7 +10,7 @@ import {localPictures} from './local_picture.mjs';
 import {editLocalBatch} from './local_batch.mjs';
 import { readHwp } from '../../probes/sites-runtime/guard/container.mjs';
 import { readLocal, saveLocal, restoreLocal, localHistory, digest } from './local_file.mjs';
-import { GuardError } from '../../probes/sites-runtime/guard/records.mjs';
+import { GuardError,parseRecords } from '../../probes/sites-runtime/guard/records.mjs';
 import {textControlBytes} from '../../probes/sites-runtime/guard/preservation.mjs';
 import {findLocalDocument,validateFind} from './local_find.mjs';
 import {hasLocalComplexContent,createLocalComplexSnapshot,inspectLocalComplex} from './local_complex.mjs';
@@ -23,6 +23,7 @@ const HwpDocument=createLocalDocumentClass(UpstreamHwpDocument);
 let initialized = false;
 export function initializeLocal(wasmBytes) { if (!initialized) { initSync({module:wasmBytes}); initialized=true; } }
 const fail = code => { throw new GuardError(code); };
+function layoutState(bytes){const raw=readHwp(bytes),hasTables=raw.profile.sections.some(({section})=>[...parseRecords(raw.streams.get(`BodyText/Section${section}`))].some(r=>r.tag===77));return hasTables?inspectLocalComplex(HwpDocument,bytes,{includeDocumentInfo:false,verifyCharacterModel:false}):{blocks:[],tables:[],pictures:[],groups:[]};}
 function rangeEligibleBlocks(document,version,raw,structural) {
   let model=structural;
   if(!model){
@@ -82,7 +83,7 @@ export async function runLocal(request) {
     embedded_preview_refresh:{text:'bounded UTF-16 excerpt',image:'first-page BMP',on:'verified changed edit, before publication',font_substitution_possible:true},
     layout_verified:false,requires:'Node.js 22 or newer with local file permissions',max_input_bytes:4194304};
   const snapshot=readLocal(request.source,request.expected_sha256);
-  if(request.action==='layout')return {...analyzeLocalLayout(inspectLocalComplex(HwpDocument,snapshot.bytes)),source:snapshot.source,source_sha256:snapshot.sha256,saved:false};
+  if(request.action==='layout')return {...analyzeLocalLayout(layoutState(snapshot.bytes)),source:snapshot.source,source_sha256:snapshot.sha256,saved:false};
   if(Object.hasOwn(request,'layout_policy')&&!['report','reject_new_overflow'].includes(request.layout_policy))fail('INVALID_LAYOUT_POLICY');
   if(request.action==='history')return localHistory(snapshot,request.limit);
   if(request.action==='find')validateFind(request,snapshot.sha256);
@@ -121,7 +122,7 @@ export async function runLocal(request) {
     result.blocks=result.blocks.map(block=>{const local=structural?.blocks.find(b=>b.id===block.id)??block;return {...block,
       structural_editable:profileSupported&&Boolean(local.editable)&&local.style.char_shape_ids?.length===1,
       text_range_editable:profileSupported&&Boolean(local.editable)&&ranges.has(block.id)&&!/[\u0000-\u001f]/.test(local.text)};});
-    if(result.tables?.length){let state;try{state=inspectLocalComplex(HwpDocument,snapshot.bytes);}catch(error){if(!(error instanceof GuardError))throw error;}if(state)for(const table of result.tables){const rawTable=state.tables.find(t=>t.section===table.section&&t.paragraph===table.paragraph&&t.control===table.control);for(const cell of table.cells)cell.subtree_sha256=rawTable?.cells[cell.cell]?.subtree_sha256;}}
+    if(result.tables?.length){let state;try{state=inspectLocalComplex(HwpDocument,snapshot.bytes,{includeDocumentInfo:false,verifyCharacterModel:false});}catch(error){if(!(error instanceof GuardError))throw error;}if(state)for(const table of result.tables){const rawTable=state.tables.find(t=>t.section===table.section&&t.paragraph===table.paragraph&&t.control===table.control);for(const cell of table.cells)cell.subtree_sha256=rawTable?.cells[cell.cell]?.subtree_sha256;}}
     let pictures=[],picture_profile_supported=true;
     try{pictures=localPictures(HwpDocument,snapshot.bytes,version);}catch(error){if(!(error instanceof GuardError))throw error;picture_profile_supported=false;}
     return {...result,pictures,picture_profile_supported,source:snapshot.source,persistence:'local_file',saved:false};
@@ -147,7 +148,7 @@ export async function runLocal(request) {
     candidate=await document.edit({expected_sha256:version,operations});
   }
   let {bytes,_layout_target_remap,...verification}=candidate;
-  try{const oldState=inspectLocalComplex(HwpDocument,snapshot.bytes),newState=inspectLocalComplex(HwpDocument,bytes),beforeLayout=analyzeLocalLayout(oldState),afterLayout=analyzeLocalLayout(newState),remap={};
+  try{const oldState=layoutState(snapshot.bytes),newState=layoutState(bytes),beforeLayout=analyzeLocalLayout(oldState),afterLayout=analyzeLocalLayout(newState),remap={};
     if(_layout_target_remap)for(const b of oldState.blocks){const key=Object.hasOwn(_layout_target_remap,b.id)?b.id:standardBlockId(b),name=_layout_target_remap[key];remap[b.id]=newState.blocks.find(x=>x.id===name||standardBlockId(x)===name)?.id??null;}
     verification.layout_diagnostics={...afterLayout,new_issues:newLayoutIssues(beforeLayout,afterLayout,remap)};
     if(request.layout_policy==='reject_new_overflow'&&verification.layout_diagnostics.new_issues.some(i=>i.certainty==='geometry'))fail('NEW_LAYOUT_OVERFLOW');
