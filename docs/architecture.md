@@ -30,6 +30,7 @@ flowchart LR
 | 공통 어댑터 | `src/one_hwp/*.mjs` | 엔진 처리, 대상·스타일·글꼴 비교 |
 | 독립 검사 | `probes/sites-runtime/guard/` | CFB·레코드·대상 매핑·비대상 바이트·변경 조건 확인 |
 | 로컬 실행기 | `src/one_hwp/local_runner.mjs`, `local_*.mjs` | 읽기·계획·편집·이력·복구 명령 |
+| 복잡한 개체 편집 | `local_complex_picture.mjs`, `local_complex_table.mjs`, `local_complex_field.mjs`, `local_complex_group.mjs` | 검증된 대상의 raw 기록만 변경하고 나머지 개체를 보존하는 0.2.20 후보 경로 |
 | 로컬 파일 저장 | `src/one_hwp/local_file.mjs` | 충돌 검사·이전 바이트 보관·같은 경로 저장 |
 | 내장 미리보기 | `local_preview_cache.mjs`, resvg WASM·폰트 | 검증된 저장 후보의 UTF-16 텍스트·BMP 갱신, 실패 시 오래된 이미지 제거 |
 | 로컬 컨테이너 쓰기 | `local_container_write.mjs` | 재배치 후 비대상 압축 스트림의 정확한 보존 |

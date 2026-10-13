@@ -7,7 +7,7 @@ const positions=[['marginLeft',4],['marginRight',8],['indent',12],['spacingBefor
 export function complexParagraphProperties(raw,records,block){
  const header=records[block.record_index];if(header.payload.length<22)fail('PARA_SHAPE_PROFILE_UNSUPPORTED');
  const id=view(header.payload).getUint16(8,true),shapes=[...parseRecords(raw.streams.get('DocInfo'))].filter(r=>r.tag===25),shape=shapes[id];
- if(!shape||![54,58].includes(shape.payload.length))fail('PARA_SHAPE_PROFILE_UNSUPPORTED');
+ if(!shape||![46,54,58].includes(shape.payload.length))fail('PARA_SHAPE_PROFILE_UNSUPPORTED');
  const p=view(shape.payload),alignment=['justify','left','right','center'][(p.getUint32(0,true)>>2)&7];
  if(!alignment)fail('PARA_SHAPE_PROFILE_UNSUPPORTED');
  return {paraShapeId:id,alignment,lineSpacingType:p.getUint32(0,true)&3,...Object.fromEntries(positions.map(([key,offset])=>[key,p.getInt32(offset,true)]))};

@@ -6,7 +6,7 @@ Repeated names require the exact field ID; `expected_old` is the field value for
 
 LF in these operations or `set_field` stores HWP character 10 line breaks inside the existing paragraph, preserving its paragraph count and anchors. Empty lines and up to 100 lines per inserted value are supported; CR, tab and other control inputs and ranges consuming anchors are refused.
 
-No-op field/text edits leave bytes, timestamps and recovery storage unchanged. The complex profile does not accept paragraph/table structure changes. Verified character and paragraph formatting can append or reuse derived definitions while retaining existing definitions exactly.
+No-op field/text edits leave bytes, timestamps and recovery storage unchanged. The complex profile refuses paragraph boundary changes; verified rectangular table axes use the bounded raw path described below. Verified character and paragraph formatting can append or reuse derived definitions while retaining existing definitions exactly.
 
 Complex blocks expose `text_mapping_verified`; unverified blocks have no edit target. Opaque headers/footers/textboxes and unsupported drawing groups can coexist with proven body/cell targets, without becoming readable or editable themselves.
 
@@ -22,7 +22,7 @@ Changed plan/edit results include `preview_cache`. `updated` means a bounded UTF
 {"action":"edit","source":"<path>","expected_sha256":"<hash>","operations":[{"type":"move_picture_group","target_id":"<returned group target>","expected_old":"<whole host text>","expected_properties":{"width":7200,"height":3600,"horzOffset":0,"vertOffset":0},"props":{"horzOffset":500,"vertOffset":200}}]}
 ```
 
-For `crop_group_picture`, use its group's target ID and the returned zero-based leaf `picture_index`. `expected_properties` is that child's full properties excluding `picture_index`: `sourceWidth`, `sourceHeight`, `cropLeft`, `cropTop`, `cropRight`, `cropBottom`.
+For `crop_group_picture`, use its group's target ID and the returned zero-based leaf `picture_index`. `expected_properties` is that child's full properties excluding `picture_index`: `rotationAngle`, `sourceWidth`, `sourceHeight`, `cropLeft`, `cropTop`, `cropRight`, `cropBottom`.
 
 `props` contains one or more of the crop amounts, in original-image HWP units (75 per source pixel). The crop must leave a positive width and height. Group transformations and sibling image bytes are retained. Group resize/rotation and child image replacement are refused.
 
@@ -298,4 +298,32 @@ Existing fonts are reused; a new font is registered only when all seven language
 
 CFB allocation may be rebuilt for definition growth; independent readers verify the exact stream set and all other packed stream bytes before a same-file save. A repeated byte-identical format request creates no backup.
 
-This adds character formatting, not nested-table structure changes, field creation or external visual certification.
+Character formatting itself does not change table structure or create fields; the separately documented complex operations provide those bounded edits. External visual certification remains separate.
+
+## Complex field and group operations
+
+`insert_field` uses a body/cell block target, its whole `expected_old` text, zero-based code-point `offset`, `name` (1–128 characters), `guide` (up to 512), and `value` (up to 100,000 UTF-16 units / 100 LF lines). Names need not be unique; reread to obtain the created field ID. Insertion inside or on another field boundary is refused.
+
+`delete_field` uses the explicit returned field target and its whole value as `expected_old`. It deletes the ClickHere wrapper, retaining its displayed value and character styles. Other field types/formulas are unsupported.
+
+```json
+{"type":"insert_field","target_id":"<block ID>","expected_old":"<whole block text>","offset":3,"name":"answer","guide":"Enter an answer","value":"First line\nSecond line"}
+```
+
+```json
+{"type":"delete_field","target_id":"<field ID>","expected_old":"<whole field value>"}
+```
+
+Group operations use a returned group target and its host block's whole text as `expected_old`. `expected_properties` is the complete selected leaf object minus `picture_index`, including `rotationAngle`, source dimensions and crop. `replace_group_picture` requires the same local `image` object as ordinary picture replacement. It preserves transforms and resets crop; old unused image data is retained.
+
+```json
+{"type":"replace_group_picture","target_id":"<group ID>","expected_old":"<host text>","picture_index":1,"expected_properties":{"rotationAngle":0,"sourceWidth":4800,"sourceHeight":3000,"cropLeft":0,"cropTop":0,"cropRight":0,"cropBottom":0},"image":{"source":"<absolute PNG/JPEG path>","expected_sha256":"<image hash>"}}
+```
+
+`rotate_group_picture` accepts only `props.rotationAngle` (integer -359…359). It preserves the center and parent/sibling transforms. A single-level group with one scale/rotation pair and verified unscaled leaf geometry is required and its rotated corners must fit the immediate parent frame. A failed plan never saves; do not resize or flatten a group to bypass this bound.
+
+```json
+{"type":"rotate_group_picture","target_id":"<group ID>","expected_old":"<host text>","picture_index":1,"expected_properties":{"rotationAngle":0,"sourceWidth":4800,"sourceHeight":3000,"cropLeft":0,"cropTop":0,"cropRight":0,"cropBottom":0},"props":{"rotationAngle":90}}
+```
+
+Complex `tables` return `axis_editable` and a rejection reason. `insert_table_row/column` and `delete_table_row/column` retain the existing request schema and full visible-cell deletion confirmation. Only verified rectangular geometry is supported here; deleting cells with fields, drawings or nested tables is refused. Retained controlled cells survive insertion and verified resizing; a picture or nested table wider than a resized cell is refused.

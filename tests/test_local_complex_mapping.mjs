@@ -12,10 +12,38 @@ import {parseRecords} from '../probes/sites-runtime/guard/records.mjs';
 import {packLocalBodyRewrite} from '../probes/sites-runtime/engine/structural-body-repair.mjs';
 import {encodeRecords} from '../src/one_hwp/local_complex_records.mjs';
 import {createHash} from 'node:crypto';
+import {deflateRawSync} from 'node:zlib';
+import {patchLocalPackedStreams} from '../src/one_hwp/local_container_write.mjs';
 initializeLocal(fs.readFileSync(new URL('../node_modules/@rhwp/core/rhwp_bg.wasm',import.meta.url)));
 const hash=b=>createHash('sha256').update(b).digest('hex');
 function workspace(t,bytes){const dir=fs.mkdtempSync(path.join(os.tmpdir(),'hwp-complex-map-'));t.after(()=>{assert.equal(path.dirname(dir),os.tmpdir());assert.ok(path.basename(dir).startsWith('hwp-complex-map-'));fs.rmSync(dir,{recursive:true,force:true});});const source=path.join(dir,'synthetic.hwp');fs.writeFileSync(source,bytes);return source;}
 const read=source=>runLocal({action:'read',source,max_chars:64000,max_blocks:128});
+
+test('complex formatting remains valid after an earlier preview failure leaves an empty image stream',async t=>{
+ const original=patchLocalPackedStreams(fieldFixture(),new Map([['PrvImage',Buffer.alloc(0)]])),source=workspace(t,original),before=await read(source),b=before.blocks[0];
+ const saved=await runLocal({action:'edit',source,expected_sha256:before.source_sha256,operations:[{type:'format_paragraph',target_id:b.target_id,expected_old:b.text,props:{alignment:'right',marginLeft:300}}]});
+ const after=await read(source);assert.equal(after.blocks[0].paragraph_properties.alignment,'right');assert.equal(after.blocks[0].text,b.text);
+ await runLocal({action:'restore',source,expected_sha256:after.source_sha256,backup_id:saved.backup_id});assert.deepEqual(fs.readFileSync(source),Buffer.from(original));
+});
+
+test('70-byte character definitions preserve their older envelope during nested-cell formatting',async t=>{
+ const current=nestedFixture(),raw=readHwp(current),definitions=[...parseRecords(raw.streams.get('DocInfo'))].map(r=>r.tag===21?{...r,payload:r.payload.slice(0,70)}:r);
+ const bytes=patchLocalPackedStreams(current,new Map([['DocInfo',deflateRawSync(encodeRecords(definitions),{level:9})]])),source=workspace(t,bytes),before=await read(source),b=before.blocks.find(x=>x.kind==='nested_cell'&&x.text==='inner answer 😀');
+ const saved=await runLocal({action:'edit',source,expected_sha256:before.source_sha256,operations:[{type:'format_text',target_id:b.target_id,expected_old:b.text,start:0,end:5,props:{bold:true,fontSize:1250,textColor:'#245A83'}}]});
+ const after=await read(source),target=after.blocks.find(x=>x.id===b.id),props=target.style.character_runs[0].properties;assert.equal(props.bold,true);assert.equal(props.fontSize,1250);assert.equal(props.textColor.toLowerCase(),'#245a83');
+ const shapes=bytes=>[...parseRecords(readHwp(bytes).streams.get('DocInfo'))].filter(r=>r.tag===21).map(r=>Buffer.from(r.payload)),old=shapes(bytes),now=shapes(fs.readFileSync(source));assert.deepEqual(now.slice(0,old.length),old);assert.equal(now.at(-1).length,70);
+ await runLocal({action:'restore',source,expected_sha256:after.source_sha256,backup_id:saved.backup_id});assert.deepEqual(fs.readFileSync(source),Buffer.from(bytes));
+});
+
+test('46-byte paragraph definitions in an older nested table retain their size and shared definitions',async t=>{
+ const current=nestedFixture(),raw=readHwp(current),definitions=[...parseRecords(raw.streams.get('DocInfo'))].map(r=>r.tag===25?{...r,payload:r.payload.slice(0,46)}:r);
+ const bytes=patchLocalPackedStreams(current,new Map([['DocInfo',deflateRawSync(encodeRecords(definitions),{level:9})]])),source=workspace(t,bytes),before=await read(source),b=before.blocks.find(x=>x.kind==='nested_cell'&&x.text==='inner answer 😀');
+ assert.equal(b.paragraph_format_editable,true);const props={alignment:'right',marginLeft:300,lineSpacing:170},saved=await runLocal({action:'edit',source,expected_sha256:before.source_sha256,operations:[{type:'format_paragraph',target_id:b.target_id,expected_old:b.text,props}]});
+ const after=await read(source),target=after.blocks.find(x=>x.id===b.id);for(const [key,value]of Object.entries(props))assert.equal(target.paragraph_properties[key],value);
+ const shapes=bytes=>[...parseRecords(readHwp(bytes).streams.get('DocInfo'))].filter(r=>r.tag===25).map(r=>Buffer.from(r.payload)),old=shapes(bytes),now=shapes(fs.readFileSync(source));
+ assert.deepEqual(now.slice(0,old.length),old);assert.equal(now.at(-1).length,46);assert.deepEqual(after.blocks.map(x=>x.text),before.blocks.map(x=>x.text));
+ await runLocal({action:'restore',source,expected_sha256:after.source_sha256,backup_id:saved.backup_id});assert.deepEqual(fs.readFileSync(source),Buffer.from(bytes));
+});
 
 for(const isHeader of [true,false])test(`opaque header/footer and repeated text do not shift a nested cell target: header=${isHeader}`,async t=>{
  const doc=new HwpDocument(nestedFixture());let bytes;try{assert.equal(JSON.parse(doc.createHeaderFooter(0,isHeader,0)).ok,true);doc.insertTextInHeaderFooter(0,isHeader,0,0,0,'inner answer 😀');bytes=checkedExport(doc);}finally{doc.free();}

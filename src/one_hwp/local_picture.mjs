@@ -13,6 +13,15 @@ const group=data=>{const m=new Map();for(const r of parseRecords(data)){if(!m.ha
 const component=Buffer.from('6369702463697024000000000000000000000100201c0000100e0000201c0000100e000000000000000000000000000000000100000000000000f03f000000000000000000000000000000000000000000000000000000000000f03f0000000000000000000000000000f03f000000000000000000000000000000000000000000000000000000000000f03f0000000000000000000000000000f03f000000000000000000000000000000000000000000000000000000000000f03f0000000000000000','hex');
 const picture=Buffer.from('0000000000000000000000000000000000000000201c000000000000201c0000100e000000000000100e000000000000000000004b0000004b000000000000000000000000000001000000000000000000004b0000004b00000000','hex');
 const bodyHeader=Buffer.from('206f736700000a000000000000000000201c0000100e000001000000000000000000000000000000000000000000','hex');
+export function rawPictureRecords(level,width,height,pixels,binId,instance,inline){
+ const header=Uint8Array.from(bodyHeader),shape=Uint8Array.from(component),pic=Uint8Array.from(picture);
+ if(inline)view(header).setUint32(4,0x000a0001,true);
+ view(header).setUint32(16,width,true);view(header).setUint32(20,height,true);view(header).setUint32(24,instance,true);
+ for(const pos of [20,28])view(shape).setUint32(pos,width,true);for(const pos of [24,32])view(shape).setUint32(pos,height,true);
+ for(const pos of [20,28])view(pic).setUint32(pos,width,true);for(const pos of [32,40])view(pic).setUint32(pos,height,true);
+ for(const pos of [52,82])view(pic).setUint32(pos,pixels.width*75,true);for(const pos of [56,86])view(pic).setUint32(pos,pixels.height*75,true);view(pic).setUint16(71,binId,true);
+ return [header,shape,pic].map((payload,i)=>({tag:[71,76,85][i],level:level+i,payload}));
+}
 export function pictureProfile(raw,model,records) {
  if(raw.profile.sections.length!==1)fail('PICTURE_PROFILE_UNSUPPORTED');const images=[];
  for(const b of model.blocks){const list=records.get(b.id);if(!list.some(r=>[76,85].includes(r.tag)))continue;const groups=objectGroups(list),level=b.kind==='cell'?3:1,text=list.find(r=>r.tag===67)?.payload;

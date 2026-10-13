@@ -19,6 +19,7 @@ HWP Easy의 사용, 개발 및 검증 문서입니다. 현재 기능은 지원 �
 | [지원 기능과 제한](supported-features.md) | 대상별 편집 범위, 읽기 전용 처리, 미리보기 제한 |
 | [Claude Code·Cursor 설치](agent-client-skills.md) | 개인 스킬 설치 위치, 호출 정책, 실제 호스트 검증 |
 | [Codex 호출 진단](local-skill-discovery.md) | 스킬 발견, 메뉴 선택과 지침 전달의 검사 기준 |
+| [0.2.20 후보 검증](local-release-0.2.20.md) | 복합 양식 편집·중첩 표·누름틀·그룹 그림 개선과 배치 한계 |
 | [0.2.19 검증](local-release-0.2.19.md) | 복잡한 양식·문단 서식·미리보기·설치·한컴 배치 근거 |
 | [프로젝트 상태](project-status.md) | 현재 버전, 실제 설치·호출 결과, 남은 작업 |
 

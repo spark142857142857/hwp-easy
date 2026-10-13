@@ -25,7 +25,7 @@ def load(file):
 
 
 def patch_shape(payload, props, fonts):
-    assert len(payload) == 74
+    assert len(payload) in (70, 74)
     out = bytearray(payload)
     if fonts is not None:
         for i, value in enumerate(fonts):

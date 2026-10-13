@@ -7,6 +7,10 @@ import {fail,view,equal,equalBytes,textTokens,rawShapes,spliceRawParagraph,publi
 import {prepareComplexCharacterFormat,publishComplexCharacterFormat,verifyComplexCharacterFormat} from './local_complex_format.mjs';
 import {mapComplexBlocks} from './local_complex_mapping.mjs';
 import {complexParagraphProperties,prepareComplexParagraphFormat} from './local_complex_paragraph.mjs';
+import {complexPictures,complexPictureProperties,prepareComplexPicture,publishComplexPicture} from './local_complex_picture.mjs';
+import {complexTables,prepareComplexTable,standardBlockId} from './local_complex_table.mjs';
+import {prepareComplexGroup} from './local_complex_group.mjs';
+import {prepareComplexField} from './local_complex_field.mjs';
 const idTarget=(id,version)=>`hwp5:${version}:${Buffer.from(id).toString('base64url')}`;
 export function hasLocalComplexContent(raw){
  for(const {section} of raw.profile.sections)for(const r of parseRecords(raw.streams.get(`BodyText/Section${section}`)))
@@ -62,6 +66,7 @@ function inspection(HwpDocument,bytes){return quiet(()=>{
    const value=range.map(t=>t.text).join('');if(value!==f.value)continue;
    fields.push({id:`${b.id}:f${f.fieldId}`,block_id:b.id,field_id:f.fieldId,name:f.name,guide:f.guide,value:f.value,field_type:f.fieldType,editable:b.text_range_editable&&range.every(t=>t.text),section:b.section,cell_path:b.cell_path,start:f.startCharIdx,end:f.endCharIdx,from,to});
   }
+  const pictures=blocks.filter(b=>b.text_mapping_verified).flatMap(b=>complexPictures(raw,recordSets.get(b.section),b).map(p=>({...p,block_id:b.id,section:b.section,cell_path:b.cell_path})));
   const groups=[];let unhandledGroups=0;
   for(const b of blocks){if(!b.text_mapping_verified)continue;const records=recordSets.get(b.section);let index=0;
    for(let i=b.record_index+1;i<b.records_end;i++){const r=records[i];if(r.tag!==71||r.level!==b.raw_level+1||Buffer.from(r.payload.subarray(0,4)).toString('ascii')!==' osg')continue;
@@ -69,12 +74,12 @@ function inspection(HwpDocument,bytes){return quiet(()=>{
     try{
     let end=i+1;while(end<records.length&&records[end].level>r.level)end++;
     if(r.payload.length<44||records[i+1].level!==r.level+1)fail('GROUP_PROFILE_UNSUPPORTED');
-    const children=[];for(let k=i+2;k<end;k++){const c=records[k];if(c.tag===85){const shape=records[k-1];if(shape?.tag!==76||c.level!==shape.level+1||c.payload.length!==91||Buffer.from(shape.payload.subarray(0,4)).toString('ascii')!=='cip$')fail('GROUP_PROFILE_UNSUPPORTED');
+    const children=[];for(let k=i+2;k<end;k++){const c=records[k];if(c.tag===85){const shape=records[k-1];if(shape?.tag!==76||shape.payload.length<38||c.level!==shape.level+1||c.payload.length!==91||Buffer.from(shape.payload.subarray(0,4)).toString('ascii')!=='cip$')fail('GROUP_PROFILE_UNSUPPORTED');
       const p=view(c.payload),bin=p.getUint16(71,true),name=[...raw.streams.keys()].find(n=>new RegExp(`^BinData/BIN${bin.toString(16).padStart(4,'0')}\\.(png|jpe?g)$`,'i').test(n));if(!name)fail('GROUP_IMAGE_UNVERIFIED');
       let data=raw.streams.get(name),size;try{size=imageSize(data);}catch{data=inflateBoundedRaw(data,1048576);size=imageSize(data);}const sourceWidth=size.width*75,sourceHeight=size.height*75;
       const cropLeft=p.getInt32(44,true),cropTop=p.getInt32(48,true),cropRight=sourceWidth-p.getInt32(52,true),cropBottom=sourceHeight-p.getInt32(56,true);
       if([cropLeft,cropTop,cropRight,cropBottom].some(n=>n<0)||cropLeft+cropRight>=sourceWidth||cropTop+cropBottom>=sourceHeight)fail('GROUP_IMAGE_UNVERIFIED');
-      children.push({picture_index:children.length,record_index:k,sourceWidth,sourceHeight,cropLeft,cropTop,cropRight,cropBottom});}
+      children.push({picture_index:children.length,record_index:k,rotationAngle:view(shape.payload).getInt16(Buffer.from(shape.payload.subarray(0,8)).toString('ascii')==='cip$cip$'?40:36,true),sourceWidth,sourceHeight,cropLeft,cropTop,cropRight,cropBottom});}
     }
     if(!children.length||children.length>32)fail('GROUP_PROFILE_UNSUPPORTED');const p=view(r.payload);
     groups.push({id:`${b.id}:g${index++}`,block_id:b.id,section:b.section,record_index:i,properties:{width:p.getUint32(16,true),height:p.getUint32(20,true),horzOffset:p.getInt32(12,true),vertOffset:p.getInt32(8,true)},pictures:children,editable:true});
@@ -82,9 +87,10 @@ function inspection(HwpDocument,bytes){return quiet(()=>{
    }
   }
   const opaqueParagraphs=[...recordSets.values()].reduce((n,records)=>n+records.filter(r=>r.tag===66).length,0)-blocks.length;
-  return {raw,blocks,fields,groups,recordSets,unhandled_fields:allFields.length-fields.length,unhandled_groups:unhandledGroups,opaque_paragraphs:opaqueParagraphs,info:JSON.parse(doc.getDocumentInfo())};
+  return {raw,blocks,fields,groups,pictures,tables:complexTables(recordSets,blocks),recordSets,unhandled_fields:allFields.length-fields.length,unhandled_groups:unhandledGroups,opaque_paragraphs:opaqueParagraphs,info:JSON.parse(doc.getDocumentInfo())};
  }finally{doc.free();}
 });}
+export {inspection as inspectLocalComplex};
 export function createLocalComplexSnapshot(HwpDocument,bytes,version){
  const state=inspection(HwpDocument,bytes),publicBlock=b=>{const {tokens,unit_styles,character_runs,record_index,records_end,text_record,shape_record,raw_level,...rest}=b;return {...rest,target_id:b.text_mapping_verified?idTarget(b.id,version):null,editable:b.text_range_editable&&tokens.every(t=>t.text||t.code===13),character_format_editable:b.text_range_editable,structural_editable:false,...(!b.text_mapping_verified?{read_only_reason:'TARGET_TEXT_UNVERIFIED'}:{}),style:{profile:'complex_raw_preservation',character_runs:character_runs??[]}};};
  const publicFields=state.fields.map(f=>{const {from,to,...rest}=f;return {...rest,target_id:idTarget(f.id,version)};}),publicGroups=state.groups.map(g=>{const {record_index,...rest}=g;return {...rest,target_id:idTarget(g.id,version),pictures:g.pictures.map(p=>{const {record_index,...rest}=p;return rest;})};});
@@ -93,16 +99,62 @@ export function createLocalComplexSnapshot(HwpDocument,bytes,version){
   if(!Number.isSafeInteger(max_chars)||max_chars<1||max_chars>64000||!Number.isSafeInteger(max_blocks)||max_blocks<1||max_blocks>128)fail('INVALID_LIMIT');
   let index=0,offset=0;if(cursor!=null){if(!cursor||Object.getPrototypeOf(cursor)!==Object.prototype||!equal(Object.keys(cursor).sort(),['block_index','offset','sha256']))fail('INVALID_CURSOR');if(cursor.sha256!==version)fail('CURSOR_VERSION_CONFLICT');index=cursor.block_index;offset=cursor.offset;if(!Number.isSafeInteger(index)||!state.blocks[index]||!Number.isSafeInteger(offset)||offset<0||offset>[...state.blocks[index].text].length)fail('INVALID_CURSOR');}
   const fragments=[],start={block_index:index,offset};while(index<state.blocks.length&&fragments.length<max_blocks){const b=state.blocks[index],points=[...b.text];if(points.length&&!max_chars)break;const end=Math.min(points.length,offset+max_chars);fragments.push({...publicBlock(b),text:points.slice(offset,end).join(''),start_offset:offset,end_offset:end,total_chars:points.length,fragment_complete:end===points.length});max_chars-=end-offset;if(end<points.length){offset=end;break;}index++;offset=0;}
-  const complete=index===state.blocks.length;return {source_sha256:version,blocks:fragments,fields:publicFields,picture_groups:publicGroups,complex_profile:true,target_mapping_verified:true,all_content_supported:false,content_complete:false,complete,next_cursor:complete?null:{sha256:version,block_index:index,offset},page_starts_at:start,offsets:'unicode_code_points',supported_blocks:state.blocks.length,section_count:state.info.sectionCount,page_count:state.info.pageCount,
+  const complete=index===state.blocks.length;return {source_sha256:version,blocks:fragments,fields:publicFields,picture_groups:publicGroups,tables:state.tables.map(t=>({id:t.id,section:t.section,paragraph:t.paragraph,cell_path:t.cell_path,control:t.control,dimensions:t.dimensions,properties:t.properties,axis_editable:t.axis_editable,read_only_reason:t.read_only_reason,cells:t.cells.map(c=>({cell:c.cell,row:c.row,col:c.col,rowSpan:c.rowSpan,colSpan:c.colSpan,properties:{width:c.width,height:c.height},paragraph_ids:c.blocks.map(b=>b.id),target_id:c.blocks[0]?idTarget(c.blocks[0].id,version):null}))})),pictures:state.pictures.map(p=>{const {record_index,bin_id,...rest}=p;return {...rest,target_id:idTarget(p.block_id,version),editable:true,format:p.cell_path.length?'complex_cell_picture':'complex_body_picture'};}),complex_profile:true,target_mapping_verified:true,all_content_supported:false,content_complete:false,complete,next_cursor:complete?null:{sha256:version,block_index:index,offset},page_starts_at:start,offsets:'unicode_code_points',supported_blocks:state.blocks.length,section_count:state.info.sectionCount,page_count:state.info.pageCount,
    unsupported:[{kind:'complex_objects',reason:'Mapped body/cell text and ClickHere field values can be edited; other controls and unmapped paragraph lists are retained as opaque bytes',unhandled_fields:state.unhandled_fields,unhandled_groups:state.unhandled_groups,opaque_paragraphs:state.opaque_paragraphs}],layout_verified:false};
  }};
 }
 export function editLocalComplex(HwpDocument,source,version,op){
  const schemas={splice_text:['start','end','new_text'],replace_text:['new_text'],set_field:['new_text'],format_text:['start','end','props'],format_paragraph:['props'],move_picture_group:['expected_properties','props'],crop_group_picture:['picture_index','expected_properties','props']};
- if(!schemas[op.type]||!equal(Object.keys(op).sort(),['type','target_id','expected_old',...schemas[op.type]].sort()))fail('COMPLEX_OPERATION_UNSUPPORTED');
+ const groupOperation=['replace_group_picture','rotate_group_picture'].includes(op.type);
+ const pictureOperation=['insert_picture','update_picture','replace_picture','delete_picture'].includes(op.type);
+ const fieldOperation=['insert_field','delete_field'].includes(op.type);
+ const tableOperation=['insert_table_row','delete_table_row','insert_table_column','delete_table_column'].includes(op.type);
+ if(!pictureOperation&&!tableOperation&&!fieldOperation&&!groupOperation&&(!schemas[op.type]||!equal(Object.keys(op).sort(),['type','target_id','expected_old',...schemas[op.type]].sort())))fail('COMPLEX_OPERATION_UNSUPPORTED');
  if(typeof op.target_id!=='string'||!op.target_id.startsWith(`hwp5:${version}:`))fail('VERSION_CONFLICT');const encoded=op.target_id.slice(70),id=Buffer.from(encoded,'base64url').toString();if(Buffer.from(id).toString('base64url')!==encoded)fail('INVALID_TARGET');
- const before=inspection(HwpDocument,source),field=before.fields.find(f=>f.id===id),group=before.groups.find(g=>g.id===id),b=before.blocks.find(b=>b.id===(field?.block_id??group?.block_id??id));if(!b)fail('INVALID_TARGET');
+ const before=inspection(HwpDocument,source),field=before.fields.find(f=>f.id===id),group=before.groups.find(g=>g.id===id),b=before.blocks.find(b=>b.id===(field?.block_id??group?.block_id??id)||(tableOperation||fieldOperation)&&standardBlockId(b)===id);if(!b)fail('INVALID_TARGET');
  const expected=field?field.value:b.text;if(expected!==op.expected_old)fail('EXPECTED_OLD_MISMATCH');let records=before.recordSets.get(b.section),wanted=b.text;
+ if(groupOperation){
+  if(!group)fail('GROUP_PICTURE_REQUIRED');const patch=prepareComplexGroup(before.raw,records,group,op);if(patch.unchanged)return {bytes:source,content_verified:true,raw_preservation_verified:true,raw_preservation_scope:'unchanged_source',layout_verified:false};
+  const bytes=publishComplexPicture(source,before.raw,b.section,patch.records,patch.image),after=inspection(HwpDocument,bytes),now=after.groups.find(g=>g.id===group.id);
+  if(!now||!equal(now.properties,group.properties)||now.pictures.length!==group.pictures.length)fail('GROUP_PRESERVATION_MISMATCH');
+  for(const child of group.pictures){const {record_index,picture_index,...props}=now.pictures[child.picture_index]??{};if(!equal(props,child.picture_index===patch.child.picture_index?patch.wanted:(({record_index,picture_index,...props})=>props)(child)))fail('GROUP_PRESERVATION_MISMATCH');}
+  if(before.blocks.length!==after.blocks.length||before.blocks.some((old,i)=>old.id!==after.blocks[i].id||old.text!==after.blocks[i].text)||!equal(before.fields,after.fields))fail('COMPLEX_CONTENT_MISMATCH');
+  return {bytes,content_verified:true,raw_preservation_verified:true,raw_preservation_scope:'selected_group_picture_binary_or_leaf_rotation_matrix_and_metadata; parent_and_sibling_records_retained',picture_group_changed:true,retained_unused_image_data:Boolean(patch.image),layout_verified:false};
+ }
+ if(fieldOperation){
+  if(group)fail('FIELD_TARGET_REQUIRED');const patch=prepareComplexField(source,before,b,field,op),written=publishRawBody(source,before.raw,b.section,patch.records),after=inspection(HwpDocument,written.bytes);verifyRawOutput(before.raw,after.raw,written.name,written.expected);
+  if(before.blocks.length!==after.blocks.length||before.blocks.some((old,i)=>old.id!==after.blocks[i].id||after.blocks[i].text!==(old.id===b.id?patch.wanted:old.text)))fail('FIELD_CONTENT_MISMATCH');
+  const created=after.fields.find(f=>f.field_id===patch.fieldId);if(patch.inserting?(!created||created.block_id!==b.id||created.name!==op.name||created.guide!==op.guide||created.value!==op.value):Boolean(created))fail('FIELD_CONTENT_MISMATCH');
+  if(after.fields.length!==before.fields.length+(patch.inserting?1:-1))fail('FIELD_CONTENT_MISMATCH');
+  for(const old of before.fields){if(!patch.inserting&&old.field_id===patch.fieldId)continue;const now=after.fields.find(f=>f.field_id===old.field_id),shift=patch.inserting&&old.block_id===b.id&&old.start>op.offset?[...op.value].length:0;if(!now||now.block_id!==old.block_id||now.value!==old.value||now.name!==old.name||now.guide!==old.guide||now.start!==old.start+shift||now.end!==old.end+shift)fail('FIELD_PRESERVATION_MISMATCH');}
+  const complexAfter=hasLocalComplexContent(after.raw),remap={};for(const old of before.blocks){const now=after.blocks.find(x=>x.id===old.id),name=complexAfter?now.id:standardBlockId(now);remap[old.id]=name;const alias=standardBlockId(old);if(alias)remap[alias]=name;}
+  for(const f of before.fields)remap[f.id]=after.fields.find(n=>n.field_id===f.field_id)?.id??null;for(const g of before.groups)remap[g.id]=g.id;
+  return {bytes:written.bytes,content_verified:true,raw_preservation_verified:true,raw_preservation_scope:'selected_ClickHere_wrapper_text_runs_and_line_cache; all_other_controls_and_streams_exact',field_changed:true,structure_changed:true,deleted_field_retains_value:!patch.inserting,_target_remap:remap,layout_verified:false};
+ }
+ if(tableOperation){
+  if(field||group)fail('TABLE_CELL_REQUIRED');const patch=prepareComplexTable(before,b,op),written=publishRawBody(source,before.raw,b.section,patch.records),after=inspection(HwpDocument,written.bytes);verifyRawOutput(before.raw,after.raw,written.name,written.expected);
+  const saved=after.tables.find(t=>t.id===patch.table.id);if(!saved||!equal(saved.dimensions,{rowCount:patch.newRows,colCount:patch.newCols,cellCount:patch.newRows*patch.newCols})||saved.properties.tableWidth!==patch.width||saved.properties.tableHeight!==patch.height)fail('TABLE_CONTENT_MISMATCH');
+  for(const old of before.blocks){const mapped=patch.remap[old.id];if(mapped===null)continue;const now=after.blocks.find(x=>x.id===mapped);if(!now||now.text!==old.text)fail('TABLE_CONTENT_MISMATCH');}
+  for(const f of before.fields){if(patch.remap[f.block_id]===null)fail('TABLE_REMOVED_CELL_HAS_CONTROLS');const now=after.fields.find(n=>n.field_id===f.field_id);if(!now||now.block_id!==patch.remap[f.block_id]||now.value!==f.value||now.name!==f.name||now.guide!==f.guide||now.start!==f.start||now.end!==f.end)fail('FIELD_PRESERVATION_MISMATCH');}
+  for(const g of before.groups){const now=after.groups.find(n=>n.id===g.id.replace(g.block_id,patch.remap[g.block_id]));if(!now||!equal(now.properties,g.properties)||!equal(now.pictures.map(({record_index,...p})=>p),g.pictures.map(({record_index,...p})=>p)))fail('GROUP_PRESERVATION_MISMATCH');}
+  for(const p of before.pictures){const now=after.pictures.find(n=>n.block_id===patch.remap[p.block_id]&&n.picture_index===p.picture_index);if(!now||!equal(now.properties,p.properties)||now.bin_id!==p.bin_id)fail('PICTURE_CONTENT_MISMATCH');}
+  for(const fresh of patch.added){const cell=saved.cells.find(c=>c.row===fresh.row&&c.col===fresh.col);if(cell?.blocks.length!==1||cell.blocks[0].text!==fresh.text)fail('TABLE_CONTENT_MISMATCH');}
+  const complexAfter=hasLocalComplexContent(after.raw),remap={};for(const old of before.blocks){const now=after.blocks.find(x=>x.id===patch.remap[old.id]),name=now?(complexAfter?now.id:standardBlockId(now)):null;remap[old.id]=name;const alias=standardBlockId(old);if(alias)remap[alias]=name;}
+  for(const f of before.fields)remap[f.id]=patch.remap[f.block_id]===null?null:`${patch.remap[f.block_id]}:f${f.field_id}`;for(const g of before.groups)remap[g.id]=patch.remap[g.block_id]===null?null:g.id.replace(g.block_id,patch.remap[g.block_id]);
+  return {bytes:written.bytes,content_verified:true,raw_preservation_verified:true,raw_preservation_scope:'table_axes_and_cell_geometry; retained_child_records_and_all_other_streams_exact',structure_changed:true,table_structure_changed:true,column_sizing:'retain_table_width_and_track_ratios',_target_remap:remap,layout_verified:false};
+ }
+ if(pictureOperation){
+  if(field||group)fail('PICTURE_TARGET_REQUIRED');const patch=prepareComplexPicture(before.raw,records,b,op);
+  if(patch.unchanged)return {bytes:source,content_verified:true,raw_preservation_verified:true,raw_preservation_scope:'unchanged_source',picture_changed:false,layout_verified:false};
+  const bytes=publishComplexPicture(source,before.raw,b.section,patch.records,patch.image),after=inspection(HwpDocument,bytes);
+  if(before.blocks.length!==after.blocks.length||before.blocks.some((old,i)=>old.id!==after.blocks[i].id||old.text!==after.blocks[i].text||!equal(old.paragraph_properties,after.blocks[i].paragraph_properties)))fail('PICTURE_CONTENT_MISMATCH');
+  const semantics=f=>({id:f.id,block_id:f.block_id,value:f.value,name:f.name,guide:f.guide,start:f.start,end:f.end});if(!equal(before.fields.map(semantics),after.fields.map(semantics)))fail('FIELD_PRESERVATION_MISMATCH');
+  const selected=after.blocks.find(x=>x.id===b.id),savedPictures=complexPictures(after.raw,after.recordSets.get(b.section),selected);
+  if(savedPictures.length!==patch.expected_picture_count)fail('PICTURE_CONTENT_MISMATCH');
+  if(patch.wanted&&!equal(savedPictures.find(p=>p.picture_index===patch.selected.picture_index)?.properties,patch.wanted))fail('PICTURE_CONTENT_MISMATCH');
+  if(patch.image){const found=savedPictures.find(p=>p.bin_id===patch.image.binId);if(!found||!equalBytes(complexPictureProperties(after.raw,after.recordSets.get(b.section).slice(found.record_index,found.record_index+3)).bytes,patch.image.bytes))fail('PICTURE_BINARY_MISMATCH');}
+  return {bytes,content_verified:true,raw_preservation_verified:true,raw_preservation_scope:'selected_picture_and_paragraph_anchor_new_binary_definition_only; every_opaque_record_retained',picture_changed:true,structure_changed:patch.inserting||patch.deleting,retained_unused_image_data:!patch.inserting,layout_verified:false};
+ }
  if(op.type==='format_paragraph'){
   if(field||group||!b.paragraph_format_editable)fail('TARGET_NOT_EDITABLE');const patch=prepareComplexParagraphFormat(before.raw,records,b,op);
   if(patch.unchanged)return {bytes:source,content_verified:true,raw_preservation_verified:true,raw_preservation_scope:'unchanged_source',formatting_changed:false,layout_verified:false};

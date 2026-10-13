@@ -21,7 +21,7 @@ It uses an engine built on [`@rhwp/core`](https://github.com/edwardkim/rhwp), wi
 - Recovery history, previous-version restoration and retention of the edited version before recovery
 - Updated embedded preview text and first-page thumbnails after saving
 
-Supported edits depend on the document structure and target. Nested-table structure changes, field creation/deletion and grouped-picture replacement/rotation remain unsupported. Documents whose structure cannot be verified are handled through partial read-only results or rejected operations. Partial reads may omit some object content.
+Supported edits depend on the document structure and target. The public 0.2.19 release does not support nested-table axes, field creation/removal or group-picture replacement/rotation. [Development candidate 0.2.20](docs/local-release-0.2.20.md) adds guarded rectangular nested-table axes, ClickHere creation/removal, nested-cell pictures and group-leaf replacement/in-frame rotation. Installed-client updates are separate; Claude Code and Cursor updates are deferred. Documents whose structure cannot be verified are handled through partial read-only results or rejected operations. Partial reads may omit some object content.
 
 SVG previews of the current document and rereading after saving do not guarantee identical fonts, line breaks or page layout in an external HWP application. See [features and limits](docs/supported-features.md) for operation-specific conditions and preview limitations.
 

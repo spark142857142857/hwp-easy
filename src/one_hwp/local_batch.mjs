@@ -21,7 +21,9 @@ function rawTarget(value,version){
 const target=(id,version)=>`hwp5:${version}:${Buffer.from(id).toString('base64url')}`;
 
 export async function applyLocalOperation(HwpDocument,bytes,version,operation){
+  if(['insert_field','delete_field'].includes(operation.type))return editLocalComplex(HwpDocument,bytes,version,operation);
   if(hasLocalComplexContent(readHwp(bytes)))return editLocalComplex(HwpDocument,bytes,version,operation);
+  if(['insert_table_row','delete_table_row','insert_table_column','delete_table_column'].includes(operation.type)&&readHwp(bytes).profile.unsupported.some(x=>[76,85].includes(x.record_tag)))return editLocalComplex(HwpDocument,bytes,version,operation);
   if(['move_paragraph','move_table'].includes(operation.type))return moveLocalBlock(HwpDocument,bytes,version,operation);
   if(tableTypes.has(operation.type))return tableFormatEdit(HwpDocument,bytes,version,operation);
   if(pictureTypes.has(operation.type))return pictureEdit(HwpDocument,bytes,version,operation);

@@ -25,7 +25,7 @@ export function validateFormatProperties(input,character=true) {
  return props;
 }
 export function patchCharacterShape(payload,props,fontIds) {
- if(payload.length!==74)fail('CHAR_SHAPE_PROFILE_UNSUPPORTED');
+ if(![70,74].includes(payload.length))fail('CHAR_SHAPE_PROFILE_UNSUPPORTED');
  const result=payload.slice(),v=view(result);
  if(fontIds)fontIds.forEach((id,i)=>v.setUint16(i*2,id,true));
  let flags=v.getUint32(46,true);
