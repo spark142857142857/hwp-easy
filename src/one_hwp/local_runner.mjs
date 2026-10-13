@@ -16,6 +16,8 @@ import {findLocalDocument,validateFind} from './local_find.mjs';
 import {hasLocalComplexContent,createLocalComplexSnapshot,inspectLocalComplex} from './local_complex.mjs';
 import {refreshLocalPreview,renderPreviewWorker} from './local_preview_cache.mjs';
 import {createLocalDocumentClass} from './local_container_write.mjs';
+import {analyzeLocalLayout,newLayoutIssues} from './local_layout.mjs';
+import {standardBlockId} from './local_complex_table.mjs';
 const HwpDocument=createLocalDocumentClass(UpstreamHwpDocument);
 
 let initialized = false;
@@ -50,8 +52,9 @@ export async function runLocal(request) {
     capabilities: ['action'],
     read: ['action','source','expected_sha256','cursor','max_chars','max_blocks'],
     preview: ['action','source','expected_sha256','page'],
-    plan: ['action','source','expected_sha256','operations'],
-    edit: ['action','source','expected_sha256','operations','output','expected_output_sha256'],
+    layout: ['action','source','expected_sha256'],
+    plan: ['action','source','expected_sha256','operations','layout_policy'],
+    edit: ['action','source','expected_sha256','operations','output','expected_output_sha256','layout_policy'],
     restore: ['action','source','expected_sha256','backup_id'],
     history: ['action','source','expected_sha256','limit'],
     find: ['action','source','expected_sha256','query','max_matches','cursor'],
@@ -61,7 +64,7 @@ export async function runLocal(request) {
   object(request,schema,request.action==='capabilities'?['action']:request.action==='read'?['action','source']:['action','source','expected_sha256']);
   if(request.action==='capabilities')return {engine:'@rhwp/core',engine_version:'0.8.6',transport:'local_execution',
     save_default:'same_file',selected_file_updated:true,file_location:'current_execution_environment',uploads_required:false,web_browser_required:false,
-    read:true,preview:true,edit:true,restore:true,find:true,local_recovery_history:true,new_paragraphs:true,multiline_body_and_cells:true,new_simple_tables:true,
+    read:true,preview:true,edit:true,restore:true,find:true,layout_diagnostics:true,reject_new_geometry_overflow:true,fit_nested_table_to_cell:true,local_recovery_history:true,new_paragraphs:true,multiline_body_and_cells:true,new_simple_tables:true,
     delete_paragraphs:true,merge_adjacent_paragraphs:true,split_paragraph:true,splice_text:true,mixed_style_multiline_insertion:true,
     move_body_paragraphs:true,move_complete_tables:true,duplicate_plain_body_and_cell_paragraphs:true,
     insert_delete_table_rows_columns:true,
@@ -69,7 +72,7 @@ export async function runLocal(request) {
     split_merge_table_cells:true,format_text:true,format_paragraph:true,
     resize_table_columns_rows:true,format_cell_layout:true,format_table_padding:true,
     atomic_operation_batches:true,max_operations:100,batch_target_ids:'initial_read; stable identity through verified position changes',
-    complex_local:{recursive_table_cell_text:true,max_cell_depth:8,clickhere_field_values:true,clickhere_creation:true,clickhere_removal_preserves_value:true,rectangular_nested_table_axes:true,merged_nested_table_axes:true,nested_table_cell_merge_split:true,nested_table_sizing_padding:true,controlled_cell_deletion: "explicit expected_cell_sha256 for each affected cell subtree",table_axes_preserve_retained_cell_pictures:true,character_formatting:['bold','italic','underline','strikethrough','fontSize','textColor','fontFamily'],paragraph_formatting:['alignment','lineSpacing','marginLeft','marginRight','indent','spacingBefore','spacingAfter'],opaque_lists_preserved:true,field_format_offsets:'relative to explicit field value, Unicode code points',line_breaks:'HWP character 10 within same paragraph; up to 100 lines per inserted value',duplicate_field_names:'explicit field target ID',picture_groups:'move whole group; crop/replace selected PNG/JPEG child; rotate a single-level group leaf with one transform pair within its parent frame',complex_structure_changes:'verified rectangular/merged table axes and cell boundaries; explicit subtree-confirmed control deletion; ClickHere creation/removal'},
+    complex_local:{recursive_table_cell_text:true,max_cell_depth:8,clickhere_field_values:true,clickhere_creation:true,clickhere_removal_preserves_value:true,rectangular_nested_table_axes:true,merged_nested_table_axes:true,nested_table_cell_merge_split:true,nested_table_sizing_padding:true,controlled_cell_deletion: "explicit expected_cell_sha256 for each affected cell subtree",table_axes_preserve_retained_cell_pictures:true,character_formatting:['bold','italic','underline','strikethrough','fontSize','textColor','fontFamily'],paragraph_formatting:['alignment','lineSpacing','marginLeft','marginRight','indent','spacingBefore','spacingAfter'],opaque_lists_preserved:true,field_format_offsets:'relative to explicit field value, Unicode code points',line_breaks:'HWP character 10 within same paragraph; up to 100 lines per inserted value',duplicate_field_names:'explicit field target ID',picture_groups:'move whole group; crop/replace selected PNG/JPEG child; rotate nested leaves within the transformed immediate parent frame; rotate/resize the outer group with composed child transforms',complex_structure_changes:'verified rectangular/merged table axes and cell boundaries; explicit subtree-confirmed control deletion; ClickHere creation/removal; split/merge mapped paragraphs around intact control subtrees; add/duplicate/delete control-free paragraphs'},
     pictures:{insert:'local PNG/JPEG, verified body or recursively mapped table cell',replace:'local PNG/JPEG, retain frame size and position',update:'size, position, four-edge crop and integer-degree rotation',multiple_per_paragraph:32,picture_index_required_when_multiple:true,delete:true,delete_cleans_unused_embedded_data:false},
     edit_profiles:{existing_text:'guarded paragraph/cell replacement; selected range insertion/deletion/replacement preserves retained mixed character styles',
       structure:'uniform-style targets; paragraphs, simple or merged table rows/columns and verified cell split/merge; opaque page numbers and supported pictures preserved',
@@ -79,6 +82,8 @@ export async function runLocal(request) {
     embedded_preview_refresh:{text:'bounded UTF-16 excerpt',image:'first-page BMP',on:'verified changed edit, before publication',font_substitution_possible:true},
     layout_verified:false,requires:'Node.js 22 or newer with local file permissions',max_input_bytes:4194304};
   const snapshot=readLocal(request.source,request.expected_sha256);
+  if(request.action==='layout')return {...analyzeLocalLayout(inspectLocalComplex(HwpDocument,snapshot.bytes)),source:snapshot.source,source_sha256:snapshot.sha256,saved:false};
+  if(Object.hasOwn(request,'layout_policy')&&!['report','reject_new_overflow'].includes(request.layout_policy))fail('INVALID_LAYOUT_POLICY');
   if(request.action==='history')return localHistory(snapshot,request.limit);
   if(request.action==='find')validateFind(request,snapshot.sha256);
   const engine=createDocumentEngine(HwpDocument,{includeTableMetadata:request.action!=='find',plainStyleInspection:true});
@@ -141,7 +146,12 @@ export async function runLocal(request) {
     });
     candidate=await document.edit({expected_sha256:version,operations});
   }
-  let {bytes,...verification}=candidate;
+  let {bytes,_layout_target_remap,...verification}=candidate;
+  try{const oldState=inspectLocalComplex(HwpDocument,snapshot.bytes),newState=inspectLocalComplex(HwpDocument,bytes),beforeLayout=analyzeLocalLayout(oldState),afterLayout=analyzeLocalLayout(newState),remap={};
+    if(_layout_target_remap)for(const b of oldState.blocks){const key=Object.hasOwn(_layout_target_remap,b.id)?b.id:standardBlockId(b),name=_layout_target_remap[key];remap[b.id]=newState.blocks.find(x=>x.id===name||standardBlockId(x)===name)?.id??null;}
+    verification.layout_diagnostics={...afterLayout,new_issues:newLayoutIssues(beforeLayout,afterLayout,remap)};
+    if(request.layout_policy==='reject_new_overflow'&&verification.layout_diagnostics.new_issues.some(i=>i.certainty==='geometry'))fail('NEW_LAYOUT_OVERFLOW');
+  }catch(error){if(error.code==='NEW_LAYOUT_OVERFLOW'||request.layout_policy==='reject_new_overflow')throw error;if(!(error instanceof GuardError))throw error;verification.layout_diagnostics={status:'unavailable',reason:error.code,layout_verified:false};}
   // The candidate above still validates every target and expected value. An
   // identical text request must not save serializer/container normalization.
   if(request.operations.every(op=>op.type==='replace_text'&&op.expected_old===op.new_text)){

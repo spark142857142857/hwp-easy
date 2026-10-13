@@ -320,11 +320,37 @@ Group operations use a returned group target and its host block's whole text as 
 {"type":"replace_group_picture","target_id":"<group ID>","expected_old":"<host text>","picture_index":1,"expected_properties":{"rotationAngle":0,"sourceWidth":4800,"sourceHeight":3000,"cropLeft":0,"cropTop":0,"cropRight":0,"cropBottom":0},"image":{"source":"<absolute PNG/JPEG path>","expected_sha256":"<image hash>"}}
 ```
 
-`rotate_group_picture` accepts only `props.rotationAngle` (integer -359…359). It preserves the center and parent/sibling transforms. A single-level group with one scale/rotation pair and verified unscaled leaf geometry is required and its rotated corners must fit the immediate parent frame. A failed plan never saves; do not resize or flatten a group to bypass this bound.
+`rotate_group_picture` accepts only `props.rotationAngle` (integer -359…359). It preserves the center and parent/sibling transforms. Nested parents and 1–9 transform pairs are supported with verified unscaled leaf geometry; rotated corners must fit the immediate parent's transformed coordinate frame. A failed plan never saves. Keep the group hierarchy intact.
 
 ```json
 {"type":"rotate_group_picture","target_id":"<group ID>","expected_old":"<host text>","picture_index":1,"expected_properties":{"rotationAngle":0,"sourceWidth":4800,"sourceHeight":3000,"cropLeft":0,"cropTop":0,"cropRight":0,"cropBottom":0},"props":{"rotationAngle":90}}
 ```
+
+## Outer group transforms and complex paragraph boundaries
+
+`transform_picture_group` uses a returned outer group ID, host text, its complete `expected_properties`, and `expected_rotation_angle`. `props` accepts `width`, `height` (positive integer HWP units ≤720000, **unrotated** frame size) and/or `rotationAngle` (integer -359…359). Read `frame_size` for unrotated size; `properties.width/height` are the current rotated bounding dimensions. It updates every component's composed transform and retains nested grouping and embedded image data. Root shear/flip, singular transforms and unsupported profiles are refused. Inner subgroup selection is not an operation target.
+
+```json
+{"type":"transform_picture_group","target_id":"<group ID>","expected_old":"<host text>","expected_properties":{"width":11600,"height":9600,"horzOffset":0,"vertOffset":0},"expected_rotation_angle":0,"props":{"width":23200,"height":19200,"rotationAngle":90}}
+```
+
+Complex paragraph operations use a whole block's text and `structural_editable:true`. The schemas match ordinary boundaries: `split_paragraph` adds `offset`; `merge_paragraph` adds `previous_target_id` and `expected_previous`; `insert_paragraphs` adds `paragraphs` (1–100 strings). `duplicate_paragraph` and `delete_paragraph` have no extra keys and refuse paragraphs containing controls. Splits move intact controls with their anchors; field values cannot straddle a new boundary. Merge targets must be consecutive within the same body/cell list and have equal paragraph formatting. The last cell paragraph cannot be deleted. Initial read targets remain valid within a checked batch after supported boundary shifts.
+
+## Geometry diagnostics and guarded fitting
+
+```json
+{"action":"layout","source":"<absolute HWP path>","expected_sha256":"<hash>"}
+```
+
+Plan/edit requests optionally accept `layout_policy:"report"` (default) or `"reject_new_overflow"`. Results include `layout_diagnostics.issues`, `new_issues`, `geometry_overflows`, `font_warnings` and the unchecked scope. Strict policy rejects a new geometry issue as `NEW_LAYOUT_OVERFLOW` before saving. A font estimate is a warning. Absence of issues is not layout certification.
+
+To shrink an overflowing nested table, use any cell paragraph target of that table and its complete returned dimensions/properties:
+
+```json
+{"type":"fit_table_to_cell","target_id":"<nested cell paragraph ID>","expected_old":"<cell text>","expected_dimensions":{"rowCount":1,"colCount":2,"cellCount":2},"expected_properties":{"tableWidth":40000,"tableHeight":1282,"cellSpacing":0,"paddingLeft":510,"paddingRight":510,"paddingTop":141,"paddingBottom":141}}
+```
+
+It retains column ratios with integer rounding, cell spans, text, styles and child objects. It never enlarges an already-contained table or changes fonts. `LAYOUT_CANNOT_FIT_WITHOUT_REFLOW` means the available width is insufficient for the checked content; other existing object/track guards can also refuse the request. Page boundaries, multi-line text height and floating-object overlap are outside these diagnostics.
 
 Complex `tables` return `axis_editable`, `layout_editable`, cell geometry and `subtree_sha256`. Verified rectangular and merged nested tables support row/column insertion and deletion. Crossing merged cells expand or shrink without deleting their paragraphs. Inserted positions already covered by an expanded merge require an empty text slot. Deletion `expected_cells` includes all affected cells, including retained crossing merges, in storage order.
 

@@ -9,8 +9,10 @@ import {mapComplexBlocks} from './local_complex_mapping.mjs';
 import {complexParagraphProperties,prepareComplexParagraphFormat} from './local_complex_paragraph.mjs';
 import {complexPictures,complexPictureProperties,prepareComplexPicture,publishComplexPicture} from './local_complex_picture.mjs';
 import {complexTables,prepareComplexTable,standardBlockId,complexCellProperties} from './local_complex_table.mjs';
-import {prepareComplexGroup} from './local_complex_group.mjs';
+import {prepareComplexGroup,groupGeometry} from './local_complex_group.mjs';
 import {prepareComplexField} from './local_complex_field.mjs';
+import {boundaryEligible,prepareComplexBoundary} from './local_complex_boundary.mjs';
+import {fitNestedTable} from './local_layout.mjs';
 const idTarget=(id,version)=>`hwp5:${version}:${Buffer.from(id).toString('base64url')}`;
 export function hasLocalComplexContent(raw){
  for(const {section} of raw.profile.sections)for(const r of parseRecords(raw.streams.get(`BodyText/Section${section}`)))
@@ -55,6 +57,7 @@ function inspection(HwpDocument,bytes){return quiet(()=>{
       const props=JSON.parse(b.cell_path.length?doc.getCellCharPropertiesAtByPath(section,b.paragraph,JSON.stringify(b.cell_path),pos):doc.getCharPropertiesAt(section,b.paragraph,pos));if(props.charShapeId!==ids[pos])fail('COMPLEX_STYLE_UNVERIFIED');if(pos===start)b.character_runs.push({start,end,properties:props});}start=end;}
     }catch(e){if(!(e instanceof GuardError))throw e;b.text_range_editable=false;delete b.unit_styles;delete b.character_runs;}
     try{b.paragraph_properties=complexParagraphProperties(raw,records,b);b.paragraph_format_editable=b.text_mapping_verified;}catch(error){if(!(error instanceof GuardError))throw error;b.paragraph_format_editable=false;}
+    b.structural_editable=boundaryEligible(records,b);
    });
   }
   const fields=[];
@@ -82,8 +85,9 @@ function inspection(HwpDocument,bytes){return quiet(()=>{
       children.push({picture_index:children.length,record_index:k,rotationAngle:view(shape.payload).getInt16(Buffer.from(shape.payload.subarray(0,8)).toString('ascii')==='cip$cip$'?40:36,true),sourceWidth,sourceHeight,cropLeft,cropTop,cropRight,cropBottom});}
     }
     if(!children.length||children.length>32)fail('GROUP_PROFILE_UNSUPPORTED');const p=view(r.payload);
-    groups.push({id:`${b.id}:g${index++}`,block_id:b.id,section:b.section,record_index:i,properties:{width:p.getUint32(16,true),height:p.getUint32(20,true),horzOffset:p.getInt32(12,true),vertOffset:p.getInt32(8,true)},pictures:children,editable:true});
-    }catch(error){if(!(error instanceof GuardError)||!['GROUP_PROFILE_UNSUPPORTED','GROUP_IMAGE_UNVERIFIED','INVALID_IMAGE_FILE'].includes(error.code))throw error;unhandledGroups++;}
+    const geometry=groupGeometry(records[i+1]);
+    groups.push({id:`${b.id}:g${index++}`,block_id:b.id,section:b.section,record_index:i,rotationAngle:geometry.v.getInt16(geometry.base+32,true),frame_size:geometry.frame_size,properties:{width:p.getUint32(16,true),height:p.getUint32(20,true),horzOffset:p.getInt32(12,true),vertOffset:p.getInt32(8,true)},pictures:children,editable:true});
+    }catch(error){if(!(error instanceof GuardError)||!['GROUP_PROFILE_UNSUPPORTED','GROUP_IMAGE_UNVERIFIED','INVALID_IMAGE_FILE','GROUP_TRANSFORM_PROFILE_UNSUPPORTED'].includes(error.code))throw error;unhandledGroups++;}
    }
   }
   const opaqueParagraphs=[...recordSets.values()].reduce((n,records)=>n+records.filter(r=>r.tag===66).length,0)-blocks.length;
@@ -92,7 +96,7 @@ function inspection(HwpDocument,bytes){return quiet(()=>{
 });}
 export {inspection as inspectLocalComplex};
 export function createLocalComplexSnapshot(HwpDocument,bytes,version){
- const state=inspection(HwpDocument,bytes),publicBlock=b=>{const {tokens,unit_styles,character_runs,record_index,records_end,text_record,shape_record,raw_level,...rest}=b;return {...rest,target_id:b.text_mapping_verified?idTarget(b.id,version):null,editable:b.text_range_editable&&tokens.every(t=>t.text||t.code===13),character_format_editable:b.text_range_editable,structural_editable:false,...(!b.text_mapping_verified?{read_only_reason:'TARGET_TEXT_UNVERIFIED'}:{}),style:{profile:'complex_raw_preservation',character_runs:character_runs??[]}};};
+ const state=inspection(HwpDocument,bytes),publicBlock=b=>{const {tokens,unit_styles,character_runs,record_index,records_end,text_record,shape_record,raw_level,...rest}=b;return {...rest,target_id:b.text_mapping_verified?idTarget(b.id,version):null,editable:b.text_range_editable&&tokens.every(t=>t.text||t.code===13),character_format_editable:b.text_range_editable,structural_editable:b.structural_editable,...(!b.text_mapping_verified?{read_only_reason:'TARGET_TEXT_UNVERIFIED'}:{}),style:{profile:'complex_raw_preservation',character_runs:character_runs??[]}};};
  const publicFields=state.fields.map(f=>{const {from,to,...rest}=f;return {...rest,target_id:idTarget(f.id,version)};}),publicGroups=state.groups.map(g=>{const {record_index,...rest}=g;return {...rest,target_id:idTarget(g.id,version),pictures:g.pictures.map(p=>{const {record_index,...rest}=p;return rest;})};});
  return {source_sha256:version,read(options){
   if(options.expected_sha256!==version)fail('VERSION_CONFLICT');let {max_chars=8000,max_blocks=128,cursor}=options;
@@ -105,13 +109,14 @@ export function createLocalComplexSnapshot(HwpDocument,bytes,version){
 }
 export function editLocalComplex(HwpDocument,source,version,op){
  const schemas={splice_text:['start','end','new_text'],replace_text:['new_text'],set_field:['new_text'],format_text:['start','end','props'],format_paragraph:['props'],move_picture_group:['expected_properties','props'],crop_group_picture:['picture_index','expected_properties','props']};
- const groupOperation=['replace_group_picture','rotate_group_picture'].includes(op.type);
+ const groupOperation=['replace_group_picture','rotate_group_picture','transform_picture_group'].includes(op.type);
+ const boundaryOperation=['split_paragraph','merge_paragraph','insert_paragraphs','duplicate_paragraph','delete_paragraph'].includes(op.type);
  const pictureOperation=['insert_picture','update_picture','replace_picture','delete_picture'].includes(op.type);
  const fieldOperation=['insert_field','delete_field'].includes(op.type);
- const tableOperation=['insert_table_row','delete_table_row','insert_table_column','delete_table_column','merge_table_cells','split_table_cell','resize_table_columns','resize_table_rows','format_cell','format_table'].includes(op.type);
- if(!pictureOperation&&!tableOperation&&!fieldOperation&&!groupOperation&&(!schemas[op.type]||!equal(Object.keys(op).sort(),['type','target_id','expected_old',...schemas[op.type]].sort())))fail('COMPLEX_OPERATION_UNSUPPORTED');
+ const tableOperation=['insert_table_row','delete_table_row','insert_table_column','delete_table_column','merge_table_cells','split_table_cell','resize_table_columns','resize_table_rows','format_cell','format_table','fit_table_to_cell'].includes(op.type);
+ if(!pictureOperation&&!tableOperation&&!fieldOperation&&!groupOperation&&!boundaryOperation&&(!schemas[op.type]||!equal(Object.keys(op).sort(),['type','target_id','expected_old',...schemas[op.type]].sort())))fail('COMPLEX_OPERATION_UNSUPPORTED');
  if(typeof op.target_id!=='string'||!op.target_id.startsWith(`hwp5:${version}:`))fail('VERSION_CONFLICT');const encoded=op.target_id.slice(70),id=Buffer.from(encoded,'base64url').toString();if(Buffer.from(id).toString('base64url')!==encoded)fail('INVALID_TARGET');
- const before=inspection(HwpDocument,source),field=before.fields.find(f=>f.id===id),group=before.groups.find(g=>g.id===id),b=before.blocks.find(b=>b.id===(field?.block_id??group?.block_id??id)||(tableOperation||fieldOperation)&&standardBlockId(b)===id);if(!b)fail('INVALID_TARGET');
+ const before=inspection(HwpDocument,source),field=before.fields.find(f=>f.id===id),group=before.groups.find(g=>g.id===id),b=before.blocks.find(b=>b.id===(field?.block_id??group?.block_id??id)||(tableOperation||fieldOperation||boundaryOperation)&&standardBlockId(b)===id);if(!b)fail('INVALID_TARGET');
  const expected=field?field.value:b.text;if(expected!==op.expected_old)fail('EXPECTED_OLD_MISMATCH');let records=before.recordSets.get(b.section),wanted=b.text;
  if(b.empty_text_materialization&&['splice_text','replace_text','insert_picture','insert_field'].includes(op.type)){
   if(['splice_text','replace_text'].includes(op.type)&&op.new_text===''){
@@ -123,13 +128,24 @@ export function editLocalComplex(HwpDocument,source,version,op){
   const staged=publishRawBody(source,before.raw,b.section,materialized);
   return editLocalComplex(HwpDocument,staged.bytes,version,op);
  }
+ if(boundaryOperation){
+  if(field||group)fail('PARAGRAPH_TARGET_REQUIRED');const patch=prepareComplexBoundary(before,b,op,version),written=publishRawBody(source,before.raw,b.section,patch.records),after=inspection(HwpDocument,written.bytes);verifyRawOutput(before.raw,after.raw,written.name,written.expected);
+  for(const old of before.blocks){const name=patch.remap[old.id],now=after.blocks.find(x=>x.id===name);if(name!==null&&(!now||now.text!==patch.expected.get(old.id)))fail('PARAGRAPH_CONTENT_MISMATCH');}
+  if(after.blocks.length!==before.blocks.length+patch.delta||patch.fresh.some(f=>after.blocks.find(x=>x.id===f.id)?.text!==f.text))fail('PARAGRAPH_CONTENT_MISMATCH');
+  if(after.fields.length!==before.fields.length||before.fields.some(f=>{const now=after.fields.find(x=>x.field_id===f.field_id);return !now||now.value!==f.value||now.name!==f.name||now.guide!==f.guide;}))fail('FIELD_PRESERVATION_MISMATCH');
+  if(after.groups.length!==before.groups.length||after.pictures.length!==before.pictures.length)fail('PICTURE_CONTENT_MISMATCH');
+  const complexAfter=hasLocalComplexContent(after.raw),remap={};for(const old of before.blocks){const now=after.blocks.find(x=>x.id===patch.remap[old.id]),name=now?(complexAfter?now.id:standardBlockId(now)):null;remap[old.id]=name;const alias=standardBlockId(old);if(alias)remap[alias]=name;}
+  for(const f of before.fields)remap[f.id]=after.fields.find(x=>x.field_id===f.field_id)?.id??null;
+  for(const g of before.groups){const at=g.section===b.section?patch.records.indexOf(records[g.record_index]):g.record_index,now=after.groups.find(x=>x.section===g.section&&x.record_index===at);if(!now||!equal(now.properties,g.properties)||!equal(now.pictures.map(({record_index,...p})=>p),g.pictures.map(({record_index,...p})=>p)))fail('GROUP_PRESERVATION_MISMATCH');remap[g.id]=now.id;}
+  return {bytes:written.bytes,content_verified:true,raw_preservation_verified:true,raw_preservation_scope:'paragraph_text_style_runs_boundaries_and_cell_list_count; retained_control_subtrees_and_other_streams_exact',structure_changed:true,paragraph_count_changed:true,_target_remap:remap,layout_verified:false};
+ }
  if(groupOperation){
   if(!group)fail('GROUP_PICTURE_REQUIRED');const patch=prepareComplexGroup(before.raw,records,group,op);if(patch.unchanged)return {bytes:source,content_verified:true,raw_preservation_verified:true,raw_preservation_scope:'unchanged_source',layout_verified:false};
   const bytes=publishComplexPicture(source,before.raw,b.section,patch.records,patch.image),after=inspection(HwpDocument,bytes),now=after.groups.find(g=>g.id===group.id);
-  if(!now||!equal(now.properties,group.properties)||now.pictures.length!==group.pictures.length)fail('GROUP_PRESERVATION_MISMATCH');
-  for(const child of group.pictures){const {record_index,picture_index,...props}=now.pictures[child.picture_index]??{};if(!equal(props,child.picture_index===patch.child.picture_index?patch.wanted:(({record_index,picture_index,...props})=>props)(child)))fail('GROUP_PRESERVATION_MISMATCH');}
+  if(!now||!equal(now.properties,patch.wantedGroup??group.properties)||now.rotationAngle!==(patch.wantedAngle??group.rotationAngle)||now.pictures.length!==group.pictures.length)fail('GROUP_PRESERVATION_MISMATCH');
+  for(const child of group.pictures){const {record_index,picture_index,...props}=now.pictures[child.picture_index]??{};if(!equal(props,child.picture_index===patch.child?.picture_index?patch.wanted:(({record_index,picture_index,...props})=>props)(child)))fail('GROUP_PRESERVATION_MISMATCH');}
   if(before.blocks.length!==after.blocks.length||before.blocks.some((old,i)=>old.id!==after.blocks[i].id||old.text!==after.blocks[i].text)||!equal(before.fields,after.fields))fail('COMPLEX_CONTENT_MISMATCH');
-  return {bytes,content_verified:true,raw_preservation_verified:true,raw_preservation_scope:'selected_group_picture_binary_or_leaf_rotation_matrix_and_metadata; parent_and_sibling_records_retained',picture_group_changed:true,retained_unused_image_data:Boolean(patch.image),layout_verified:false};
+  return {bytes,content_verified:true,raw_preservation_verified:true,raw_preservation_scope:op.type==='transform_picture_group'?'group_bounding_frame_and_first_rotation_pair_of_each_component; hierarchy_images_translation_scale_and_later_pairs_exact':'selected_group_picture_binary_or_leaf_rotation_matrix_and_metadata; parent_and_sibling_records_retained',picture_group_changed:true,retained_unused_image_data:Boolean(patch.image),layout_verified:false};
  }
  if(fieldOperation){
   if(group)fail('FIELD_TARGET_REQUIRED');const patch=prepareComplexField(source,before,b,field,op),written=publishRawBody(source,before.raw,b.section,patch.records),after=inspection(HwpDocument,written.bytes);verifyRawOutput(before.raw,after.raw,written.name,written.expected);
@@ -142,7 +158,7 @@ export function editLocalComplex(HwpDocument,source,version,op){
   return {bytes:written.bytes,content_verified:true,raw_preservation_verified:true,raw_preservation_scope:'selected_ClickHere_wrapper_text_runs_and_line_cache; all_other_controls_and_streams_exact',field_changed:true,structure_changed:true,deleted_field_retains_value:!patch.inserting,_target_remap:remap,layout_verified:false};
  }
  if(tableOperation){
-  if(field||group)fail('TABLE_CELL_REQUIRED');const patch=prepareComplexTable(before,b,op);if(patch.unchanged)return {bytes:source,content_verified:true,raw_preservation_verified:true,raw_preservation_scope:'unchanged_source',layout_verified:false};const written=publishRawBody(source,before.raw,b.section,patch.records),after=inspection(HwpDocument,written.bytes);verifyRawOutput(before.raw,after.raw,written.name,written.expected);
+  if(field||group)fail('TABLE_CELL_REQUIRED');const effective=op.type==='fit_table_to_cell'?fitNestedTable(before,b,op):op,patch=effective?prepareComplexTable(before,b,effective):{unchanged:true};if(patch.unchanged)return {bytes:source,content_verified:true,raw_preservation_verified:true,raw_preservation_scope:'unchanged_source',layout_verified:false};const written=publishRawBody(source,before.raw,b.section,patch.records),after=inspection(HwpDocument,written.bytes);verifyRawOutput(before.raw,after.raw,written.name,written.expected);
   const saved=after.tables.find(t=>t.id===patch.table.id);if(!saved||!equal(saved.dimensions,{rowCount:patch.newRows,colCount:patch.newCols,cellCount:patch.cellCount})||saved.properties.tableWidth!==patch.width||saved.properties.tableHeight!==patch.height)fail('TABLE_CONTENT_MISMATCH');
   if(!equal(saved.cells.map(c=>({row:c.row,col:c.col,rowSpan:c.rowSpan,colSpan:c.colSpan,width:c.width,height:c.height})),patch.expectedCells))fail('TABLE_GEOMETRY_MISMATCH');
   if(patch.expectedProperties&&!equal(saved.properties,patch.expectedProperties))fail('TABLE_FORMAT_PROPERTIES_MISMATCH');

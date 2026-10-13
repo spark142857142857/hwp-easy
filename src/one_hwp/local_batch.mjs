@@ -46,7 +46,7 @@ export async function editLocalBatch(HwpDocument,source,initialVersion,operation
       const id=rawTarget(op[key],initialVersion);identities.set(id,id);
     }
   }
-  let bytes=source,last;const outcomes=[];
+  let bytes=source,last,layoutRemap=null;const outcomes=[];
   for(const [index,op] of operations.entries()){
     const currentVersion=digest(bytes),operation=structuredClone(op);
     for(const key of keys)if(key==='target_id'||Object.hasOwn(op,key)){
@@ -58,6 +58,8 @@ export async function editLocalBatch(HwpDocument,source,initialVersion,operation
     if(result.content_verified!==true||result.raw_preservation_verified!==true)fail('BATCH_VERIFICATION_FAILED');
     const {_target_remap,bytes:next,...verification}=result;
     if(_target_remap){
+      if(layoutRemap===null)layoutRemap={..._target_remap};
+      else for(const [initial,current] of Object.entries(layoutRemap))if(current!==null)layoutRemap[initial]=Object.hasOwn(_target_remap,current)?_target_remap[current]:null;
       for(const [initial,current] of identities){
         if(current===null)continue;
         if(!Object.hasOwn(_target_remap,current))fail('INVALID_TARGET');
@@ -66,7 +68,7 @@ export async function editLocalBatch(HwpDocument,source,initialVersion,operation
     }
     outcomes.push({index,type:op.type,...verification});bytes=next;last=verification;
   }
-  if(operations.length===1)return {bytes,...last};
+  if(operations.length===1)return {bytes,...last,_layout_target_remap:layoutRemap};
   return {bytes,content_verified:true,raw_preservation_verified:true,
     raw_preservation_scope:'each_operation_verified_before_one_final_save',
     operation_count:operations.length,atomic_batch:true,
@@ -74,5 +76,7 @@ export async function editLocalBatch(HwpDocument,source,initialVersion,operation
     formatting_changed:outcomes.some(o=>o.formatting_changed===true),
     table_formatting_changed:outcomes.some(o=>o.table_formatting_changed===true),
     text_range_changed:outcomes.some(o=>o.text_range_changed===true),
-    layout_verified:false,operations:outcomes};
+    picture_changed:outcomes.some(o=>o.picture_changed===true),
+    picture_group_changed:outcomes.some(o=>o.picture_group_changed===true),
+    layout_verified:false,operations:outcomes,_layout_target_remap:layoutRemap};
 }

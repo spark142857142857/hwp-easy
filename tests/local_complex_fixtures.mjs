@@ -54,3 +54,13 @@ export function groupFixture({source=fixture({table:false,paragraphs:['group hos
   const group=JSON.parse(doc.groupShapes(JSON.stringify({sectionIdx:0,targets:[{paraIdx:a.paraIdx,controlIdx:a.controlIdx},{paraIdx:b.paraIdx,controlIdx:b.controlIdx}]})));if(!group.ok)throw new Error('Grouping failed');return checkedExport(doc);
  }finally{doc.free();}
 }
+export function nestedGroupFixture(){
+ const doc=new HwpDocument(groupFixture({source:groupFixture(),paragraph:2}));
+ let source;try{doc.setShapeProperties(0,2,0,JSON.stringify({vertOffset:6000}));const r=JSON.parse(doc.groupShapes(JSON.stringify({sectionIdx:0,targets:[{paraIdx:1,controlIdx:0},{paraIdx:2,controlIdx:0}]})));if(!r.ok)throw new Error('Nested grouping failed');source=checkedExport(doc);}finally{doc.free();}
+ // Upstream grouping leaves descendant renderingInfo in its previous group
+ // coordinates. Establish a reproducible separated native-compatible fixture.
+ const raw=readHwp(source),records=[...parseRecords(raw.streams.get('BodyText/Section0'))].map(r=>({...r,payload:r.payload.slice()})),groups=records.map((r,i)=>r.tag===76&&r.level===3&&Buffer.from(r.payload.subarray(0,4)).toString()==='noc$'?i:-1).filter(i=>i>=0),at=groups[1];
+ let end=at+1;while(end<records.length&&records[end].level>records[at].level)end++;
+ for(let i=at;i<end;i++)if(records[i].tag===76){const r=records[i],base=Buffer.from(r.payload.subarray(0,4)).equals(Buffer.from(r.payload.subarray(4,8)))?8:4;view(r.payload).setFloat64(base+84,6000,true);}
+ const packed=readCfb(source),body=encodeRecords(records),compressed=view(raw.streams.get('FileHeader')).getUint32(36,true)&1;packed.set('BodyText/Section0',compressed?deflateRawSync(body,{level:9}):body);const cfb=CFB.utils.cfb_new();for(const [name,value]of packed)CFB.utils.cfb_add(cfb,name,Buffer.from(value));return new Uint8Array(CFB.write(cfb,{type:'buffer',fileType:'cfb'}));
+}
