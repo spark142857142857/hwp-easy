@@ -21,7 +21,7 @@ It uses an engine built on [`@rhwp/core`](https://github.com/edwardkim/rhwp), wi
 - Recovery history, previous-version restoration and retention of the edited version before recovery
 - Updated embedded preview text and first-page thumbnails after saving
 
-Supported edits depend on the document structure and target. The public 0.2.19 release does not support nested-table axes, field creation/removal or group-picture replacement/rotation. [Development candidate 0.2.20](docs/local-release-0.2.20.md) adds guarded rectangular nested-table axes, ClickHere creation/removal, nested-cell pictures and group-leaf replacement/in-frame rotation. Installed-client updates are separate; Claude Code and Cursor updates are deferred. Documents whose structure cannot be verified are handled through partial read-only results or rejected operations. Partial reads may omit some object content.
+Supported edits depend on the document structure and target. The public 0.2.19 release does not support nested-table axes, field creation/removal or group-picture replacement/rotation. [Codex 0.2.20 verification](docs/local-release-0.2.20.md) adds guarded rectangular nested-table axes, ClickHere creation/removal, nested-cell pictures and group-leaf replacement/in-frame rotation. Codex 0.2.20 is installed and verified; Claude Code and Cursor remain on 0.2.19. Documents whose structure cannot be verified are handled through partial read-only results or rejected operations. Partial reads may omit some object content.
 
 SVG previews of the current document and rereading after saving do not guarantee identical fonts, line breaks or page layout in an external HWP application. See [features and limits](docs/supported-features.md) for operation-specific conditions and preview limitations.
 
@@ -37,7 +37,7 @@ SVG previews of the current document and rereading after saving do not guarantee
 | `scripts/rhwp_bg.wasm` | Engine that reads HWP structure and produces edited documents and SVG previews |
 | Preview WASM, font and notices | Embedded BMP thumbnail generation and preview font fallback |
 
-The Codex plugin packages this skill and its runtime resources with `plugin.json` and listing metadata such as the name, icon, description and version. All three clients use the same source, runner and WASM, with the same editing scope. Copying `SKILL.md` alone is insufficient to run HWP Easy. See [architecture](docs/architecture.md) for details.
+The Codex plugin packages this skill and its runtime resources with `plugin.json` and listing metadata such as the name, icon, description and version. Packages built at the same version share the source, runner, WASM and editing scope. Installed version differences are recorded separately. Copying `SKILL.md` alone is insufficient to run HWP Easy. See [architecture](docs/architecture.md) for details.
 
 <a id="choose-your-app"></a>
 
@@ -51,7 +51,7 @@ Install the complete package for your client, including the runner and engine. T
 | Claude Code | Personal skill package | [Installation and invocation](docs/agent-client-skills.md#설치와-호출) |
 | Cursor | Personal skill package | [Installation and invocation](docs/agent-client-skills.md#설치와-호출) |
 
-The current version is **0.2.19**. Download client ZIPs and SHA-256 checksums from the [public release](https://github.com/spark142857142857/hwp-easy/releases/tag/hwp-easy-local-v0.2.19). OpenAI directory publication is a separate process. See [project status](docs/project-status.md) for installations and verified scope.
+The verified Codex installation is **0.2.20**; public packages and the Claude Code/Cursor installations remain **0.2.19**. Download client ZIPs and SHA-256 checksums from the [public release](https://github.com/spark142857142857/hwp-easy/releases/tag/hwp-easy-local-v0.2.19). OpenAI directory publication is a separate process. See [project status](docs/project-status.md) for installations and verified scope.
 
 <a id="install-and-use"></a>
 <a id="how-does-it-work"></a>
@@ -94,7 +94,7 @@ See the [developer guide](docs/developer-guide.md) for setup, source organizatio
 
 ## Project status
 
-Installed 0.2.19 runners in all three clients passed editing, same-file saving, rereading and exact recovery. A fresh Codex app-server conversation executed the selected skill through the actual model; Claude Code and Cursor CLI model invocations were verified on 0.2.18. Selected edits in 12 public documents and Hancom layout checks on two representative documents also passed. See the [0.2.19 verification record](docs/local-release-0.2.19.md) and [current CI](https://github.com/spark142857142857/hwp-easy/actions). Other-user installation and the complete Cloud flow remain follow-up work.
+A fresh independent Codex chat explicitly used the installed 0.2.20 skill to edit and save two synthetic documents in place, then restored their exact original bytes in a separate follow-up turn. All ten Windows/Linux CI jobs for the 0.2.20 code passed. Claude Code and Cursor remain on 0.2.19; their actual AI invocation records are from 0.2.18. Compound editing of 12 public documents and representative layout checks are recorded in [0.2.20 verification](docs/local-release-0.2.20.md). See [current CI](https://github.com/spark142857142857/hwp-easy/actions) for subsequent changes. Other-user installation and the complete Cloud flow remain follow-up work.
 
 Remote **0.1.9** and the Windows COM prototype are retained earlier implementations. Their code, packages and review records are indexed under [archived material](docs/README.md#보관-자료).
 
