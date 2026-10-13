@@ -19,18 +19,24 @@ export function fieldFixture({cell=false,multiple=false,mixed=false}={}){
   return checkedExport(doc);
  }finally{doc.free();}
 }
-export function nestedFixture(source=fixture(),{inside_nested=false}={}){
+export function nestedFixture(source=fixture(),{inside_nested=false,rows=1,cols=2,merge=null}={}){
  const raw=readHwp(source),records=[...parseRecords(raw.streams.get('BodyText/Section0'))].map(r=>({...r,payload:r.payload.slice()}));
+ const level=inside_nested?Math.max(...records.filter(r=>r.tag===66).map(r=>r.level)):2;
+ const hostHeader=records.find(r=>r.tag===72&&r.level===level),available=inside_nested?Math.min(10000,view(hostHeader.payload).getUint32(16,true)-view(hostHeader.payload).getUint16(24,true)-view(hostHeader.payload).getUint16(26,true)):10000;
+ const widths=Array(cols).fill(Math.floor(available/cols));widths[cols-1]+=available-widths.reduce((a,b)=>a+b,0);
  const donor=new HwpDocument(fixture({table:false,paragraphs:['donor']}));let donorBytes;
- try{const at=JSON.parse(donor.createTableEx(JSON.stringify({sectionIdx:0,paraIdx:0,charOffset:5,rowCount:1,colCount:2,colWidths:[5000,5000],treatAsChar:true})));donor.insertTextInCell(0,at.paraIdx,at.controlIdx,0,0,0,'inner label');donor.insertTextInCell(0,at.paraIdx,at.controlIdx,1,0,0,'inner answer 😀');donor.applyCharFormatInCell(0,at.paraIdx,at.controlIdx,1,0,0,5,JSON.stringify({bold:true}));donorBytes=checkedExport(donor);}finally{donor.free();}
+ try{const at=JSON.parse(donor.createTableEx(JSON.stringify({sectionIdx:0,paraIdx:0,charOffset:5,rowCount:rows,colCount:cols,colWidths:widths,treatAsChar:true})));
+  for(let cell=0;cell<rows*cols;cell++)donor.insertTextInCell(0,at.paraIdx,at.controlIdx,cell,0,0,cell===0?'inner label':cell===1?'inner answer 😀':`inner ${Math.floor(cell/cols)}:${cell%cols}`);
+  if(cols>1)donor.applyCharFormatInCell(0,at.paraIdx,at.controlIdx,1,0,0,5,JSON.stringify({bold:true}));
+  if(merge){const response=JSON.parse(donor.mergeTableCells(0,at.paraIdx,at.controlIdx,...merge));if(!response.ok)throw new Error('Fixture merge failed');}
+  donorBytes=checkedExport(donor);}finally{donor.free();}
  // Use only existing source style IDs. Synthetic bold is applied separately
  // after transplant when needed, since definitions are never copied blindly.
  const rs=[...parseRecords(readHwp(donorBytes).streams.get('BodyText/Section0'))],start=rs.findIndex(r=>r.tag===71&&Buffer.from(r.payload.subarray(0,4)).toString()===' lbt');
  const stop=rs.findIndex((r,i)=>i>start&&r.tag===66&&r.level===0),addition=rs.slice(start,stop<0?rs.length:stop).map(r=>({...r,level:r.level+2,payload:r.payload.slice()}));
  for(const r of addition)if(r.tag===68)for(let p=4;p<r.payload.length;p+=8)view(r.payload).setUint32(p,0,true);
- const level=inside_nested?Math.max(...records.filter(r=>r.tag===66).map(r=>r.level)):2;
  if(inside_nested)for(const r of addition)r.level+=level-2;
- const para=records.findIndex(r=>r.tag===66&&r.level===level),text=records.findIndex((r,i)=>i>para&&r.tag===67&&r.level===level+1),next=records.findIndex((r,i)=>i>para&&r.tag===72&&r.level===level);
+ const para=records.findIndex(r=>r.tag===66&&r.level===level),text=records.findIndex((r,i)=>i>para&&r.tag===67&&r.level===level+1),next=records.findIndex((r,i)=>i>para&&[66,72].includes(r.tag)&&r.level===level);
  if(para<0||text<0||next<0)throw new Error('Fixture requires a source table');
  const anchor=Uint8Array.from([11,0,32,108,98,116,0,0,0,0,0,0,0,0,11,0]);records[text].payload=Buffer.concat([records[text].payload.subarray(0,-2),anchor,records[text].payload.subarray(-2)]);
  const h=view(records[para].payload);h.setUint32(0,((h.getUint32(0,true)&0x80000000)|records[text].payload.length/2)>>>0,true);h.setUint32(4,h.getUint32(4,true)|1<<11,true);

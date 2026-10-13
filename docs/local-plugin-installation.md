@@ -47,17 +47,17 @@ ZIP을 새로운 영구 로컬 폴더에 풀고 `.agents/plugins/marketplace.jso
 
 ## 개발자가 재현하기
 
-아래는 현재 소스에서 **0.2.20 패키지를 생성·설치·검사하는 절차**다. 공개 0.2.19 ZIP은 빌드 없이 설치 준비 입력으로 사용할 수 있다. 0.2.20은 현재 소스에서 만든 검증 패키지다. [개발 환경](developer-guide.md#환경과-구성)을 먼저 준비하며 패키지 생성은 설치와 분리한다.
+아래는 현재 소스에서 **0.2.21 패키지를 생성·설치·검사하는 절차**다. 설치된 0.2.20은 위의 실제 검증 기록으로 보관한다. 공개 0.2.19 ZIP은 빌드 없이 설치 준비 입력으로 사용할 수 있다. 0.2.21은 후속 소스 검증 패키지이며 실제 설치 갱신은 별도다. [개발 환경](developer-guide.md#환경과-구성)을 먼저 준비하며 패키지 생성은 설치와 분리한다.
 
 ```powershell
 node scripts/package_local_plugin.mjs
 python scripts/archive_local_plugin.py
 ```
 
-출력은 `outputs/plugin-package/hwp-easy/`와 `outputs/plugin-package/hwp-easy-0.2.20.zip`이다. `prepare_local_marketplace.py`는 ZIP의 경로, 런타임 해시와 명시적 호출 정책을 확인한 뒤 **새로운 폴더**에 로컬 마켓플레이스를 준비한다. 기존 설치 폴더는 덮어쓰지 않으며 설치·등록을 수행하지 않는다.
+출력은 `outputs/plugin-package/hwp-easy/`와 `outputs/plugin-package/hwp-easy-0.2.21.zip`이다. `prepare_local_marketplace.py`는 ZIP의 경로, 런타임 해시와 명시적 호출 정책을 확인한 뒤 **새로운 폴더**에 로컬 마켓플레이스를 준비한다. 기존 설치 폴더는 덮어쓰지 않으며 설치·등록을 수행하지 않는다.
 
 ```powershell
-python scripts/prepare_local_marketplace.py outputs/plugin-package/hwp-easy-0.2.20.zip '<새 마켓플레이스 경로>'
+python scripts/prepare_local_marketplace.py outputs/plugin-package/hwp-easy-0.2.21.zip '<새 마켓플레이스 경로>'
 codex plugin marketplace add '<새 마켓플레이스 경로>' --json
 codex plugin add hwp-easy@hwp-easy --json
 codex plugin list --marketplace hwp-easy --json

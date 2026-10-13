@@ -15,7 +15,9 @@ for(const depth of [0,1,2,3])test(`complex pictures keep fields, nested paths an
  const original=depth===0?fieldFixture({multiple:true,mixed:true}):depth===3?nestedFixture(nestedFixture(),{inside_nested:true}):nestedFixture(),{source,images}=workspace(t,original);let state=await read(source);const block=state.blocks.find(b=>b.cell_path.length===depth&&(depth===0?b.kind==='paragraph':depth===1?b.kind==='cell':b.text==='inner answer 😀'));
  const fields=state.fields.map(f=>[f.name,f.guide,f.value]),texts=state.blocks.map(b=>[b.id,b.text]);let first;
  const edit=async op=>{state=await read(source);const b=state.blocks.find(b=>b.id===block.id),request={source,expected_sha256:state.source_sha256,operations:[{type:op.type,target_id:b.target_id,expected_old:b.text,...op}]};const prior=fs.readFileSync(source);assert.equal((await runLocal({action:'plan',...request})).saved,false);assert.deepEqual(fs.readFileSync(source),prior);const saved=await runLocal({action:'edit',...request});first??=saved;state=await read(source);assert.deepEqual(state.blocks.map(b=>[b.id,b.text]),texts);assert.deepEqual(state.fields.map(f=>[f.name,f.guide,f.value]),fields);return saved;};
- await edit({type:'insert_picture',offset:[...block.text].length,image:images[0],width:3600,height:1800});assert.equal(state.pictures.length,1);
+ // The depth-three fixture fits its actual parent cell. Size the initial
+ // picture to that narrow cell instead of relying on a protruding fixture.
+ await edit({type:'insert_picture',offset:[...block.text].length,image:images[0],width:depth===3?1600:3600,height:1800});assert.equal(state.pictures.length,1);
  const initial=state.pictures[0];assert.equal(initial.properties.treatAsChar,true);assert.equal(initial.cell_path.length,depth);
  const preview=await runLocal({action:'preview',source,expected_sha256:state.source_sha256,page:0});assert.match(preview.svg,/data:image\/jpeg;base64,/);
  await edit({type:'update_picture',picture_index:0,expected_properties:initial.properties,props:{cropLeft:75,rotationAngle:90}});assert.equal(state.pictures[0].properties.rotationAngle,90);assert.equal(state.pictures[0].properties.cropLeft,75);

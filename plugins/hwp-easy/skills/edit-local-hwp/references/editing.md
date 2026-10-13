@@ -76,7 +76,7 @@ Choose the version corresponding to the user's requested change; ask only when t
 
 Existing supported merged cells can be split to their existing grid, and a complete rectangular range can be merged. Confirm all selected cells' paragraph texts in storage order; do not guess a cell index from its row and column.
 
-Merge retains the first cell's paragraphs and appends nonempty paragraphs from other selected cells. Empty paragraphs from those other cells are removed. Existing fields, nested objects and unsupported geometry are refused before saving.
+The ordinary merge profile appends nonempty paragraphs and refuses controlled cells. In a complex profile, verified merge retains every selected paragraph and its field/picture/nested-table controls; split keeps existing content in the top-left cell. Confirm all selected texts and use the full path, not a guessed cell index. Multiple independent named-cell identities and unverified geometry are refused.
 
 Character formatting uses code-point start/end offsets; an emoji is one code point. Supported properties are font family, size, color, bold, italic, underline and strikethrough. In a `complex_profile`, use `format_text` on the actual body/nested-cell target or an explicit field target.
 
@@ -111,3 +111,5 @@ Verify `ok`, `saved`, `saved_path`, `output_sha256` and content checks. A byte-i
 Report the changed file directly, without a download task. If saving is unconfirmed, inspect the selected file before retrying. A stale-version error requires a new read; an unsupported edit remains unsaved. Restore only on the user's request using the returned backup ID and current hash.
 
 Content checks do not certify every HWP layout or complex object.
+
+Complex table axes, cell boundaries, sizing and padding follow `references/requests.md`. For an explicitly requested controlled-cell deletion, use the returned subtree hashes to confirm all affected cell contents. Never use this path to drop controls that the user asked to retain. Empty cells produced by a split can be filled or receive a field/picture through their returned target IDs.

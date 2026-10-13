@@ -17,7 +17,8 @@ function writeContainer(tree){
 
 export function patchLocalPackedStreams(source,changes){
  const before=readCfb(source),tree=CFB.read(Buffer.from(source),{type:'buffer'});
- placeholder(tree);
+ // Add requested streams before reserving the writer's marker name. An
+ // input may legitimately contain that exact name; its bytes must survive.
  for(const [name,payload]of changes){
   const entry=CFB.find(tree,'/'+name);if(entry){if(entry.type!==2)fail('LOCAL_CONTAINER_PRESERVATION_MISMATCH');entry.content=Buffer.from(payload);entry.size=payload.length;}
   else CFB.utils.cfb_add(tree,name,Buffer.from(payload),{unsafe:true});

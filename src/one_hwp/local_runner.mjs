@@ -13,7 +13,7 @@ import { readLocal, saveLocal, restoreLocal, localHistory, digest } from './loca
 import { GuardError } from '../../probes/sites-runtime/guard/records.mjs';
 import {textControlBytes} from '../../probes/sites-runtime/guard/preservation.mjs';
 import {findLocalDocument,validateFind} from './local_find.mjs';
-import {hasLocalComplexContent,createLocalComplexSnapshot} from './local_complex.mjs';
+import {hasLocalComplexContent,createLocalComplexSnapshot,inspectLocalComplex} from './local_complex.mjs';
 import {refreshLocalPreview,renderPreviewWorker} from './local_preview_cache.mjs';
 import {createLocalDocumentClass} from './local_container_write.mjs';
 const HwpDocument=createLocalDocumentClass(UpstreamHwpDocument);
@@ -69,7 +69,7 @@ export async function runLocal(request) {
     split_merge_table_cells:true,format_text:true,format_paragraph:true,
     resize_table_columns_rows:true,format_cell_layout:true,format_table_padding:true,
     atomic_operation_batches:true,max_operations:100,batch_target_ids:'initial_read; stable identity through verified position changes',
-    complex_local:{recursive_table_cell_text:true,max_cell_depth:8,clickhere_field_values:true,clickhere_creation:true,clickhere_removal_preserves_value:true,rectangular_nested_table_axes:true,table_axes_preserve_retained_cell_pictures:true,character_formatting:['bold','italic','underline','strikethrough','fontSize','textColor','fontFamily'],paragraph_formatting:['alignment','lineSpacing','marginLeft','marginRight','indent','spacingBefore','spacingAfter'],opaque_lists_preserved:true,field_format_offsets:'relative to explicit field value, Unicode code points',line_breaks:'HWP character 10 within same paragraph; up to 100 lines per inserted value',duplicate_field_names:'explicit field target ID',picture_groups:'move whole group; crop/replace selected PNG/JPEG child; rotate a single-level group leaf with one transform pair within its parent frame',complex_structure_changes:'rectangular table rows/columns; ClickHere creation/removal'},
+    complex_local:{recursive_table_cell_text:true,max_cell_depth:8,clickhere_field_values:true,clickhere_creation:true,clickhere_removal_preserves_value:true,rectangular_nested_table_axes:true,merged_nested_table_axes:true,nested_table_cell_merge_split:true,nested_table_sizing_padding:true,controlled_cell_deletion: "explicit expected_cell_sha256 for each affected cell subtree",table_axes_preserve_retained_cell_pictures:true,character_formatting:['bold','italic','underline','strikethrough','fontSize','textColor','fontFamily'],paragraph_formatting:['alignment','lineSpacing','marginLeft','marginRight','indent','spacingBefore','spacingAfter'],opaque_lists_preserved:true,field_format_offsets:'relative to explicit field value, Unicode code points',line_breaks:'HWP character 10 within same paragraph; up to 100 lines per inserted value',duplicate_field_names:'explicit field target ID',picture_groups:'move whole group; crop/replace selected PNG/JPEG child; rotate a single-level group leaf with one transform pair within its parent frame',complex_structure_changes:'verified rectangular/merged table axes and cell boundaries; explicit subtree-confirmed control deletion; ClickHere creation/removal'},
     pictures:{insert:'local PNG/JPEG, verified body or recursively mapped table cell',replace:'local PNG/JPEG, retain frame size and position',update:'size, position, four-edge crop and integer-degree rotation',multiple_per_paragraph:32,picture_index_required_when_multiple:true,delete:true,delete_cleans_unused_embedded_data:false},
     edit_profiles:{existing_text:'guarded paragraph/cell replacement; selected range insertion/deletion/replacement preserves retained mixed character styles',
       structure:'uniform-style targets; paragraphs, simple or merged table rows/columns and verified cell split/merge; opaque page numbers and supported pictures preserved',
@@ -116,6 +116,7 @@ export async function runLocal(request) {
     result.blocks=result.blocks.map(block=>{const local=structural?.blocks.find(b=>b.id===block.id)??block;return {...block,
       structural_editable:profileSupported&&Boolean(local.editable)&&local.style.char_shape_ids?.length===1,
       text_range_editable:profileSupported&&Boolean(local.editable)&&ranges.has(block.id)&&!/[\u0000-\u001f]/.test(local.text)};});
+    if(result.tables?.length){let state;try{state=inspectLocalComplex(HwpDocument,snapshot.bytes);}catch(error){if(!(error instanceof GuardError))throw error;}if(state)for(const table of result.tables){const rawTable=state.tables.find(t=>t.section===table.section&&t.paragraph===table.paragraph&&t.control===table.control);for(const cell of table.cells)cell.subtree_sha256=rawTable?.cells[cell.cell]?.subtree_sha256;}}
     let pictures=[],picture_profile_supported=true;
     try{pictures=localPictures(HwpDocument,snapshot.bytes,version);}catch(error){if(!(error instanceof GuardError))throw error;picture_profile_supported=false;}
     return {...result,pictures,picture_profile_supported,source:snapshot.source,persistence:'local_file',saved:false};
