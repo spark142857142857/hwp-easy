@@ -73,6 +73,9 @@ def verify(folder, case):
         fa = {key: value[2] for g in raw.record_groups(ra) for key, value in raw.fields(g).items()}
         fb = {key: value[2] for g in raw.record_groups(rb) for key, value in raw.fields(g).items()}
         assert fa == fb
+        if name=='field-page-break-split':
+            heads=[r for r in rb if r[0]==66 and r[1]==0]
+            assert heads[0][2][11]==4 and heads[1][2][11]==0
     elif op['type'] in ('transform_picture_group', 'rotate_group_picture'):
         assert len(ra) == len(rb)
         changed = [i for i, (x, y) in enumerate(zip(ra, rb)) if x != y]

@@ -1,6 +1,6 @@
 /** Isolated packaged runner: paragraph boundaries, nested groups, layout and exact recovery. */
 import fs from 'node:fs';import path from 'node:path';import os from 'node:os';import assert from 'node:assert/strict';import {spawnSync} from 'node:child_process';
-import {initSync} from '@rhwp/core';import {nestedFixture,fieldFixture,nestedGroupFixture} from '../tests/local_complex_fixtures.mjs';import {digest} from '../src/one_hwp/local_file.mjs';
+import {initSync} from '@rhwp/core';import {nestedFixture,fieldFixture,nestedGroupFixture,commonSizedGroupFixture,pageBreakFieldFixture} from '../tests/local_complex_fixtures.mjs';import {digest} from '../src/one_hwp/local_file.mjs';
 initSync({module:fs.readFileSync('node_modules/@rhwp/core/rhwp_bg.wasm')});
 const out=path.resolve(process.argv[2]??'outputs/local-freedom-check');assert.equal(fs.existsSync(out),false);fs.mkdirSync(out,{recursive:true});
 const temp=fs.mkdtempSync(path.join(os.tmpdir(),'hwp-freedom-package-')),plugin=path.join(temp,'plugin');fs.cpSync('outputs/plugin-package/hwp-easy',plugin,{recursive:true});
@@ -15,11 +15,13 @@ function trial(name,bytes,choose){fs.writeFileSync(source,bytes);const before=re
 const base=b=>({target_id:b.target_id,expected_old:b.text});
 try{
  for(const offset of [0,7,14,20])trial('field-split-'+offset,fieldFixture({mixed:true}),s=>[{type:'split_paragraph',...base(s.blocks[0]),offset}]);
+ trial('field-page-break-split',pageBreakFieldFixture(),s=>[{type:'split_paragraph',...base(s.blocks[0]),offset:7}]);
  const separated=trial('cell-depth3-split',nestedFixture(nestedFixture(),{inside_nested:true}),s=>[{type:'split_paragraph',...base(s.blocks.find(b=>b.cell_path.length===3&&b.text==='inner answer 😀')),offset:7}]);
  trial('cell-depth3-merge',separated,s=>{const b=s.blocks.find(b=>b.cell_path.length===3&&b.text==='nswer 😀'),prev=s.blocks[s.blocks.indexOf(b)-1];return [{type:'merge_paragraph',...base(b),previous_target_id:prev.target_id,expected_previous:prev.text}];});
  trial('nested-table-boundary',nestedFixture(),s=>[{type:'split_paragraph',...base(s.blocks.find(b=>b.cell_path.length===1&&b.text==='문항')),offset:1}]);
  trial('cell-depth3-create-delete',nestedFixture(nestedFixture(),{inside_nested:true}),s=>{const b=s.blocks.find(b=>b.cell_path.length===3&&b.text==='inner label');return [{type:'insert_paragraphs',...base(b),paragraphs:['added 😀','']},{type:'duplicate_paragraph',...base(b)},{type:'delete_paragraph',...base(b)}];});
  const groupBytes=nestedGroupFixture();
+ trial('native-common-size-rotate',commonSizedGroupFixture(),s=>{const g=s.picture_groups[0],b=s.blocks.find(b=>b.id===g.block_id);return [{type:'transform_picture_group',...base(g),expected_old:b.text,expected_properties:g.properties,expected_rotation_angle:g.rotationAngle,props:{rotationAngle:90}}];});
  for(const [name,props]of [['rotate',{rotationAngle:90}],['resize',{width:23200,height:19200}],['rotate-resize',{rotationAngle:90,width:23200,height:19200}]])trial('nested-group-'+name,groupBytes,s=>{const g=s.picture_groups[0],b=s.blocks.find(b=>b.id===g.block_id);return [{type:'transform_picture_group',...base(g),expected_old:b.text,expected_properties:g.properties,expected_rotation_angle:g.rotationAngle,props}];});
  for(const [picture_index,angle]of [[0,180],[1,90]])trial('nested-leaf-'+picture_index,groupBytes,s=>{const g=s.picture_groups[0],b=s.blocks.find(b=>b.id===g.block_id),{picture_index:_,...props}=g.pictures[picture_index];return [{type:'rotate_group_picture',...base(g),expected_old:b.text,picture_index,expected_properties:props,props:{rotationAngle:angle}}];});
  const turned=trial('nested-group-followup-before',groupBytes,s=>{const g=s.picture_groups[0],b=s.blocks.find(b=>b.id===g.block_id);return [{type:'transform_picture_group',...base(g),expected_old:b.text,expected_properties:g.properties,expected_rotation_angle:g.rotationAngle,props:{rotationAngle:90}}];});

@@ -9,7 +9,7 @@ import {mapComplexBlocks} from './local_complex_mapping.mjs';
 import {complexParagraphProperties,prepareComplexParagraphFormat} from './local_complex_paragraph.mjs';
 import {complexPictures,complexPictureProperties,prepareComplexPicture,publishComplexPicture} from './local_complex_picture.mjs';
 import {complexTables,prepareComplexTable,standardBlockId,complexCellProperties} from './local_complex_table.mjs';
-import {prepareComplexGroup,groupGeometry} from './local_complex_group.mjs';
+import {prepareComplexGroup,groupFrame} from './local_complex_group.mjs';
 import {prepareComplexField} from './local_complex_field.mjs';
 import {boundaryEligible,prepareComplexBoundary} from './local_complex_boundary.mjs';
 import {fitNestedTable} from './local_layout.mjs';
@@ -86,8 +86,8 @@ function inspection(HwpDocument,bytes,{includeDocumentInfo=true,verifyCharacterM
       children.push({picture_index:children.length,record_index:k,rotationAngle:view(shape.payload).getInt16(Buffer.from(shape.payload.subarray(0,8)).toString('ascii')==='cip$cip$'?40:36,true),sourceWidth,sourceHeight,cropLeft,cropTop,cropRight,cropBottom});}
     }
     if(!children.length||children.length>32)fail('GROUP_PROFILE_UNSUPPORTED');const p=view(r.payload);
-    const geometry=groupGeometry(records[i+1]);
-    groups.push({id:`${b.id}:g${index++}`,block_id:b.id,section:b.section,record_index:i,rotationAngle:geometry.v.getInt16(geometry.base+32,true),frame_size:geometry.frame_size,properties:{width:p.getUint32(16,true),height:p.getUint32(20,true),horzOffset:p.getInt32(12,true),vertOffset:p.getInt32(8,true)},pictures:children,editable:true});
+    const properties={width:p.getUint32(16,true),height:p.getUint32(20,true),horzOffset:p.getInt32(12,true),vertOffset:p.getInt32(8,true)},geometry=groupFrame(records[i+1],properties);
+    groups.push({id:`${b.id}:g${index++}`,block_id:b.id,section:b.section,record_index:i,rotationAngle:geometry.v.getInt16(geometry.base+32,true),frame_size:geometry.frame_size,properties,pictures:children,editable:true});
     }catch(error){if(!(error instanceof GuardError)||!['GROUP_PROFILE_UNSUPPORTED','GROUP_IMAGE_UNVERIFIED','INVALID_IMAGE_FILE','GROUP_TRANSFORM_PROFILE_UNSUPPORTED'].includes(error.code))throw error;unhandledGroups++;}
    }
   }

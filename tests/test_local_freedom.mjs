@@ -1,6 +1,7 @@
 import test from 'node:test';import assert from 'node:assert/strict';import fs from 'node:fs';import path from 'node:path';import os from 'node:os';
 import {HwpDocument} from '@rhwp/core';import {initializeLocal,runLocal} from '../src/one_hwp/local_runner.mjs';
-import {groupFixture,fieldFixture,nestedFixture,checkedExport} from './local_complex_fixtures.mjs';
+import {groupFixture,fieldFixture,nestedFixture,checkedExport,commonSizedGroupFixture,pageBreakFieldFixture} from './local_complex_fixtures.mjs';
+import {readHwp} from '../probes/sites-runtime/guard/container.mjs';import {parseRecords} from '../probes/sites-runtime/guard/records.mjs';
 import {progressiveJpeg} from './local_image_fixtures.mjs';import {digest} from '../src/one_hwp/local_file.mjs';
 import {inspectLocalComplex} from '../src/one_hwp/local_complex.mjs';
 initializeLocal(fs.readFileSync(new URL('../node_modules/@rhwp/core/rhwp_bg.wasm',import.meta.url)));
@@ -63,4 +64,14 @@ test('fixing one overflow does not hide an equal new overflow in another cell',a
 test('geometry inspection verifies mapped cells without requesting whole-document pagination',()=>{
  class NoPagination extends HwpDocument{getDocumentInfo(){throw new Error('Pagination is outside geometry scope');}getCharPropertiesAt(){throw new Error('Font rendering is outside geometry scope');}getCellCharPropertiesAtByPath(){throw new Error('Font rendering is outside geometry scope');}}
  const state=inspectLocalComplex(NoPagination,nestedFixture(),{includeDocumentInfo:false,verifyCharacterModel:false});assert.equal(state.tables.length,2);assert.equal(state.blocks.some(b=>b.text==='inner answer 😀'&&b.text_mapping_verified&&b.character_runs?.[0]?.properties.fontSize===1000),true);assert.equal(Object.hasOwn(state,'info'),false);
+});
+test('rotating a group with a common-only native size keeps its actual displayed size',async t=>{
+ const w=workspace(t,commonSizedGroupFixture()),s=await read(w.source),g=s.picture_groups[0],b=s.blocks.find(b=>b.id===g.block_id);assert.deepEqual(g.frame_size,{width:23200,height:19200});
+ await saveRestore(w,s,[{type:'transform_picture_group',target_id:g.target_id,expected_old:b.text,expected_properties:g.properties,expected_rotation_angle:g.rotationAngle,props:{rotationAngle:90}}],after=>{const now=after.picture_groups[0];assert.deepEqual(now.frame_size,g.frame_size);assert.equal(now.properties.width,g.properties.height);assert.equal(now.properties.height,g.properties.width);assert.deepEqual(now.pictures,g.pictures);});
+});
+test('a non-right-angle group rotation remains editable through integer bounding-frame rounding',async t=>{
+ const w=workspace(t,commonSizedGroupFixture());for(const angle of [45,0,90]){const s=await read(w.source),g=s.picture_groups[0],b=s.blocks.find(b=>b.id===g.block_id);const saved=await runLocal({action:'edit',source:w.source,expected_sha256:s.source_sha256,operations:[{type:'transform_picture_group',target_id:g.target_id,expected_old:b.text,expected_properties:g.properties,expected_rotation_angle:g.rotationAngle,props:{rotationAngle:angle}}]});assert.equal(saved.saved,true);assert.equal((await read(w.source)).picture_groups[0].rotationAngle,angle);}
+});
+test('splitting a controlled paragraph keeps its existing page break on the first half only',async t=>{
+ const w=workspace(t,pageBreakFieldFixture()),s=await read(w.source),b=s.blocks[0];await saveRestore(w,s,[{type:'split_paragraph',target_id:b.target_id,expected_old:b.text,offset:7}],()=>{const heads=[...parseRecords(readHwp(fs.readFileSync(w.source)).streams.get('BodyText/Section0'))].filter(r=>r.tag===66&&r.level===0);assert.equal(heads[0].payload[11],4);assert.equal(heads[1].payload[11],0);});
 });
