@@ -9,7 +9,7 @@ import { preservableStructuralProfile,recordsByBlock } from './local_structure.m
 import {localPictures} from './local_picture.mjs';
 import {editLocalBatch} from './local_batch.mjs';
 import { readHwp } from '../../probes/sites-runtime/guard/container.mjs';
-import { readLocal, saveLocal, restoreLocal, localHistory } from './local_file.mjs';
+import { readLocal, saveLocal, restoreLocal, localHistory, digest } from './local_file.mjs';
 import { GuardError } from '../../probes/sites-runtime/guard/records.mjs';
 import {textControlBytes} from '../../probes/sites-runtime/guard/preservation.mjs';
 import {findLocalDocument,validateFind} from './local_find.mjs';
@@ -149,6 +149,7 @@ export async function runLocal(request) {
   if(!Buffer.from(bytes).equals(Buffer.from(snapshot.bytes))){
     const preview=await refreshLocalPreview(HwpDocument,bytes);bytes=preview.bytes;verification.preview_cache=preview.preview_cache;
   }else verification.preview_cache={status:'unchanged',document_streams_preserved:true};
+  verification.output_sha256=digest(bytes);
   if(request.action==='plan')return {...verification,source:snapshot.source,source_sha256:version,valid:true,serialization_checked:true,saved:false};
   return {...verification,...saveLocal(snapshot,bytes,{output:request.output,expected_output_sha256:request.expected_output_sha256})};
 }

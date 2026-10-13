@@ -11,9 +11,10 @@ jobs:
   regression:
     name: Python ${{ matrix.python }} / ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
-    # Standard isolated-package coverage remains bounded. Large text checks
-    # run separately so they do not consume this job's remaining allowance.
-    timeout-minutes: 12
+    # Includes isolated preview workers for every changed candidate.
+    # The Windows regression exceeded 12 minutes after adding this coverage.
+    # Large text remains in a separate job; individual request bounds stay fixed.
+    timeout-minutes: 18
     strategy:
       fail-fast: false
       matrix:

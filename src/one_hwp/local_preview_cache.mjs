@@ -4,10 +4,9 @@ import {fileURLToPath} from 'node:url';
 import {spawnSync} from 'node:child_process';
 import {HwpDocument,initSync} from '@rhwp/core';
 import {Resvg,initWasm} from '@resvg/resvg-wasm';
-import CFB from '../../probes/sites-runtime/node_modules/cfb/cfb.js';
-import {readCfb,readHwp} from '../../probes/sites-runtime/guard/container.mjs';
+import {readHwp} from '../../probes/sites-runtime/guard/container.mjs';
 import {GuardError,parseRecords} from '../../probes/sites-runtime/guard/records.mjs';
-import {equalBytes} from './local_complex_records.mjs';
+import {patchLocalPackedStreams} from './local_container_write.mjs';
 
 let initialized;
 const fail=code=>{throw new GuardError(code);};
@@ -63,20 +62,14 @@ export async function renderPreviewWorker(bytes){
  const rendered=await rasterizeLocalSvg(svg);return {ok:true,image:Buffer.from(rendered.bytes).toString('base64'),width:rendered.width,height:rendered.height};
 }
 export async function refreshLocalPreview(_HwpDocument,bytes){
- const before=readCfb(bytes),text=localPreviewText(bytes);
+ const text=localPreviewText(bytes);
  // Native/WASM layout may loop on an unsupported profile. Isolate only this
  // derived image work; a timeout cannot hang an otherwise verified file edit.
  const child=spawnSync(process.execPath,['--max-old-space-size=256',fileURLToPath(import.meta.url),'--preview-worker'],{input:Buffer.from(bytes),encoding:'utf8',timeout:5000,maxBuffer:512*1024,windowsHide:true});
  let rendered;
  if(child.status===0&&!child.error){try{const value=JSON.parse(child.stdout);if(value.ok===true)rendered={bytes:Buffer.from(value.image,'base64'),width:value.width,height:value.height};}catch{}}
  const changes=new Map([['PrvText',Buffer.from(text,'utf16le')],['PrvImage',rendered?.bytes??Buffer.alloc(0)]]);
- const tree=CFB.read(Buffer.from(bytes),{type:'buffer'});
- const magic='\u0001Sh33tJ5';if(!CFB.find(tree,'/'+magic)){tree.FullPaths.push(tree.FullPaths[0]+magic);tree.FileIndex.push({name:magic,type:0});}
- for(const [name,payload]of changes){const entry=CFB.find(tree,'/'+name);if(entry){if(entry.type!==2)fail('PREVIEW_REFRESH_FAILED');entry.content=payload;entry.size=payload.length;}else CFB.utils.cfb_add(tree,name,payload,{unsafe:true});}
- const result=new Uint8Array(CFB.write(tree,{type:'buffer',fileType:'cfb'}));if(result.length>4*1024*1024)fail('OUTPUT_LIMIT_EXCEEDED');
- const after=readCfb(result),expected=new Set([...before.keys(),...changes.keys()]);
- if(after.size!==expected.size||[...after.keys()].some(name=>!expected.has(name)))fail('PREVIEW_PRESERVATION_MISMATCH');
- for(const [name,value]of after)if(!equalBytes(value,changes.get(name)??before.get(name)))fail('PREVIEW_PRESERVATION_MISMATCH');
+ const result=patchLocalPackedStreams(bytes,changes);
  return {bytes:result,preview_cache:{status:rendered?'updated':'text_updated_image_unavailable',text_excerpt:true,text_units:text.length,image_format:rendered?'BMP':null,image_width:rendered?.width??null,image_height:rendered?.height??null,...(!rendered?{image_failure:child.error?.code==='ETIMEDOUT'?'RENDER_TIMEOUT':'RENDER_FAILED',stale_image_cleared:true}:{}),page:0,renderer:'rhwp SVG + resvg WASM',fallback_font:'NanumGothic',font_substitution_possible:true,layout_verified:false,document_streams_preserved:true}};
 }
 if(process.argv[1]&&/[\\/]local_preview_cache\.mjs$/.test(process.argv[1])&&fileURLToPath(import.meta.url)===process.argv[1]&&process.argv[2]==='--preview-worker'){
