@@ -23,6 +23,7 @@
 
 | 검사 | 결과 | 확인한 내용 |
 | --- | --- | --- |
+| Windows·Linux CI | 10개 작업 모두 통과 | 기능 커밋 `eb8b35b`의 [Source checks](https://github.com/spark142857142857/hwp-easy/actions/runs/38362789720) |
 | 로컬 회귀 | 391개 통과 | 기존 본문·표·그림·서식·저장·복구와 새 표 경로. 새 전용 검사 14개 포함 |
 | 분리 패키지 | 합성 14건 통과 | 2·3단 병합 표 축, 개체 셀 병합·분리·삭제, 안쪽 표 전체 삭제, 네 배치 작업의 묶음 저장 |
 | 공개 양식 | 고정 공개 3개·축 변경 6건 통과 | 원본 해시 유지, 계획과 저장 해시 일치, 같은 시험 사본 저장·정확한 복구 |
@@ -34,16 +35,18 @@
 
 이전 검사에서 전체 쪽 이미지를 만들지 못했던 공개 양식 7은 한컴 API의 `MoveDocEnd`로 쪽 계산을 완료한 뒤 모든 쪽을 렌더링했습니다. 행 추가는 17쪽 유지, 열 추가는 줄바꿈 변화로 17→18쪽이며 복구는 17쪽과 원본 이미지로 돌아왔습니다. 이는 검증한 문서의 결과이며 임의 문서의 인쇄·폰트·최종 배치를 인증하지 않습니다.
 
+아주 좁은 3단 합성 표에서는 글자가 한 글자씩 줄바꿈되거나 셀 경계에 가려지는 배치를 관찰했습니다. 원시 글자와 한컴 TEXT 판독은 보존됐지만 전체 표시·인쇄 상태의 통과로 계산하지 않습니다. 내부 여백과 글자 크기에 따른 넘침 확인·보고, 고정 개체 재배치는 후속 범위입니다. 이를 자동 글꼴 축소나 내용 삭제로 숨기지 않습니다.
+
 한글 검사 중 새 빈 셀의 CR만 든 텍스트 기록이 열기 실패를 일으키는 것을 발견해 호환 빈 문단 프로필로 수정했습니다. 세 단계 중첩 합성 표의 제어 위치와 부모 셀 내부 너비도 고쳤습니다. 수정 전 실패 산출물과 최종 성공 산출물을 구분해 보관합니다.
 
 ## 패키지와 재현
 
 Codex 형식 ZIP은 `outputs/plugin-package/hwp-easy-0.2.21.zip`입니다.
 
-- ZIP SHA-256: `5a937b21e4cf689fc3ffb472d5ee7bd81011ca6c1c5be8a7cee7c4617e9698dd`
+- ZIP SHA-256: `41f0738c1c4e5cdcfe3877fc82d6cad0a317f93d54ec96a9b732ef4c9aea2d08`
 - 실행기 SHA-256: `781763abc79a80be87971e6d00e96e36335ff5f19bb29a3aae8a4f8d97d17935`
 - 엔진 WASM은 0.2.20과 같은 @rhwp/core 0.8.6입니다.
-- 최종 근거: ignored `outputs/flexible-editing-20261013/`의 `regression-release.log`, `synthetic-release/`, `public-axes-release/`, `native-release/`, `marketplace-ready/`.
+- 최종 근거: ignored `outputs/flexible-editing-20261013/`의 `regression-release.log`, `synthetic-release/`, `public-axes-release/`, `native-release/`, `marketplace-ready-final/`.
 
 [개발 환경](developer-guide.md)을 준비한 뒤 별도의 새 출력 폴더에서 실행합니다.
 
