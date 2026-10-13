@@ -2,9 +2,9 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
-HWP Easy is a local plugin and skill for reading and editing HWP documents in Codex, Claude Code and Cursor.
+HWP Easy is a local tool for reading and editing HWP documents in Codex, Claude Code and Cursor. It is distributed as a plugin for Codex and as personal skill packages containing the runner and engine for Claude Code and Cursor.
 
-It uses a Node/WASM runner built on [`@rhwp/core`](https://github.com/edwardkim/rhwp), without requiring Hancom installation or an HWP Easy server. Verified edits save to the same HWP file, with previous bytes retained for recovery. All three client distributions share the same source and runner.
+It uses an engine built on [`@rhwp/core`](https://github.com/edwardkim/rhwp), without requiring Hancom installation or an HWP Easy server. HWP Easy adds edit-target and preservation checks, conflict detection, same-file saving and recovery. Only verified edits are saved, with previous bytes retained for recovery.
 
 [한국어](README.md) · [Usage guide](docs/quick-start.md) · [Documentation](docs/README.md)
 
@@ -16,23 +16,38 @@ It uses a Node/WASM runner built on [`@rhwp/core`](https://github.com/edwardkim/
 - Body and table-cell reading, phrase search and SVG previews of the current document
 - Text replacement, multiline answers, paragraph insertion, deletion, duplication and movement
 - Supported table structure changes and font, size, color and alignment editing
-- PNG/JPEG insertion, replacement, resizing, cropping and rotation
+- Ordinary PNG/JPEG picture insertion, replacement, resizing, cropping and rotation at supported body and table-cell locations
 - Same-file saving with conflict detection and preservation checks for untargeted content
 - Recovery history, previous-version restoration and retention of the edited version before recovery
 
-Supported edits depend on the document structure and target. Nested-table structure changes, field creation/deletion and grouped-picture replacement/rotation remain unsupported. See [features and limits](docs/supported-features.md) for the complete scope.
+Supported edits depend on the document structure and target. Nested-table structure changes, field creation/deletion and grouped-picture replacement/rotation remain unsupported. Documents whose structure cannot be verified are handled through partial read-only results or rejected operations. Partial reads may omit some object content.
+
+SVG previews of the current document and rereading after saving do not guarantee identical fonts, line breaks or page layout in an external HWP application. See [features and limits](docs/supported-features.md) for operation-specific conditions and preview limitations.
+
+## Package contents
+
+`SKILL.md` instructs the AI on the editing workflow. The bundled runner and engine perform the actual HWP processing. Each skill directory includes:
+
+| Component | Role |
+| --- | --- |
+| `SKILL.md` | Instructions for reading files, selecting targets, editing, saving and recovery |
+| `references/` | Supported operations, request formats and operation-specific constraints |
+| `scripts/local-runner.mjs` | JavaScript bundle that calls the engine, checks edits and handles local saving, backups and recovery |
+| `scripts/rhwp_bg.wasm` | Engine that reads HWP structure and produces edited documents and SVG previews |
+
+The Codex plugin packages this skill and its runtime resources with `plugin.json` and listing metadata such as the name, icon, description and version. All three clients use the same source, runner and WASM, with the same editing scope. Copying `SKILL.md` alone is insufficient to run HWP Easy. See [architecture](docs/architecture.md) for details.
 
 <a id="choose-your-app"></a>
 
 ## Installation
 
-The execution environment requires Node.js 22+ and access to the target file. The document engine, WASM and JavaScript dependencies are bundled. Login and usage requirements follow the agent application.
+Install the complete package for your client, including the runner and engine. The execution environment requires Node.js 22+ and access to the target file. The document engine, WASM and JavaScript dependencies are bundled. Login and usage requirements follow the agent application.
 
 | Client | Distribution | Installation guide |
 | --- | --- | --- |
 | Codex | Local plugin | [Installation record and reproduction](docs/local-plugin-installation.md) |
-| Claude Code | Personal skill | [Installation and invocation](docs/agent-client-skills.md#설치와-호출) |
-| Cursor | Personal skill | [Installation and invocation](docs/agent-client-skills.md#설치와-호출) |
+| Claude Code | Personal skill package | [Installation and invocation](docs/agent-client-skills.md#설치와-호출) |
+| Cursor | Personal skill package | [Installation and invocation](docs/agent-client-skills.md#설치와-호출) |
 
 The current source and generated package version is **0.2.18**. Public downloads and directory publication are being prepared. See [project status](docs/project-status.md) for installed versions and verified scope.
 

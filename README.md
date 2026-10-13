@@ -2,9 +2,9 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
-HWP Easy는 Codex, Claude Code, Cursor에서 HWP(한글 문서)를 읽고 편집하는 로컬 플러그인·스킬입니다.
+HWP Easy는 Codex, Claude Code, Cursor에서 HWP(한글 문서)를 읽고 편집하는 로컬 도구입니다. Codex에는 플러그인으로, Claude Code·Cursor에는 실행기와 엔진을 포함한 개인 스킬 패키지로 배포합니다.
 
-[`@rhwp/core`](https://github.com/edwardkim/rhwp) 기반 Node/WASM 실행기로 한글 설치나 HWP Easy 서버 없이 문서를 처리합니다. 검증을 통과한 수정은 같은 HWP 파일에 저장하고, 이전 내용은 복구용으로 보관합니다. 세 앱용 배포본은 공통 소스와 실행기를 사용합니다.
+[`@rhwp/core`](https://github.com/edwardkim/rhwp) 기반 엔진으로 한글 설치나 HWP Easy 서버 없이 문서를 처리합니다. HWP Easy는 여기에 편집 대상·비대상 보존 검사, 충돌 검사, 같은 파일 저장과 복구 기능을 추가합니다. 검증을 통과한 수정만 저장하고, 이전 내용은 복구용으로 보관합니다.
 
 [English](README.en.md) · [사용 가이드](docs/quick-start.md) · [문서](docs/README.md)
 
@@ -16,23 +16,38 @@ HWP Easy는 Codex, Claude Code, Cursor에서 HWP(한글 문서)를 읽고 편집
 - 본문·표 셀 조회, 문구 검색, 현재 문서의 SVG 미리보기
 - 텍스트 치환, 여러 줄 답변 작성, 문단 추가·삭제·복제·이동
 - 지원하는 표 구조 변경과 글꼴·크기·색·정렬 등 서식 편집
-- PNG/JPEG 삽입·교체·크기 조정·자르기·회전
+- 지원하는 본문·표 셀 위치의 일반 PNG/JPEG 그림 삽입·교체·크기 조정·자르기·회전
 - 충돌 검사와 비대상 내용 보존 검사를 거친 같은 파일 저장
 - 복구 이력 조회, 이전 버전 복구, 복구 전 편집본 보관
 
-편집 지원 범위는 문서 구조와 대상에 따라 다릅니다. 중첩 표 구조 변경, 누름틀 생성·삭제, 그룹 그림 교체·회전 등은 미지원입니다. 작업별 조건은 [지원 기능과 제한](docs/supported-features.md)에 정리되어 있습니다.
+편집 지원 범위는 문서 구조와 대상에 따라 다릅니다. 중첩 표 구조 변경, 누름틀 생성·삭제, 그룹 그림 교체·회전 등은 미지원입니다. 구조를 검증하지 못하는 문서는 부분 읽기 전용으로 처리하거나 작업을 거부하며, 부분 읽기 결과에는 일부 개체의 내용이 빠질 수 있습니다.
+
+현재 문서의 SVG 미리보기와 저장 후 재읽기는 외부 한글 프로그램과의 정확한 글꼴·줄바꿈·쪽 배치를 보장하지 않습니다. 작업별 조건과 미리보기 제한은 [지원 기능과 제한](docs/supported-features.md)에 정리되어 있습니다.
+
+## 구성
+
+`SKILL.md`는 AI에게 편집 절차를 알려 주는 지침입니다. 실제 HWP 처리는 함께 배포하는 실행기와 엔진이 수행합니다. 스킬 폴더에는 다음 파일이 포함됩니다.
+
+| 구성 | 역할 |
+| --- | --- |
+| `SKILL.md` | 파일 읽기, 대상 선택, 편집·저장·복구의 실행 절차 |
+| `references/` | 지원 작업, 요청 형식과 작업별 제한 |
+| `scripts/local-runner.mjs` | 엔진 호출, 편집 검사, 로컬 저장·백업·복구를 수행하는 JS 번들 |
+| `scripts/rhwp_bg.wasm` | HWP 내부 구조를 읽고 수정본과 SVG를 만드는 엔진 |
+
+Codex 플러그인은 이 스킬과 실행 자원에 `plugin.json`, 이름·아이콘·설명·버전 등 설치 목록용 정보를 더한 패키지입니다. 세 앱은 같은 소스·실행기·WASM을 사용하며 편집 지원 범위도 같습니다. `SKILL.md` 하나만 복사해서는 HWP Easy를 실행할 수 없습니다. 세부 구조는 [아키텍처](docs/architecture.md)를 참조하세요.
 
 <a id="어떤-앱에서-시작하나요"></a>
 
 ## 설치
 
-실행 환경에는 Node.js 22 이상과 대상 파일의 접근 권한이 필요합니다. 문서 엔진·WASM·JS 의존성은 배포본에 포함됩니다. 에이전트의 로그인과 이용 조건은 각 앱을 따릅니다.
+실행기와 엔진을 포함한 앱별 패키지 전체를 설치합니다. 실행 환경에는 Node.js 22 이상과 대상 파일의 접근 권한이 필요하며, 문서 엔진·WASM·JS 의존성은 배포본에 포함됩니다. 에이전트의 로그인과 이용 조건은 각 앱을 따릅니다.
 
 | 클라이언트 | 배포 형식 | 설치 안내 |
 | --- | --- | --- |
 | Codex | 로컬 플러그인 | [설치 기록과 재현 절차](docs/local-plugin-installation.md) |
-| Claude Code | 개인 스킬 | [설치와 호출](docs/agent-client-skills.md#설치와-호출) |
-| Cursor | 개인 스킬 | [설치와 호출](docs/agent-client-skills.md#설치와-호출) |
+| Claude Code | 개인 스킬 패키지 | [설치와 호출](docs/agent-client-skills.md#설치와-호출) |
+| Cursor | 개인 스킬 패키지 | [설치와 호출](docs/agent-client-skills.md#설치와-호출) |
 
 현재 소스·생성 패키지 버전은 **0.2.18**입니다. 일반 사용자용 공개 다운로드와 디렉터리 게시는 준비 중이며, 실제 설치 버전과 검증 범위는 [프로젝트 상태](docs/project-status.md)에서 확인할 수 있습니다.
 
