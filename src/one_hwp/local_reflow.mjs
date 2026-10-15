@@ -9,7 +9,7 @@ import {fail,view,equal,equalBytes,encodeRecords} from './local_complex_records.
 import {objectFlow} from './local_flow_records.mjs';
 import {cellContainer} from './local_layout.mjs';
 
-function invalidate(records,blocks){
+export function invalidateSectionLayout(records,blocks){
  const replacements=new Map(),remove=new Set();for(const b of blocks){const head=records[b.record_index].payload.slice();view(head).setUint16(16,0,true);replacements.set(b.record_index,head);
   for(let i=b.record_index+1;i<b.records_end;i++)if(records[i].tag===69&&records[i].level===b.raw_level+1)remove.add(i);
  }return records.flatMap((r,i)=>remove.has(i)?[]:[replacements.has(i)?{...r,payload:replacements.get(i)}:r]);
@@ -48,7 +48,7 @@ export function reflowLocal(HwpDocument,source,version,op){
   let shapeId=shapes.findIndex(r=>equalBytes(r.payload,wanted));if(shapeId<0){shapeId=shapes.length;const map=maps[0].payload.slice();view(map).setUint32(52,shapes.length+1,true);docInfo=definitionBytes(docInfo,defs,new Map([[maps[0].index,map]]),new Map([[shapes.at(-1).index,[{tag:25,level:shapes.at(-1).level,payload:wanted}]]]));}
   const payload=records[b.record_index].payload.slice();view(payload).setUint16(8,shapeId,true);records=records.map((r,i)=>i===b.record_index?{...r,payload}:r);
  }
- records=invalidate(records,state.blocks.filter(x=>x.section===b.section));const name=`BodyText/Section${b.section}`,body=encodeRecords(records),compressed=Boolean(view(state.raw.streams.get('FileHeader')).getUint32(36,true)&1),changes=new Map();
+ records=invalidateSectionLayout(records,state.blocks.filter(x=>x.section===b.section));const name=`BodyText/Section${b.section}`,body=encodeRecords(records),compressed=Boolean(view(state.raw.streams.get('FileHeader')).getUint32(36,true)&1),changes=new Map();
  for(const [key,wanted] of [[name,body],['DocInfo',docInfo]])if(!equalBytes(wanted,state.raw.streams.get(key)))changes.set(key,compressed?deflateRawSync(wanted,{level:9}):wanted);
  if(!changes.size)return {bytes:source,content_verified:true,raw_preservation_verified:true,unchanged:true,layout_verified:false};
  const bytes=patchLocalPackedStreams(source,changes),after=inspectLocalComplex(HwpDocument,bytes,{includeDocumentInfo:false,verifyCharacterModel:false});

@@ -19,6 +19,8 @@ import {createLocalDocumentClass} from './local_container_write.mjs';
 import {analyzeLocalLayout,newLayoutIssues} from './local_layout.mjs';
 import {standardBlockId} from './local_complex_table.mjs';
 import {analyzeRenderedLayout} from './local_rendered_layout.mjs';
+import {sectionPages} from './local_page_state.mjs';
+import {publicTextBoxes} from './local_text_boxes.mjs';
 const HwpDocument=createLocalDocumentClass(UpstreamHwpDocument);
 
 let initialized = false;
@@ -66,7 +68,7 @@ export async function runLocal(request) {
   object(request,schema,request.action==='capabilities'?['action']:request.action==='read'?['action','source']:['action','source','expected_sha256']);
   if(request.action==='capabilities')return {engine:'@rhwp/core',engine_version:'0.8.6',transport:'local_execution',
     save_default:'same_file',selected_file_updated:true,file_location:'current_execution_environment',uploads_required:false,web_browser_required:false,
-    read:true,preview:true,edit:true,restore:true,find:true,layout_diagnostics:true,reject_new_geometry_overflow:true,fit_nested_table_to_cell:true,automatic_selected_paragraph_reflow:true,automatic_selected_floating_object_reflow:true,local_recovery_history:true,new_paragraphs:true,multiline_body_and_cells:true,new_simple_tables:true,
+    read:true,preview:true,edit:true,restore:true,find:true,layout_diagnostics:true,reject_new_geometry_overflow:true,fit_nested_table_to_cell:true,automatic_selected_paragraph_reflow:true,automatic_selected_floating_object_reflow:true,reposition_floating_preserves_anchor:true,protect_section_bottom:true,plain_body_text_boxes:true,local_recovery_history:true,new_paragraphs:true,multiline_body_and_cells:true,new_simple_tables:true,
     delete_paragraphs:true,merge_adjacent_paragraphs:true,split_paragraph:true,splice_text:true,mixed_style_multiline_insertion:true,
     move_body_paragraphs:true,move_complete_tables:true,duplicate_plain_body_and_cell_paragraphs:true,
     insert_delete_table_rows_columns:true,
@@ -129,7 +131,7 @@ export async function runLocal(request) {
     if(result.tables?.length){let state;try{state=inspectLocalComplex(HwpDocument,snapshot.bytes,{includeDocumentInfo:false,verifyCharacterModel:false});}catch(error){if(!(error instanceof GuardError))throw error;}if(state)for(const table of result.tables){const rawTable=state.tables.find(t=>t.section===table.section&&t.paragraph===table.paragraph&&t.control===table.control);for(const cell of table.cells)cell.subtree_sha256=rawTable?.cells[cell.cell]?.subtree_sha256;}}
     let pictures=[],picture_profile_supported=true;
     try{pictures=localPictures(HwpDocument,snapshot.bytes,version);}catch(error){if(!(error instanceof GuardError))throw error;picture_profile_supported=false;}
-    try{const state=inspectLocalComplex(HwpDocument,snapshot.bytes,{includeDocumentInfo:false,verifyCharacterModel:false});for(const b of result.blocks){const raw=state.blocks.find(x=>standardBlockId(x)===b.id);if(raw){b.paragraph_properties=raw.paragraph_properties;b.flow_editable=raw.paragraph_format_editable;}}for(const p of pictures){const id=Buffer.from(p.target_id.slice(70),'base64url').toString(),raw=state.pictures.find(x=>x.section===p.section&&standardBlockId(state.blocks.find(b=>b.id===x.block_id))===id&&x.picture_index===p.picture_index);if(raw)p.flow=raw.flow;}if(!picture_profile_supported)pictures=state.pictures.flatMap(p=>{const b=state.blocks.find(b=>b.id===p.block_id),id=standardBlockId(b),target=result.blocks.find(b=>b.id===id)?.target_id;return target?[{target_id:target,picture_index:p.picture_index,section:p.section,paragraph:b.paragraph,properties:p.properties,flow:p.flow,format:'raw_flow_only_picture',editable:false,flow_editable:true}]:[];});}catch(error){if(!(error instanceof GuardError))throw error;}
+    try{const state=inspectLocalComplex(HwpDocument,snapshot.bytes,{includeDocumentInfo:false,verifyCharacterModel:false});result.page_definitions=sectionPages(state);result.text_boxes=publicTextBoxes(state,version);for(const b of result.blocks){const raw=state.blocks.find(x=>standardBlockId(x)===b.id);if(raw){b.paragraph_properties=raw.paragraph_properties;b.flow_editable=raw.paragraph_format_editable;}}for(const p of pictures){const id=Buffer.from(p.target_id.slice(70),'base64url').toString(),raw=state.pictures.find(x=>x.section===p.section&&standardBlockId(state.blocks.find(b=>b.id===x.block_id))===id&&x.picture_index===p.picture_index);if(raw)p.flow=raw.flow;}if(!picture_profile_supported)pictures=state.pictures.flatMap(p=>{const b=state.blocks.find(b=>b.id===p.block_id),id=standardBlockId(b),target=result.blocks.find(b=>b.id===id)?.target_id;return target?[{target_id:target,picture_index:p.picture_index,section:p.section,paragraph:b.paragraph,properties:p.properties,flow:p.flow,format:'raw_flow_only_picture',editable:false,flow_editable:true}]:[];});}catch(error){if(!(error instanceof GuardError))throw error;}
     return {...result,pictures,picture_profile_supported,source:snapshot.source,persistence:'local_file',saved:false};
   }
   if(request.action==='preview')return {...document.preview({expected_sha256:version,page:request.page??0}),preview_source:'current_document_render',embedded_preview_cache:'not_used',source:snapshot.source,saved:false};

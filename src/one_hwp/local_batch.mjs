@@ -7,8 +7,10 @@ import {structuralEdit} from './local_structure.mjs';
 import {pictureEdit} from './local_picture.mjs';
 import {tableFormatEdit} from './local_table_format.mjs';
 import {moveLocalBlock} from './local_move.mjs';
-import {hasLocalComplexContent,editLocalComplex} from './local_complex.mjs';
+import {hasLocalComplexContent,editLocalComplex,inspectLocalComplex} from './local_complex.mjs';
 import {reflowLocal} from './local_reflow.mjs';
+import {placementLocal} from './local_placement.mjs';
+import {editTextBox} from './local_text_boxes.mjs';
 
 const fail=code=>{throw new GuardError(code);};
 const pictureTypes=new Set(['insert_picture','update_picture','delete_picture','replace_picture']);
@@ -22,6 +24,11 @@ function rawTarget(value,version){
 const target=(id,version)=>`hwp5:${version}:${Buffer.from(id).toString('base64url')}`;
 
 export async function applyLocalOperation(HwpDocument,bytes,version,operation){
+  if(['reposition_floating_object','protect_page_bottom'].includes(operation.type))return placementLocal(HwpDocument,bytes,version,operation);
+  if(operation.type==='splice_text_box'){
+    const state=inspectLocalComplex(HwpDocument,bytes,{includeDocumentInfo:false,verifyCharacterModel:false}),result=editTextBox(state,bytes,version,operation);
+    if(result.bytes!==bytes){const after=inspectLocalComplex(HwpDocument,result.bytes,{includeDocumentInfo:false,verifyCharacterModel:false}),id=rawTarget(operation.target_id,version),old=state.text_boxes.flatMap(b=>b.paragraphs).find(p=>p.id===id),now=after.text_boxes.flatMap(b=>b.paragraphs).find(p=>p.id===id),wanted=[...old.text].slice(0,operation.start).join('')+operation.new_text+[...old.text].slice(operation.end).join('');if(!now||now.text!==wanted)fail('TEXT_BOX_CONTENT_MISMATCH');}return result;
+  }
   if(['reflow_paragraph','reflow_object'].includes(operation.type))return reflowLocal(HwpDocument,bytes,version,operation);
   if(['insert_field','delete_field'].includes(operation.type)||Object.hasOwn(operation,'expected_cell_sha256'))return editLocalComplex(HwpDocument,bytes,version,operation);
   if(hasLocalComplexContent(readHwp(bytes)))return editLocalComplex(HwpDocument,bytes,version,operation);
@@ -40,26 +47,31 @@ export async function applyLocalOperation(HwpDocument,bytes,version,operation){
 
 export async function editLocalBatch(HwpDocument,source,initialVersion,operations){
   const identities=new Map(),keys=['target_id','previous_target_id','after_target_id'];
+  const references=op=>{const refs=keys.filter(k=>k==='target_id'||Object.hasOwn(op,k)).map(key=>({key,value:op[key]}));if(Object.hasOwn(op,'protected_objects')){if(!Array.isArray(op.protected_objects)||op.protected_objects.length>16)fail('INVALID_PROTECTED_OBJECTS');op.protected_objects.forEach((value,index)=>refs.push({key:'protected_objects',index,value}));}return refs;};
   // Every target belongs to the caller's initial read, even when it moves in
   // an earlier step. Text and picture conditions refer to each step's state.
   for(const op of operations){
     if(!op||Object.getPrototypeOf(op)!==Object.prototype)fail('INVALID_OPERATION');
-    for(const key of keys)if(key==='target_id'||Object.hasOwn(op,key)){
-      const id=rawTarget(op[key],initialVersion);identities.set(id,id);
+    for(const {value} of references(op)){
+      const id=rawTarget(value,initialVersion);identities.set(id,id);
     }
   }
   let bytes=source,last,layoutRemap=null;const outcomes=[];
   for(const [index,op] of operations.entries()){
     const currentVersion=digest(bytes),operation=structuredClone(op);
-    for(const key of keys)if(key==='target_id'||Object.hasOwn(op,key)){
-      const identity=rawTarget(op[key],initialVersion),current=identities.get(identity);
+    for(const {key,index,value} of references(op)){
+      const identity=rawTarget(value,initialVersion),current=identities.get(identity);
       if(current===null)fail('BATCH_TARGET_REMOVED');
-      operation[key]=target(current,currentVersion);
+      if(index===undefined)operation[key]=target(current,currentVersion);else operation[key][index]=target(current,currentVersion);
     }
     const result=await applyLocalOperation(HwpDocument,bytes,currentVersion,operation);
     if(result.content_verified!==true||result.raw_preservation_verified!==true)fail('BATCH_VERIFICATION_FAILED');
     const {_target_remap,bytes:next,...verification}=result;
     if(_target_remap){
+      if([...identities.values()].some(id=>id?.includes(':tb'))){
+        const old=inspectLocalComplex(HwpDocument,bytes,{includeDocumentInfo:false,verifyCharacterModel:false}),after=inspectLocalComplex(HwpDocument,next,{includeDocumentInfo:false,verifyCharacterModel:false});
+        for(const box of old.text_boxes){const candidates=after.text_boxes.filter(b=>b.section===box.section&&b.subtree_sha256===box.subtree_sha256);if(candidates.length!==1)continue;const now=candidates[0];_target_remap[box.id]=now.id;for(const p of box.paragraphs)_target_remap[p.id]=now.paragraphs[p.paragraph]?.id??null;}
+      }
       if(layoutRemap===null)layoutRemap={..._target_remap};
       else for(const [initial,current] of Object.entries(layoutRemap))if(current!==null)layoutRemap[initial]=Object.hasOwn(_target_remap,current)?_target_remap[current]:null;
       for(const [initial,current] of identities){
@@ -80,5 +92,8 @@ export async function editLocalBatch(HwpDocument,source,initialVersion,operation
     text_range_changed:outcomes.some(o=>o.text_range_changed===true),
     picture_changed:outcomes.some(o=>o.picture_changed===true),
     picture_group_changed:outcomes.some(o=>o.picture_group_changed===true),
+    page_layout_changed:outcomes.some(o=>o.page_layout_changed===true),
+    text_box_changed:outcomes.some(o=>o.text_box_changed===true),
+    flow_changed:outcomes.some(o=>o.flow_changed===true),
     layout_verified:false,operations:outcomes,_layout_target_remap:layoutRemap};
 }

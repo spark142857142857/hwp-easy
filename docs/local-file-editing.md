@@ -291,3 +291,7 @@ python scripts/archive_local_plugin.py
 현재 생성 패키지는 ignored `outputs/plugin-package/hwp-easy/`, ZIP은 `outputs/plugin-package/hwp-easy-0.2.15.zip`에 있다. [스킬 소스](../plugins/hwp-easy/skills/edit-local-hwp/SKILL.md)는 명시적으로 선택하는 `edit-local-hwp`이며 `allow_implicit_invocation: false`를 유지한다. 10월 11일의 분리 실행 검사는 전역 설치, MCP 등록, 운영 Sites와 심사본을 바꾸지 않았다. 10월 12일 사용자 요청에 따른 실제 로컬 플러그인 설치는 [설치 기록](local-plugin-installation.md)과 구분한다. 공개 디렉터리 게시와 심사는 별개의 단계다.
 
 공식 문서는 스킬의 실행 코드, 자원을 패키지에 포함하는 방식을 제공하며, 공개 제출의 로컬 MCP에는 별도 지원 경로를 안내한다. 따라서 로컬 stdio MCP가 누구나 설치하는 디렉터리에 그대로 등록되었다고 주장하지 않는다. [패키지 안내](https://developers.openai.com/plugins/build/plugins), [스킬 안내](https://developers.openai.com/plugins/build/skills).
+
+## 0.2.24 부동 개체·고정 하단·글상자
+
+선택 개체를 부동 상태로 유지한 재배치, 고정 바닥 영역과 단순 텍스트 꼬리말 위치 보존, 본문 사각형 글상자 부분 편집·빈 상자 입력을 지원 프로필에 추가했다. 쪽 계산 차이는 확실한 충돌과 구분해 불확실 결과로 보고한다. 작업별 조건·10건의 같은 파일 저장/정확한 복구·한컴 30개 파일/43쪽 확인은 [0.2.24 검증](local-release-0.2.24.md), 세부 요청은 [실행기 참조](../plugins/hwp-easy/skills/edit-local-hwp/references/requests.md)를 따른다.
