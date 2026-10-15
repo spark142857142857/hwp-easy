@@ -118,11 +118,17 @@ jobs:
   local-complex:
     name: Complex local objects / ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 12
+    # Expanded Windows checks passed but cleanup hit the 12-minute job limit.
+    # Individual edit and preview worker limits remain unchanged.
+    timeout-minutes: ${{ matrix.timeout_minutes }}
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, windows-latest]
+        include:
+          - os: ubuntu-latest
+            timeout_minutes: 12
+          - os: windows-latest
+            timeout_minutes: 15
     steps:
       - name: Check out source
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
