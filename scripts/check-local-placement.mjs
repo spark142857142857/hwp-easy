@@ -1,6 +1,6 @@
 /** Isolated shipped runtime: floating placement, footer reserve and text-box edits. */
 import fs from 'node:fs';import path from 'node:path';import os from 'node:os';import assert from 'node:assert/strict';import {spawnSync} from 'node:child_process';
-import {HwpDocument,initSync} from '@rhwp/core';import {floatingFixture} from '../tests/local_reflow_fixtures.mjs';import {placementFixture} from '../tests/local_placement_fixtures.mjs';import {fixture} from '../tests/rhwp_fixtures.mjs';import {checkedExport} from '../tests/local_complex_fixtures.mjs';import {progressiveJpeg} from '../tests/local_image_fixtures.mjs';import {digest} from '../src/one_hwp/local_file.mjs';
+import {HwpDocument,initSync} from '@rhwp/core';import {floatingFixture} from '../tests/local_reflow_fixtures.mjs';import {placementFixture,cellBoxFixture,opaqueGroupFixture} from '../tests/local_placement_fixtures.mjs';import {fixture} from '../tests/rhwp_fixtures.mjs';import {checkedExport} from '../tests/local_complex_fixtures.mjs';import {progressiveJpeg} from '../tests/local_image_fixtures.mjs';import {digest} from '../src/one_hwp/local_file.mjs';
 initSync({module:fs.readFileSync('node_modules/@rhwp/core/rhwp_bg.wasm')});
 const out=path.resolve(process.argv[2]??'outputs/local-placement-check');assert.equal(fs.existsSync(out),false);fs.mkdirSync(out,{recursive:true});
 const temp=fs.mkdtempSync(path.join(os.tmpdir(),'hwp-placement-package-')),packageDir=path.join(temp,'package');fs.cpSync('outputs/plugin-package/hwp-easy',packageDir,{recursive:true});const runner=path.join(packageDir,'skills/edit-local-hwp/scripts/local-runner.mjs'),source=path.join(temp,'test.hwp'),requestFile=path.join(temp,'request.json'),cases=[];
@@ -15,10 +15,12 @@ try{
  const doc=new HwpDocument(fixture({table:false,paragraphs:['PICTURE HOST','AFTER','END']}));let picture;try{const at=JSON.parse(doc.insertPicture(0,0,0,'[]',progressiveJpeg,7200,3600,64,40,'jpg','synthetic'));doc.setPictureProperties(0,at.paraIdx,at.controlIdx,JSON.stringify({treatAsChar:false}));picture=checkedExport(doc);}finally{doc.free();}
  trial('floating-picture',picture,s=>{const p=s.pictures[0],b=s.blocks.find(b=>b.target_id===p.target_id);return [move(s,{...p,block_id:b.id})];});
  trial('floating-text-box',placementFixture({box:true}),s=>[move(s,s.text_boxes[0])]);
+ trial('floating-opaque-group',opaqueGroupFixture(),s=>[move(s,s.opaque_drawings[0])]);
  for(const table of [false,true])trial('fixed-footer-'+table,placementFixture({box:true,fixed:true,footer:true,table}),s=>[bottom(s,{protected_objects:[s.text_boxes[0].target_id]})]);
  trial('reserve-footer',placementFixture({footer:true}),s=>[bottom(s,{minimum_footer_height:10000})]);
  trial('text-box-mixed',placementFixture({box:true,mixed:true}),s=>[splice(s.text_boxes[0])]);
  trial('text-box-empty',placementFixture({box:true,empty:true}),s=>[{...splice(s.text_boxes[0]),start:0,end:0,new_text:'빈 상자 입력 😀\n둘째 줄'}]);
+ for(const nested of [false,true])for(const empty of [false,true])trial(`cell-text-box-${nested}-${empty}`,cellBoxFixture({nested,empty}),s=>[{...splice(s.text_boxes[0]),start:0,end:[...s.text_boxes[0].paragraphs[0].text].length,new_text:'CELL BOX 😀\nSECOND LINE'}]);
  trial('fixed-footer-and-text',placementFixture({box:true,mixed:true,fixed:true,footer:true}),s=>[bottom(s,{protected_objects:[s.text_boxes[0].target_id]}),splice(s.text_boxes[0])]);
  fs.writeFileSync(path.join(out,'cases.json'),JSON.stringify(cases,null,2)+'\n');const summary={status:'PASS',cases:cases.length,same_file_save:true,plan_matches_saved_sha256:true,exact_restore:true,runner_sha256:digest(fs.readFileSync(runner)),layout_verified:false};fs.writeFileSync(path.join(out,'summary.json'),JSON.stringify(summary,null,2)+'\n');console.log(JSON.stringify(summary));
 }finally{assert.equal(path.dirname(temp),os.tmpdir());assert.ok(path.basename(temp).startsWith('hwp-placement-package-'));fs.rmSync(temp,{recursive:true,force:true});}

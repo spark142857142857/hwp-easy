@@ -68,7 +68,7 @@ export async function runLocal(request) {
   object(request,schema,request.action==='capabilities'?['action']:request.action==='read'?['action','source']:['action','source','expected_sha256']);
   if(request.action==='capabilities')return {engine:'@rhwp/core',engine_version:'0.8.6',transport:'local_execution',
     save_default:'same_file',selected_file_updated:true,file_location:'current_execution_environment',uploads_required:false,web_browser_required:false,
-    read:true,preview:true,edit:true,restore:true,find:true,layout_diagnostics:true,reject_new_geometry_overflow:true,fit_nested_table_to_cell:true,automatic_selected_paragraph_reflow:true,automatic_selected_floating_object_reflow:true,reposition_floating_preserves_anchor:true,protect_section_bottom:true,plain_body_text_boxes:true,local_recovery_history:true,new_paragraphs:true,multiline_body_and_cells:true,new_simple_tables:true,
+    read:true,preview:true,edit:true,restore:true,find:true,layout_diagnostics:true,reject_new_geometry_overflow:true,reject_new_layout_risk:true,fit_nested_table_to_cell:true,automatic_selected_paragraph_reflow:true,automatic_selected_floating_object_reflow:true,reposition_floating_preserves_anchor:true,opaque_body_drawing_placement:true,protect_section_bottom:true,plain_body_text_boxes:true,plain_cell_text_boxes:true,local_recovery_history:true,new_paragraphs:true,multiline_body_and_cells:true,new_simple_tables:true,
     delete_paragraphs:true,merge_adjacent_paragraphs:true,split_paragraph:true,splice_text:true,mixed_style_multiline_insertion:true,
     move_body_paragraphs:true,move_complete_tables:true,duplicate_plain_body_and_cell_paragraphs:true,
     insert_delete_table_rows_columns:true,
@@ -90,7 +90,7 @@ export async function runLocal(request) {
     if(Object.hasOwn(request,'scope')&&!['geometry','rendered'].includes(request.scope))fail('INVALID_LAYOUT_SCOPE');
     return {...(request.scope==='rendered'?analyzeRenderedLayout(HwpDocument,snapshot.bytes):analyzeLocalLayout(layoutState(snapshot.bytes))),source:snapshot.source,source_sha256:snapshot.sha256,saved:false};
   }
-  if(Object.hasOwn(request,'layout_policy')&&!['report','reject_new_overflow'].includes(request.layout_policy))fail('INVALID_LAYOUT_POLICY');
+  if(Object.hasOwn(request,'layout_policy')&&!['report','reject_new_overflow','reject_new_risk'].includes(request.layout_policy))fail('INVALID_LAYOUT_POLICY');
   if(request.action==='history')return localHistory(snapshot,request.limit);
   if(request.action==='find')validateFind(request,snapshot.sha256);
   const engine=createDocumentEngine(HwpDocument,{includeTableMetadata:request.action!=='find',plainStyleInspection:true});
@@ -159,7 +159,8 @@ export async function runLocal(request) {
     if(_layout_target_remap)for(const b of oldState.blocks){const key=Object.hasOwn(_layout_target_remap,b.id)?b.id:standardBlockId(b),name=_layout_target_remap[key];remap[b.id]=newState.blocks.find(x=>x.id===name||standardBlockId(x)===name)?.id??null;}
     verification.layout_diagnostics={...afterLayout,new_issues:newLayoutIssues(beforeLayout,afterLayout,remap)};
     if(request.layout_policy==='reject_new_overflow'&&verification.layout_diagnostics.new_issues.some(i=>i.certainty==='geometry'))fail('NEW_LAYOUT_OVERFLOW');
-  }catch(error){if(error.code==='NEW_LAYOUT_OVERFLOW'||request.layout_policy==='reject_new_overflow')throw error;if(!(error instanceof GuardError))throw error;verification.layout_diagnostics={status:'unavailable',reason:error.code,layout_verified:false};}
+    if(request.layout_policy==='reject_new_risk'&&verification.layout_diagnostics.new_issues.length)fail('NEW_LAYOUT_RISK');
+  }catch(error){if(['NEW_LAYOUT_OVERFLOW','NEW_LAYOUT_RISK'].includes(error.code)||['reject_new_overflow','reject_new_risk'].includes(request.layout_policy))throw error;if(!(error instanceof GuardError))throw error;verification.layout_diagnostics={status:'unavailable',reason:error.code,layout_verified:false};}
   // The candidate above still validates every target and expected value. An
   // identical text request must not save serializer/container normalization.
   if(request.operations.every(op=>op.type==='replace_text'&&op.expected_old===op.new_text)){

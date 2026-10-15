@@ -72,6 +72,10 @@ export async function editLocalBatch(HwpDocument,source,initialVersion,operation
         const old=inspectLocalComplex(HwpDocument,bytes,{includeDocumentInfo:false,verifyCharacterModel:false}),after=inspectLocalComplex(HwpDocument,next,{includeDocumentInfo:false,verifyCharacterModel:false});
         for(const box of old.text_boxes){const candidates=after.text_boxes.filter(b=>b.section===box.section&&b.subtree_sha256===box.subtree_sha256);if(candidates.length!==1)continue;const now=candidates[0];_target_remap[box.id]=now.id;for(const p of box.paragraphs)_target_remap[p.id]=now.paragraphs[p.paragraph]?.id??null;}
       }
+      if([...identities.values()].some(id=>id?.includes(':od'))){
+        const old=inspectLocalComplex(HwpDocument,bytes,{includeDocumentInfo:false,verifyCharacterModel:false}),after=inspectLocalComplex(HwpDocument,next,{includeDocumentInfo:false,verifyCharacterModel:false});
+        for(const d of old.opaque_drawings){const matches=after.opaque_drawings.filter(n=>n.section===d.section&&n.subtree_sha256===d.subtree_sha256);if(matches.length===1)_target_remap[d.id]=matches[0].id;}
+      }
       if(layoutRemap===null)layoutRemap={..._target_remap};
       else for(const [initial,current] of Object.entries(layoutRemap))if(current!==null)layoutRemap[initial]=Object.hasOwn(_target_remap,current)?_target_remap[current]:null;
       for(const [initial,current] of identities){

@@ -19,7 +19,7 @@ def materialize_empty(rs):
  out=[]
  for i,r in enumerate(rs):
   out.append(r)
-  if r[0]==66 and r[1]==3 and rs[i+1][0]==68:out.append((67,4,b'\r\0'))
+  if r[0]==66 and r[1]>=3 and r[1]%2==1 and rs[i+1][0]==68:out.append((67,r[1]+1,b'\r\0'))
  return out
 def styles(payload,length):
  runs=[struct.unpack_from('<II',payload,i) for i in range(0,len(payload),8)];assert runs[0][0]==0
@@ -48,9 +48,9 @@ for c in cases:
    if any(o['type']=='protect_page_bottom' for o in c['operations']):x[28:32]=y[28:32]=bytes(4)
    assert x==y,(name,'page definition')
   elif tag==67 and old!=new:
-   assert splice and level==4;points=list(old.decode('utf-16le')[:-1]);wanted=''.join(points[:splice['start']])+splice['new_text']+''.join(points[splice['end']:]);assert new==(wanted+'\r').encode('utf-16le');changed_text+=1
+   assert splice and level>=4 and level%2==0;points=list(old.decode('utf-16le')[:-1]);wanted=''.join(points[:splice['start']])+splice['new_text']+''.join(points[splice['end']:]);assert new==(wanted+'\r').encode('utf-16le');changed_text+=1
   elif tag==68 and old!=new:
-   assert splice and level==4 and rb[i-1][0]==67
+   assert splice and level>=4 and level%2==0 and rb[i-1][0]==67
    prior=rb[i-1][2];now=ra[i-1][2];points=list(prior.decode('utf-16le')[:-1]);start=len(''.join(points[:splice['start']]).encode('utf-16le'))//2;end=len(''.join(points[:splice['end']]).encode('utf-16le'))//2
    oldstyles=styles(old,len(prior)//2);inherited=oldstyles[start if start<end else max(0,start-1)];expected=oldstyles[:start]+[inherited]*(len(splice['new_text'].encode('utf-16le'))//2)+oldstyles[end:]
    assert styles(new,len(now)//2)==expected,(name,'retained character style');changed_styles+=1

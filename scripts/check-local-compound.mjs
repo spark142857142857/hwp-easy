@@ -3,7 +3,9 @@ import fs from 'node:fs';import path from 'node:path';import assert from 'node:a
 import {spawnSync} from 'node:child_process';import {createHash} from 'node:crypto';
 import {initializeLocal,runLocal} from '../src/one_hwp/local_runner.mjs';
 import {baselineJpeg} from '../tests/local_image_fixtures.mjs';
-const [corpusArgument,outArgument,runnerArgument]=process.argv.slice(2);
+const [corpusArgument,outArgument,runnerArgument,shortArgument]=process.argv.slice(2);
+const shortAnswers=new Set((shortArgument??'').replace(/^--short-answers=/,'').split(',').filter(Boolean).map(Number));
+assert.ok(!shortArgument||/^--short-answers=\d+(,\d+)*$/.test(shortArgument));
 assert.ok(corpusArgument&&outArgument,'Usage: node check-local-compound.mjs <pinned-corpus> <fresh-output> [runner|--source]');
 const corpus=path.resolve(corpusArgument),out=path.resolve(outArgument),sourceMode=runnerArgument==='--source',runner=path.resolve(runnerArgument&&!sourceMode?runnerArgument:'outputs/plugin-package/hwp-easy/skills/edit-local-hwp/scripts/local-runner.mjs');
 assert.equal(fs.existsSync(out),false);fs.mkdirSync(out,{recursive:true});
@@ -25,8 +27,8 @@ for(const entry of catalog.entries){
  for(const blockId of new Set(changed.map(c=>c.id))){let text=before.blocks.find(b=>b.id===blockId).text;for(const item of changed.filter(c=>c.id===blockId).sort((a,b)=>b.field.start-a.field.start))text=[...text].slice(0,item.field.start).join('')+item.value+[...text].slice(item.field.end).join('');wanted.set(blockId,text);}
  if(!changed.length){
   const candidates=before.blocks.filter(b=>b.text_range_editable).sort((a,b)=>b.cell_path.length-a.cell_path.length).slice(0,2);
-  for(const b of candidates){const value=Array.from({length:6},(_,i)=>`\n복합 검증 ${entry.id} ${i+1}: 여러 칸과 문단 서식, 그림을 함께 변경하는 합성 답변입니다. 😀`).join('');
-   const at=[...b.text].length;operations.push({type:'splice_text',target_id:b.target_id,expected_old:b.text,start:at,end:at,new_text:value});wanted.set(b.id,b.text+value);changed.push({id:b.id,start:at+1,end:at+21,value:b.text+value});}
+  for(const b of candidates){const value=shortAnswers.has(entry.id)?`\n합성 입력 ${entry.id}`:Array.from({length:6},(_,i)=>`\n복합 검증 ${entry.id} ${i+1}: 여러 칸과 문단 서식, 그림을 함께 변경하는 합성 답변입니다. 😀`).join('');
+   const at=[...b.text].length;operations.push({type:'splice_text',target_id:b.target_id,expected_old:b.text,start:at,end:at,new_text:value});wanted.set(b.id,b.text+value);changed.push({id:b.id,start:at+1,end:at+1+Math.min(20,[...value].length-1),value:b.text+value});}
  }
  assert.ok(changed.length);const selected=changed[0],block=before.blocks.find(b=>b.id===selected.id),target=selected.field??block;
  operations.push({type:'format_text',target_id:target.target_id,expected_old:selected.field?fieldValues.get(target.id):wanted.get(block.id),start:selected.start,end:selected.end,props:{bold:true,fontSize:1250,textColor:'#245A83'}});
@@ -41,5 +43,5 @@ for(const entry of catalog.entries){
  const stale=await call({action:'edit',...request});assert.equal(stale.ok,false);assert.equal(stale.error,'VERSION_CONFLICT');const restore=await call({action:'restore',source,expected_sha256:after.source_sha256,backup_id:edit.result.backup_id});assert.equal(restore.ok,true);assert.deepEqual(fs.readFileSync(source),original);fs.writeFileSync(path.join(directory,'restored.hwp'),fs.readFileSync(source));
  assert.equal(hash(fs.readFileSync(originalPath)),entry.sha256);const result={id:entry.id,status:'PASS',operations:operations.length,text_targets:changed.length,same_file_saved:true,final_failure_saved_nothing:true,restore_exact:true};report.push(result);console.log(JSON.stringify(result));
 }
-const summary={scope:sourceMode?'development source; not packaged runtime':'isolated bundled runtime',runner_sha256:sourceMode?null:hash(fs.readFileSync(runner)),documents:report,layout_verified:false};
+const summary={scope:sourceMode?'development source; not packaged runtime':'isolated bundled runtime',short_answer_ids:[...shortAnswers],runner_sha256:sourceMode?null:hash(fs.readFileSync(runner)),documents:report,layout_verified:false};
 fs.writeFileSync(path.join(out,'results.json'),JSON.stringify(summary,null,2)+'\n');if(report.some(r=>r.status!=='PASS'))process.exitCode=1;

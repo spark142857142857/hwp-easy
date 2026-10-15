@@ -8,7 +8,7 @@ import {sameProperties} from './local_page_state.mjs';
 const cid=r=>Buffer.from(r.payload.subarray(0,4)).toString('ascii');
 export function inspectTextBoxes(doc,raw,recordSets,blocks,definitionCount){
  const boxes=[];
- for(const b of blocks){if(b.cell_path.length||!b.text_mapping_verified)continue;const rs=recordSets.get(b.section);let control=-1,index=0;
+ for(const b of blocks){if(!b.text_mapping_verified)continue;const rs=recordSets.get(b.section);let control=-1,index=0;
   for(let i=b.record_index+1;i<b.records_end;i++){const r=rs[i];if(r.tag!==71||r.level!==b.raw_level+1)continue;control++;
    if(cid(r)!==' osg'||rs[i+1]?.tag!==76||cid(rs[i+1])!=='cer$')continue;
    const shape=rs[i+1],list=rs[i+2];if(!validObjectHeader(r.payload)||shape.payload.length<196||list?.tag!==72||list.level!==shape.level+1||list.payload.length!==33)continue;
@@ -24,16 +24,17 @@ export function inspectTextBoxes(doc,raw,recordSets,blocks,definitionCount){
      if(!ts.length&&(view(rs[at].payload).getUint32(0,true)&0x7fffffff)!==1)fail('TEXT_BOX_PROFILE_UNSUPPORTED');
      const rawText=ts[0]?.payload??new Uint8Array([13,0]),tokens=textTokens(rawText);if(tokens.some(t=>!t.text&&t.code!==13))fail('TEXT_BOX_PROFILE_UNSUPPORTED');const text=tokens.map(t=>t.text).join(''),unit_styles=rawShapes(rs[at],cs[0],rawText,definitionCount);
      if((view(rs[at].payload).getUint32(0,true)&0x7fffffff)!==rawText.length/2||Boolean(view(rs[at].payload).getUint32(4,true)&(1<<10))!==tokens.some(t=>t.code===10)||tokens.some(t=>t.text&&t.length===2&&unit_styles[t.unit]!==unit_styles[t.unit+1]))fail('TEXT_BOX_PROFILE_UNSUPPORTED');
-     let actual;try{actual=doc.getTextInCellEx(JSON.stringify({sectionIdx:b.section,parentParaIdx:b.paragraph,controlIdx:control,cellIdx:0,cellParaIdx:p,charOffset:0,count:[...text].length}));}catch{fail('TEXT_BOX_TEXT_UNVERIFIED');}if(actual!==text)fail('TEXT_BOX_TEXT_UNVERIFIED');
+     const path=[...b.cell_path,{controlIndex:control,cellIndex:0,cellParaIndex:p}];
+     let actual;try{actual=doc.getTextInCellByPath(b.section,b.paragraph,JSON.stringify(path),0,[...text].length);}catch{fail('TEXT_BOX_TEXT_UNVERIFIED');}if(actual!==text)fail('TEXT_BOX_TEXT_UNVERIFIED');
      paragraphs.push({id:`${b.id}:tb${index}:p${p}`,paragraph:p,text,record_index:at,records_end:stop,raw_level:rs[at].level,text_record:ts.length?rs.indexOf(ts[0]):null,shape_record:rs.indexOf(cs[0]),tokens,unit_styles});
     }
     const v=view(r.payload),properties={width:v.getUint32(16,true),height:v.getUint32(20,true),horzOffset:v.getInt32(12,true),vertOffset:v.getInt32(8,true)};
-    boxes.push({id:`${b.id}:tb${index++}`,block_id:b.id,section:b.section,paragraph:b.paragraph,control_index:control,record_index:i,records_end:end,properties,flow:objectFlow(r),paragraphs,subtree_sha256:createHash('sha256').update(encodeRecords(rs.slice(i,end))).digest('hex')});
+    boxes.push({id:`${b.id}:tb${index++}`,block_id:b.id,section:b.section,paragraph:b.paragraph,cell_path:b.cell_path,control_index:control,record_index:i,records_end:end,properties,flow:objectFlow(r),paragraphs,subtree_sha256:createHash('sha256').update(encodeRecords(rs.slice(i,end))).digest('hex')});
    }catch(error){if(!(error instanceof GuardError))throw error;}
   }
  }return boxes;
 }
-export function publicTextBoxes(state,version){const target=id=>`hwp5:${version}:${Buffer.from(id).toString('base64url')}`;return state.text_boxes.map(box=>({id:box.id,target_id:target(box.id),block_id:box.block_id,section:box.section,paragraph:box.paragraph,control_index:box.control_index,properties:box.properties,flow:box.flow,subtree_sha256:box.subtree_sha256,profile:'body_rectangle_plain_paragraphs',paragraphs:box.paragraphs.map(p=>({id:p.id,target_id:target(p.id),paragraph:p.paragraph,text:p.text,editable:true}))}));}
+export function publicTextBoxes(state,version){const target=id=>`hwp5:${version}:${Buffer.from(id).toString('base64url')}`;return state.text_boxes.map(box=>({id:box.id,target_id:target(box.id),block_id:box.block_id,section:box.section,paragraph:box.paragraph,cell_path:box.cell_path,control_index:box.control_index,properties:box.properties,flow:box.flow,subtree_sha256:box.subtree_sha256,profile:box.cell_path.length?'cell_rectangle_plain_paragraphs':'body_rectangle_plain_paragraphs',paragraphs:box.paragraphs.map(p=>({id:p.id,target_id:target(p.id),paragraph:p.paragraph,text:p.text,editable:true}))}));}
 export function editTextBox(state,source,version,op){
  if(!equal(Object.keys(op).sort(),['type','target_id','expected_old','start','end','new_text','expected_properties'].sort()))fail('INVALID_OPERATION');
  if(typeof op.target_id!=='string'||!op.target_id.startsWith(`hwp5:${version}:`))fail('VERSION_CONFLICT');const encoded=op.target_id.slice(70),id=Buffer.from(encoded,'base64url').toString();if(Buffer.from(id).toString('base64url')!==encoded)fail('INVALID_TARGET');
