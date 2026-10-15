@@ -1,6 +1,6 @@
 # HWP Easy 제품 요구사항 초안
 
-[문서 인덱스](README.md) · [프로젝트 상태](project-status.md) · [아키텍처](architecture.md)
+[문서 인덱스](README.md) · [프로젝트 상태](project-status.md) · [아키텍처](architecture.md) · [개선·남은 작업](remaining-work.md)
 
 HWP Easy의 제품 요구사항과 결정 이력을 관리합니다. 사용법은 [사용 가이드](quick-start.md), 현재 제공하는 기능은 [지원 기능](supported-features.md)을 따릅니다. 초기 Python·원격·심사 기록은 현재 로컬 배포본의 설치 조건과 구분합니다.
 

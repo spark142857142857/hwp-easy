@@ -6,7 +6,7 @@ HWP Easy is a local tool for reading and editing HWP documents in Codex, Claude 
 
 It uses an engine built on [`@rhwp/core`](https://github.com/edwardkim/rhwp), without requiring Hancom installation or an HWP Easy server. HWP Easy adds edit-target and preservation checks, conflict detection, same-file saving and recovery. Only verified edits are saved, with previous bytes retained for recovery.
 
-[한국어](README.md) · [Usage guide](docs/quick-start.md) · [Documentation](docs/README.md)
+[한국어](README.md) · [Usage guide](docs/quick-start.md) · [Documentation](docs/README.md) · [Roadmap (Korean)](docs/remaining-work.md)
 
 <a id="supported-local-editing"></a>
 <a id="what-can-i-use-it-for"></a>

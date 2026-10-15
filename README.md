@@ -6,7 +6,7 @@ HWP Easy는 Codex, Claude Code, Cursor에서 HWP(한글 문서)를 읽고 편집
 
 [`@rhwp/core`](https://github.com/edwardkim/rhwp) 기반 엔진으로 한글 설치나 HWP Easy 서버 없이 문서를 처리합니다. HWP Easy는 여기에 편집 대상·비대상 보존 검사, 충돌 검사, 같은 파일 저장과 복구 기능을 추가합니다. 검증을 통과한 수정만 저장하고, 이전 내용은 복구용으로 보관합니다.
 
-[English](README.en.md) · [사용 가이드](docs/quick-start.md) · [문서](docs/README.md)
+[English](README.en.md) · [사용 가이드](docs/quick-start.md) · [문서](docs/README.md) · [개선·남은 작업](docs/remaining-work.md)
 
 <a id="로컬에서-할-수-있는-편집"></a>
 <a id="어떤-작업에-쓸-수-있나요"></a>
