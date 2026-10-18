@@ -8,7 +8,7 @@ const same=(a,b)=>JSON.stringify(a)===JSON.stringify(b);
 const finite=r=>r&&['x','y','w','h'].every(k=>Number.isFinite(r[k]))&&r.w>0&&r.h>0;
 const dimensions=(c,t)=>c.rowCount===t.dimensions.rowCount&&c.colCount===t.dimensions.colCount&&Math.abs(c.w-t.properties.tableWidth/75)<2;
 
-function locateCell(state,box,snapshot,tick){
+export function locateCell(state,box,snapshot,tick){
  const path=box.cell_path,root=state.tables.find(t=>t.section===box.section&&t.paragraph===box.paragraph&&!t.cell_path.length&&t.control===path[0].controlIndex);
  if(!root)return null;
  const roots=snapshot.pages.flatMap(page=>page.controls.filter(c=>{tick();return c.type==='table'&&same(c.stableIndex,[box.section,box.paragraph,root.control])&&dimensions(c,root);}).map(table=>({page,table})));

@@ -28,7 +28,7 @@ function textHeight(block,width){
   x+=w;line=Math.max(line,size*spacing);
  }return Math.ceil(h+line+(points.at(-1)==='\n'?(runs.at(-1)?.properties.fontSize??1000)*spacing:0));
 }
-function textBoxHeightEstimator(state){
+export function textBoxHeightEstimator(state){
  const defs=[...parseRecords(state.raw.streams.get('DocInfo'))].filter(r=>r.tag===21);
  return box=>{let estimate=0;const rs=state.recordSets.get(box.section);
   for(const paragraph of box.paragraphs){
