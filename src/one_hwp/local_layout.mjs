@@ -70,6 +70,11 @@ export function analyzeLocalLayout(state){
   for(const p of state.pictures.filter(p=>p.block_id===b.id)){checks++;const props=p.properties,theta=props.rotationAngle*Math.PI/180,boundWidth=Math.abs(Math.cos(theta))*props.width+Math.abs(Math.sin(theta))*props.height;
    const extent=Math.ceil(boundWidth+Math.max(0,props.horzOffset)-1e-7);if(extent>parent.width)add('PICTURE_EXCEEDS_CELL_WIDTH',b,extent,parent.width,'geometry',{picture_index:p.picture_index,object_identity:layoutObjectIdentity(state,p)});}
   for(const g of state.groups.filter(g=>g.block_id===b.id)){checks++;const p=g.properties,extent=p.width+Math.max(0,p.horzOffset);if(extent>parent.width)add('GROUP_EXCEEDS_CELL_WIDTH',b,extent,parent.width,'geometry',{group_id:g.id,object_identity:layoutObjectIdentity(state,g)});}
+  for(const box of (state.text_boxes??[]).filter(box=>box.block_id===b.id&&!box.flow.treatAsChar&&box.flow.widthRelTo===4&&box.flow.horzRelTo===2&&box.flow.horzAlign===0)){
+   checks++;const p=box.properties,extent=p.width+Math.max(0,p.horzOffset)+box.flow.marginLeft+box.flow.marginRight;
+   if(extent>parent.width)add('TEXT_BOX_EXCEEDS_CELL_WIDTH',b,extent,parent.width,'geometry',{text_box_id:box.id,object_identity:layoutObjectIdentity(state,box)});
+   if(p.horzOffset<box.flow.marginLeft)add('TEXT_BOX_EXCEEDS_CELL_LEFT_BOUNDARY',b,box.flow.marginLeft-p.horzOffset,0,'geometry',{text_box_id:box.id,object_identity:layoutObjectIdentity(state,box)});
+  }
  }
  cellPageRisks(state,add);
  checks+=fixedTextBoxRisks(state,add);

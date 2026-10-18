@@ -5,6 +5,7 @@ import {fail,view,textTokens,rawShapes,encodeRecords,spliceRawParagraph,equal} f
 import {objectFlow,validObjectHeader} from './local_flow_records.mjs';
 import {publishVerifiedPatch} from './local_verified_patch.mjs';
 import {sameProperties} from './local_page_state.mjs';
+import {textBoxGeometry} from './local_text_box_geometry.mjs';
 const cid=r=>Buffer.from(r.payload.subarray(0,4)).toString('ascii');
 export function inspectTextBoxes(doc,raw,recordSets,blocks,definitionCount){
  const boxes=[];
@@ -34,7 +35,7 @@ export function inspectTextBoxes(doc,raw,recordSets,blocks,definitionCount){
   }
  }return boxes;
 }
-export function publicTextBoxes(state,version){const target=id=>`hwp5:${version}:${Buffer.from(id).toString('base64url')}`;return state.text_boxes.map(box=>({id:box.id,target_id:target(box.id),block_id:box.block_id,section:box.section,paragraph:box.paragraph,cell_path:box.cell_path,control_index:box.control_index,properties:box.properties,flow:box.flow,subtree_sha256:box.subtree_sha256,profile:box.cell_path.length?'cell_rectangle_plain_paragraphs':'body_rectangle_plain_paragraphs',paragraphs:box.paragraphs.map(p=>({id:p.id,target_id:target(p.id),paragraph:p.paragraph,text:p.text,editable:true}))}));}
+export function publicTextBoxes(state,version){const target=id=>`hwp5:${version}:${Buffer.from(id).toString('base64url')}`;return state.text_boxes.map(box=>({id:box.id,target_id:target(box.id),block_id:box.block_id,section:box.section,paragraph:box.paragraph,cell_path:box.cell_path,control_index:box.control_index,properties:box.properties,flow:box.flow,subtree_sha256:box.subtree_sha256,geometry_editable:Boolean(textBoxGeometry(state,box)),profile:box.cell_path.length?'cell_rectangle_plain_paragraphs':'body_rectangle_plain_paragraphs',paragraphs:box.paragraphs.map(p=>({id:p.id,target_id:target(p.id),paragraph:p.paragraph,text:p.text,editable:true}))}));}
 export function editTextBox(state,source,version,op){
  if(!equal(Object.keys(op).sort(),['type','target_id','expected_old','start','end','new_text','expected_properties'].sort()))fail('INVALID_OPERATION');
  if(typeof op.target_id!=='string'||!op.target_id.startsWith(`hwp5:${version}:`))fail('VERSION_CONFLICT');const encoded=op.target_id.slice(70),id=Buffer.from(encoded,'base64url').toString();if(Buffer.from(id).toString('base64url')!==encoded)fail('INVALID_TARGET');

@@ -8,12 +8,9 @@ import {patchLocalPackedStreams} from './local_container_write.mjs';
 import {fail,view,equal,equalBytes,encodeRecords} from './local_complex_records.mjs';
 import {objectFlow} from './local_flow_records.mjs';
 import {cellContainer} from './local_layout.mjs';
+import {invalidateSectionLayout} from './local_layout_cache.mjs';
+export {invalidateSectionLayout} from './local_layout_cache.mjs';
 
-export function invalidateSectionLayout(records,blocks){
- const replacements=new Map(),remove=new Set();for(const b of blocks){const head=records[b.record_index].payload.slice();view(head).setUint16(16,0,true);replacements.set(b.record_index,head);
-  for(let i=b.record_index+1;i<b.records_end;i++)if(records[i].tag===69&&records[i].level===b.raw_level+1)remove.add(i);
- }return records.flatMap((r,i)=>remove.has(i)?[]:[replacements.has(i)?{...r,payload:replacements.get(i)}:r]);
-}
 export function reflowLocal(HwpDocument,source,version,op){
  const object=op.type==='reflow_object',keys=['type','target_id','expected_old',object?'expected_flow':'expected_properties',...(object?['expected_properties']:[]),...(Object.hasOwn(op,'picture_index')?['picture_index']:[])];
  if(!['reflow_object','reflow_paragraph'].includes(op.type)||!equal(Object.keys(op).sort(),keys.sort())||!object&&Object.hasOwn(op,'picture_index'))fail('INVALID_OPERATION');

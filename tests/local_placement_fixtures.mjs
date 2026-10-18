@@ -36,10 +36,11 @@ export function placementFixture({box=false,empty=false,mixed=false,fixed=false,
  return bytes;
 }
 
-export function cellBoxFixture({nested=false,empty=false,mixed=false}={}){
+export function cellBoxFixture({nested=false,empty=false,mixed=false,cellRelative=false}={}){
  const source=nested?nestedFixture():fixture(),s=inspectLocalComplex(HwpDocument,source,{includeDocumentInfo:false,verifyCharacterModel:false}),b=s.blocks.find(b=>b.cell_path.length===(nested?2:1)),rs=s.recordSets.get(0);
  const donor=placementFixture({box:true,empty,mixed,boxWidth:nested?3000:6000,boxOffset:0}),drs=[...parseRecords(readHwp(donor).streams.get('BodyText/Section0'))],at=drs.findIndex(r=>r.tag===71&&Buffer.from(r.payload.subarray(0,4)).toString()===' osg');let stop=at+1;while(stop<drs.length&&drs[stop].level>drs[at].level)stop++;
  const subtree=drs.slice(at,stop).map(r=>({...r,level:r.level+b.raw_level,payload:r.payload.slice()}));
+ if(cellRelative){const v=view(subtree[0].payload);v.setUint32(4,((v.getUint32(4,true)&~((3<<3)|(3<<8)))|(2<<3)|(2<<8))>>>0,true);v.setInt32(8,0,true);}
  // Reuse valid source definitions; this fixture asserts mixed spans separately.
  for(const r of subtree)if(r.tag===68)for(let i=4;i<r.payload.length;i+=8)view(r.payload).setUint32(i,view(rs[b.shape_record].payload).getUint32(4,true),true);
  const anchor=Buffer.alloc(16);anchor.writeUInt16LE(11);anchor.write(' osg',2,'ascii');anchor.writeUInt16LE(11,14);

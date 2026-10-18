@@ -21,7 +21,7 @@ It uses an engine built on [`@rhwp/core`](https://github.com/edwardkim/rhwp), wi
 - Recovery history, previous-version restoration and retention of the edited version before recovery
 - Updated embedded preview text and first-page thumbnails after saving
 
-Supported edits depend on document structure and target. [0.2.25](docs/local-release-0.2.25.md) expanded public-form checks, vector-group placement, cell text boxes and nested-table risk diagnostics. The current [0.2.26 source and verification package](docs/local-release-0.2.26.md) adds recovery of interrupted saves using its new lock format, per-object overflow matching and estimated height warnings for supported fixed text boxes. Codex remains installed at 0.2.25; Claude Code and Cursor remain on 0.2.19. Unverifiable structures produce partial read-only results or refused operations. Partial reads may omit some object content.
+Supported edits depend on document structure and target. The current [0.2.27 source and verification package](docs/local-release-0.2.27.md) retains previous save/recovery improvements and adds explicit movement and resizing of supported plain rectangle text boxes in body paragraphs, cells and nested cells. Automatic fitting and placement remain separate work. Codex remains installed at 0.2.25; Claude Code and Cursor remain on 0.2.19. Unverifiable structures produce partial read-only results or refused operations. Partial reads may omit some object content.
 
 SVG previews of the current document and rereading after saving do not guarantee identical fonts, line breaks or page layout in an external HWP application. See [features and limits](docs/supported-features.md) for operation-specific conditions and preview limitations.
 

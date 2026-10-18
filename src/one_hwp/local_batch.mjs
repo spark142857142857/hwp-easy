@@ -11,6 +11,7 @@ import {hasLocalComplexContent,editLocalComplex,inspectLocalComplex} from './loc
 import {reflowLocal} from './local_reflow.mjs';
 import {placementLocal} from './local_placement.mjs';
 import {editTextBox} from './local_text_boxes.mjs';
+import {transformTextBox} from './local_text_box_geometry.mjs';
 import {layoutObjectIdentity} from './local_layout_identity.mjs';
 import {standardBlockId} from './local_complex_table.mjs';
 
@@ -27,6 +28,13 @@ const target=(id,version)=>`hwp5:${version}:${Buffer.from(id).toString('base64ur
 
 export async function applyLocalOperation(HwpDocument,bytes,version,operation){
   if(['reposition_floating_object','protect_page_bottom'].includes(operation.type))return placementLocal(HwpDocument,bytes,version,operation);
+  if(operation.type==='transform_text_box'){
+    const state=inspectLocalComplex(HwpDocument,bytes,{includeDocumentInfo:false,verifyCharacterModel:false}),result=transformTextBox(state,bytes,version,operation);
+    if(result.bytes!==bytes){
+      const after=inspectLocalComplex(HwpDocument,result.bytes,{includeDocumentInfo:false,verifyCharacterModel:false}),id=rawTarget(operation.target_id,version),old=state.text_boxes.find(b=>b.id===id),now=after.text_boxes.find(b=>b.id===id);
+      if(!now||JSON.stringify(now.properties)!==JSON.stringify({...old.properties,...operation.props})||JSON.stringify(now.flow)!==JSON.stringify(old.flow)||JSON.stringify(now.paragraphs.map(p=>[p.text,p.unit_styles]))!==JSON.stringify(old.paragraphs.map(p=>[p.text,p.unit_styles])))fail('TEXT_BOX_GEOMETRY_MISMATCH');
+    }return result;
+  }
   if(operation.type==='splice_text_box'){
     const state=inspectLocalComplex(HwpDocument,bytes,{includeDocumentInfo:false,verifyCharacterModel:false}),result=editTextBox(state,bytes,version,operation);
     if(result.bytes!==bytes){const after=inspectLocalComplex(HwpDocument,result.bytes,{includeDocumentInfo:false,verifyCharacterModel:false}),id=rawTarget(operation.target_id,version),old=state.text_boxes.flatMap(b=>b.paragraphs).find(p=>p.id===id),now=after.text_boxes.flatMap(b=>b.paragraphs).find(p=>p.id===id),wanted=[...old.text].slice(0,operation.start).join('')+operation.new_text+[...old.text].slice(operation.end).join('');if(!now||now.text!==wanted)fail('TEXT_BOX_CONTENT_MISMATCH');}return result;
@@ -106,6 +114,7 @@ export async function editLocalBatch(HwpDocument,source,initialVersion,operation
     picture_group_changed:outcomes.some(o=>o.picture_group_changed===true),
     page_layout_changed:outcomes.some(o=>o.page_layout_changed===true),
     text_box_changed:outcomes.some(o=>o.text_box_changed===true),
+    text_box_geometry_changed:outcomes.some(o=>o.text_box_geometry_changed===true),
     flow_changed:outcomes.some(o=>o.flow_changed===true),
     layout_verified:false,operations:outcomes,_layout_target_remap:layoutRemap,_layout_removed_objects:[...removedObjects]};
 }
