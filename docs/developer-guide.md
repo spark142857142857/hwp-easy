@@ -56,10 +56,17 @@ npm --prefix probes/sites-runtime ci --ignore-scripts --no-audit --no-fund
 
 ## 검사
 
-문서 링크·개인 파일 제외 규칙과 공통 엔진 검사는 저장소 루트에서 실행합니다.
+GitHub Actions의 [Source checks](../.github/workflows/checks.yml)는 push와 pull request에서 실행합니다. 루트의 `README.md`·`README.en.md`, `docs/`, `plugins/archive/README.md`, `probes/sites-runtime/README.md`, `vendor/local-preview/README.md`만 변경한 경우에는 자동 CI를 생략합니다. 문서와 함께 코드·의존성·빌드 설정을 변경하면 기존 전체 검사를 실행합니다. `SKILL.md`와 스킬의 참조 문서는 실행 동작에 영향을 주므로 생략 대상에 넣지 않습니다. 필요한 경우 GitHub의 **Actions → Source checks → Run workflow**에서 전체 검사를 수동 실행할 수 있습니다.
+
+문서만 변경했을 때도 아래 링크 검사는 로컬에서 실행합니다.
 
 ```bash
 node scripts/check-repository.mjs
+```
+
+공통 엔진을 변경하면 엔진 검사도 실행합니다.
+
+```bash
 npm run test:engine
 ```
 
