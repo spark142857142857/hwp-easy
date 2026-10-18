@@ -26,11 +26,15 @@ export function complexTables(recordSets,blocks){
  return tables;
 }
 /** Recover tracks only when existing span constraints determine every boundary. */
-function tracks(table,axis){
+export function trackPositions(table,axis){
  const count=table.dimensions[axis==='col'?'colCount':'rowCount'],span=axis+'Span',size=axis==='col'?'width':'height',edges=Array.from({length:count+1},()=>[]),positions=Array(count+1).fill(null);
  for(const c of table.cells){edges[c[axis]].push([c[axis]+c[span],c[size]]);edges[c[axis]+c[span]].push([c[axis],-c[size]]);}
  positions[0]=0;const queue=[0];
  for(let i=0;i<queue.length;i++)for(const [end,delta]of edges[queue[i]]){const value=positions[queue[i]]+delta;if(positions[end]===null){positions[end]=value;queue.push(end);}else if(positions[end]!==value)fail('TABLE_GEOMETRY_UNSUPPORTED');}
+ return positions;
+}
+function tracks(table,axis){
+ const positions=trackPositions(table,axis),count=positions.length-1;
  if(positions.some(n=>n===null))fail('TABLE_TRACK_GEOMETRY_UNDETERMINED');
  const values=positions.slice(1).map((n,i)=>n-positions[i]);if(values.some(n=>n<1||n>720000))fail('TABLE_GEOMETRY_UNSUPPORTED');
  if(axis==='col'&&positions[count]!==table.properties.tableWidth)fail('TABLE_GEOMETRY_UNSUPPORTED');

@@ -29,8 +29,13 @@ for i,c in enumerate(cases):
     name=c['name'];a=image(name,'before');b=image(name,'after');r=image(name,'restored');assert all(results[name+'-'+s]['pages']==1 for s in ('before','after','restored'));assert ImageChops.difference(a,r).getbbox() is None,(name,'restore pixels');assert text(results[name+'-before']['text'])==text(results[name+'-after']['text']),(name,'native text/order')
     p=c['verification']['placement'];box=rectangle(b,p['after']);tolerance=math.ceil(p['inline_prefix_tolerance'])+3;grid=cell(b,p['projected_cell'],tolerance);prior=cell(a,p['projected_cell'],tolerance);assert grid==prior,(name,'cell geometry moved')
     left,top,right,bottom=box;cl,ct,cr,cb=grid;assert left>=cl+2 and top>=ct+2 and right<=cr-2 and bottom<=cb-2,(name,'box outside actual nested cell',box,grid)
-    if c['options'].get('hostText','inner label'):assert top>=ct+30,(name,'box overlaps host text band',box,grid)
-    checks.append(dict(case=name,depth=len(c['after']['text_boxes'][0]['cell_path']),actual_cell=grid,actual_box=box,cell_edges_unchanged=True))
+    # Exclude the old selected frame and its text; the remaining native ink
+    # independently checks cell text/sibling objects for all alignments.
+    old=p['before'];in_old=lambda xx,yy:old['x']-4<=xx<=old['x']+old['w']+4 and old['y']-4<=yy<=old['y']+old['h']+4
+    ink=[(xx,yy) for yy in range(ct+3,cb-2) for xx in range(cl+3,cr-2) if not in_old(xx,yy) and dark(a,xx,yy)]
+    assert not any(left-1<=xx<=right+1 and top-1<=yy<=bottom+1 for xx,yy in ink),(name,'box intersects native cell text',box,grid)
+    assert all(dark(b,xx,yy) for xx,yy in ink),(name,'native text position changed')
+    checks.append(dict(case=name,depth=len(c['after']['text_boxes'][0]['cell_path']),actual_cell=grid,actual_box=box,cell_edges_unchanged=True,native_text_ink_clear=True))
     region=(max(0,cl-45),max(0,ct-30),min(b.width,cr+250),min(b.height,cb+35))
     for j,(label,im) in enumerate([('before',a),('after',b)]):draw.text((j*600,i*300),f'{name} {label}',fill='black');sheet.paste(im.crop(region),(j*600,i*300+20))
 sheet.save(out/'review.png');summary=dict(status='PASS',documents=len(rows),pages=sum(r['pages'] for r in rows),native_cell_and_floating_frame_checks=checks,native_text_verified=True,restored_pages_pixel_exact=len(cases),layout_verified=False)

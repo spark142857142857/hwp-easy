@@ -20,11 +20,12 @@ export function duplicateFloatingPageFixture(){
  return packLocalBodyRewrite(bytes,state.raw,new Map([['BodyText/Section0',encodeRecords(records)]]));
 }
 
-export function floatingAreaFixture({columns=1,pageBreak=false,cell=false,nested=false,mixed=false}={}){
+export function floatingAreaFixture({columns=1,pageBreak=false,cell=false,nested=false,mixed=false,unequal=false}={}){
  let bytes=cell?cellBoxFixture({nested,cellRelative:true}):placementFixture({box:true,mixed,boxWidth:6000,boxOffset:0});
  if(pageBreak){const doc=new HwpDocument(bytes);try{doc.insertPageBreak(0,1,0);bytes=checkedExport(doc);}finally{doc.free();}}
  let state=inspectLocalComplex(HwpDocument,bytes,{includeDocumentInfo:false,verifyCharacterModel:false}),rs=state.recordSets.get(0).map(r=>({...r,payload:r.payload.slice()}));
  if(columns>1){const col=rs.find(r=>r.tag===71&&Buffer.from(r.payload.subarray(0,4)).toString()==='dloc');view(col.payload).setUint16(4,(columns<<2)|0x1000,true);view(col.payload).setUint16(6,1800,true);}
+ if(unequal){const col=rs.find(r=>r.tag===71&&Buffer.from(r.payload.subarray(0,4)).toString()==='dloc'),raw=Buffer.alloc(22);Buffer.from(col.payload.subarray(0,4)).copy(raw);view(raw).setUint16(4,8,true);for(const [i,n]of [11000,2000,19768,0].entries())view(raw).setUint16(8+i*2,n,true);col.payload=raw;}
  if(cell){for(const table of state.tables){for(const c of table.cells){const p=view(rs[c.start].payload);p.setUint32(4,p.getUint32(4,true)&~0x60,true);p.setUint32(20,table.cell_path.length?12000:18000,true);}view(rs[table.record_index].payload).setUint32(20,table.dimensions.rowCount*(table.cell_path.length?12000:18000),true);}
   const p=state.text_boxes[0].paragraphs[0];rs=spliceRawParagraph(rs,p,0,[...p.text].length,'BOX').records;
  }
@@ -32,3 +33,5 @@ export function floatingAreaFixture({columns=1,pageBreak=false,cell=false,nested
  state=inspectLocalComplex(HwpDocument,bytes,{includeDocumentInfo:false,verifyCharacterModel:false});
  return packLocalBodyRewrite(bytes,state.raw,new Map([['BodyText/Section0',encodeRecords(invalidateSectionLayout(state.recordSets.get(0),state.blocks))]]));
 }
+
+export const intentionalOverlapFixture=()=>placementFixture({box:true,boxWidth:6000,boxOffset:10000});

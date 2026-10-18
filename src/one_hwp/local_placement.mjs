@@ -7,15 +7,15 @@ import {objectFlow} from './local_flow_records.mjs';
 import {captureRenderedLayout,contains} from './local_rendered_layout.mjs';
 import {pageProperties,sameProperties} from './local_page_state.mjs';
 import {definitionBytes} from './local_complex_format.mjs';
-import {publishVerifiedPatch} from './local_verified_patch.mjs';
+import {publishVerifiedPatch,publishVerifiedSections} from './local_verified_patch.mjs';
 import {invalidateSectionLayout} from './local_reflow.mjs';
 import {reanchorFloating,floatingTargetRemap} from './local_floating_anchor.mjs';
 import {placeCellFloating} from './local_floating_cell.mjs';
 import {padded,placementFree,placementCandidates} from './local_floating_space.mjs';
 
 const outcome=(bytes,extra={})=>({bytes,content_verified:true,raw_preservation_verified:true,layout_verified:false,...extra});
-const paginationUncertain=l=>l.code!=='INLINE_CONTROL_RENDER_PLANE_DISAGREEMENT';
-const bottomPaginationUncertain=l=>paginationUncertain(l)&&l.code!=='FIXED_FOOTER_SPACING_NOT_MODELED';
+const paginationUncertain=l=>!['INLINE_CONTROL_RENDER_PLANE_DISAGREEMENT','NESTED_TABLE_PAGINATION_UNVERIFIED'].includes(l.code);
+const bottomPaginationUncertain=l=>!['INLINE_CONTROL_RENDER_PLANE_DISAGREEMENT','FIXED_FOOTER_SPACING_NOT_MODELED'].includes(l.code);
 function decode(target,version){if(typeof target!=='string'||!target.startsWith(`hwp5:${version}:`))fail('VERSION_CONFLICT');const x=target.slice(70),id=Buffer.from(x,'base64url').toString();if(!id||Buffer.from(id).toString('base64url')!==x)fail('INVALID_TARGET');return id;}
 function targetObject(state,id,pictureIndex,allowCell=false){
  const group=state.groups.find(g=>g.id===id),box=state.text_boxes.find(g=>g.id===id),opaque=state.opaque_drawings.find(g=>g.id===id),b=state.blocks.find(b=>b.id===(group?.block_id??box?.block_id??opaque?.block_id??id)||standardBlockId(b)===id);if(!b?.text_mapping_verified||b.cell_path.length&&!allowCell)fail('BODY_FLOATING_OBJECT_REQUIRED');
@@ -33,37 +33,46 @@ function columnFrames(state,t,page,column){
  const rs=state.recordSets.get(t.b.section),defs=rs.filter(r=>r.tag===71&&Buffer.from(r.payload.subarray(0,4)).toString()==='dloc');
  if(defs.length!==1||defs[0].payload.length<8)fail('PLACEMENT_COLUMN_PROFILE_UNSUPPORTED');
  const flags=view(defs[0].payload).getUint16(4,true),count=(flags>>>2)&255,cols=page.info.columns;
- if(!count||count>8||(flags&3)!==0||!(flags&0x1000)||!Array.isArray(cols)||cols.length!==count)fail('PLACEMENT_COLUMN_LAYOUT_UNVERIFIED');
+ if(!count||count>8||(flags&0xc03)!==0||!Array.isArray(cols)||cols.length!==count)fail('PLACEMENT_COLUMN_LAYOUT_UNVERIFIED');
  if(column!==undefined&&(!Number.isSafeInteger(column)||column<0||column>=count))fail('INVALID_PLACEMENT_COLUMN');
  const frames=cols.map(c=>({x:c.x,y:page.body.y,w:c.width,h:page.body.h}));
  if(frames.some((f,i)=>!Number.isFinite(f.x)||!Number.isFinite(f.w)||f.w<=0||!contains(page.body,f)||i&&frames[i-1].x+frames[i-1].w>f.x+.5))fail('PLACEMENT_COLUMN_LAYOUT_UNVERIFIED');
- const spacing=view(defs[0].payload).getUint16(6,true)/75,width=(page.body.w-spacing*(count-1))/count;if(frames.some((f,i)=>Math.abs(f.w-width)>1||Math.abs(f.x-(page.body.x+i*(width+spacing)))>1))fail('PLACEMENT_COLUMN_LAYOUT_UNVERIFIED');
+ if(flags&0x1000){const spacing=view(defs[0].payload).getUint16(6,true)/75,width=(page.body.w-spacing*(count-1))/count;if(frames.some((f,i)=>Math.abs(f.w-width)>1||Math.abs(f.x-(page.body.x+i*(width+spacing)))>1))fail('PLACEMENT_COLUMN_LAYOUT_UNVERIFIED');}
+ else{
+  const raw=defs[0].payload;if(count<2||raw.length!==14+count*4)fail('PLACEMENT_COLUMN_LAYOUT_UNVERIFIED');const v=view(raw),weights=Array.from({length:count},(_,i)=>({w:v.getInt16(8+i*4,true),gap:v.getInt16(10+i*4,true)}));
+  if(weights.some(c=>c.w<=0||c.gap<0)||weights.at(-1).gap!==0||weights.reduce((n,c)=>n+c.w+c.gap,0)!==32768)fail('PLACEMENT_COLUMN_LAYOUT_UNVERIFIED');
+  let x=page.body.x;for(const [i,c]of weights.entries()){if(Math.abs(frames[i].x-x)>1||Math.abs(frames[i].w-page.body.w*c.w/32768)>1)fail('PLACEMENT_COLUMN_LAYOUT_UNVERIFIED');x+=page.body.w*(c.w+c.gap)/32768;}
+ }
  return column===undefined?frames:[frames[column]];
 }
 export function placementLocal(HwpDocument,source,version,op){
  const state=inspectLocalComplex(HwpDocument,source,{includeDocumentInfo:false,verifyCharacterModel:false});
  if(op.type==='protect_page_bottom')return protectBottom(HwpDocument,source,version,state,op);
- const allowed=['type','target_id','expected_old','expected_properties','expected_flow','picture_index','clearance','destination_target_id','expected_destination','destination_column'];if(op.type!=='reposition_floating_object'||Object.keys(op).some(k=>!allowed.includes(k))||['type','target_id','expected_old','expected_properties','expected_flow'].some(k=>!Object.hasOwn(op,k))||Object.hasOwn(op,'destination_target_id')!==Object.hasOwn(op,'expected_destination'))fail('INVALID_OPERATION');
+ const allowed=['type','target_id','expected_old','expected_properties','expected_flow','picture_index','clearance','destination_target_id','expected_destination','destination_column','overlap_policy'];if(op.type!=='reposition_floating_object'||Object.keys(op).some(k=>!allowed.includes(k))||['type','target_id','expected_old','expected_properties','expected_flow'].some(k=>!Object.hasOwn(op,k))||Object.hasOwn(op,'destination_target_id')!==Object.hasOwn(op,'expected_destination'))fail('INVALID_OPERATION');
+ if(op.overlap_policy!==undefined&&!['avoid','preserve_existing'].includes(op.overlap_policy))fail('INVALID_OVERLAP_POLICY');const preserveOverlap=op.overlap_policy==='preserve_existing';
  const t=targetObject(state,decode(op.target_id,version),op.picture_index,true);if(t.b.text!==op.expected_old)fail('EXPECTED_OLD_MISMATCH');if(!sameProperties(op.expected_properties,t.selected.properties)||!sameProperties(op.expected_flow,t.flow))fail('EXPECTED_OBJECT_FLOW_MISMATCH');
  const clearance=op.clearance??900;if(!Number.isSafeInteger(clearance)||clearance<0||clearance>7200)fail('INVALID_CLEARANCE');const gap=clearance/75;
  const destination=op.destination_target_id===undefined?t.b:state.blocks.find(b=>b.id===decode(op.destination_target_id,version)||standardBlockId(b)===decode(op.destination_target_id,version));
  if(!destination?.text_mapping_verified)fail('PLACEMENT_DESTINATION_UNVERIFIED');if(op.destination_target_id!==undefined&&destination.text!==op.expected_destination)fail('EXPECTED_DESTINATION_MISMATCH');
- if(t.b.cell_path.length){if(destination.id!==t.b.id||op.destination_column!==undefined)fail('PLACEMENT_REANCHOR_BODY_REQUIRED');return placeCellFloating(HwpDocument,source,state,t,clearance);}
- const before=captureRenderedLayout(HwpDocument,source),originalAt=located(before,t),rs=state.recordSets.get(t.b.section),defs=rs.filter(r=>r.tag===73);if(defs.length!==1||pageProperties(defs[0]).attributes!==0)fail('PLACEMENT_PAGE_PROFILE_UNSUPPORTED');
+ if(preserveOverlap&&destination.id!==t.b.id)fail('PLACEMENT_OVERLAP_PRESERVATION_REQUIRES_SAME_ANCHOR');
+ if(destination.cell_path.length&&op.destination_column!==undefined)fail('INVALID_PLACEMENT_COLUMN');
+ if(t.b.cell_path.length&&destination.id===t.b.id)return placeCellFloating(HwpDocument,source,state,t,clearance,preserveOverlap);
+ const before=captureRenderedLayout(HwpDocument,source),originalAt=t.b.cell_path.length?null:located(before,t),rs=state.recordSets.get(t.b.section),defs=rs.filter(r=>r.tag===73);if(defs.length!==1||pageProperties(defs[0]).attributes!==0)fail('PLACEMENT_PAGE_PROFILE_UNSUPPORTED');
  const anchored=reanchorFloating(state,t,destination),reanchored=Boolean(anchored.remap);let baseSource=source,baseState=state,baseT=t,baseRecords=rs;
- if(reanchored){baseSource=publishVerifiedPatch(source,state,t.b.section,anchored.records);baseState=inspectLocalComplex(HwpDocument,baseSource,{includeDocumentInfo:false,verifyCharacterModel:false});baseRecords=baseState.recordSets.get(t.b.section);const index=anchored.records.indexOf(anchored.selected_record),key=t.selected.paragraphs?'text_boxes':t.selected.pictures?'groups':t.selected.contents_read_only?'opaque_drawings':'pictures',selected=baseState[key].find(o=>o.record_index===index);if(!selected)fail('PLACEMENT_IDENTITY_REMAP_UNVERIFIED');baseT=targetObject(baseState,selected.id??selected.block_id,selected.picture_index,true);}
+ if(reanchored){baseSource=publishVerifiedSections(source,state,anchored.recordSets);baseState=inspectLocalComplex(HwpDocument,baseSource,{includeDocumentInfo:false,verifyCharacterModel:false});baseRecords=baseState.recordSets.get(destination.section);const index=anchored.recordSets.get(destination.section).indexOf(anchored.selected_record),key=t.selected.paragraphs?'text_boxes':t.selected.pictures?'groups':t.selected.contents_read_only?'opaque_drawings':'pictures',selected=baseState[key].find(o=>o.section===destination.section&&o.record_index===index);if(!selected)fail('PLACEMENT_IDENTITY_REMAP_UNVERIFIED');baseT=targetObject(baseState,selected.id??selected.block_id,selected.picture_index,true);const pages=baseRecords.filter(r=>r.tag===73);if(pages.length!==1||pageProperties(pages[0]).attributes!==0)fail('PLACEMENT_PAGE_PROFILE_UNSUPPORTED');}
+ const remap=reanchored?floatingTargetRemap(state,baseState,anchored.recordSets,state.recordSets,t.selected,anchored.selected_record,anchored.origins):null;
+ if(baseT.b.cell_path.length){const result=placeCellFloating(HwpDocument,baseSource,baseState,baseT,clearance);return {...result,unchanged:false,structure_changed:true,_target_remap:remap,raw_preservation_scope:'selected_floating_offsets_anchor_and_subtree_levels_host_text_style_indices_and_line_caches; visible_text_styles_flow_geometry_other_controls_and_streams_exact'};}
  const at=located(reanchored?captureRenderedLayout(HwpDocument,baseSource):before,baseT);if(at.page.limitations.some(paginationUncertain))fail('PLACEMENT_PAGINATION_UNVERIFIED');
  const frames=columnFrames(baseState,baseT,at.page,op.destination_column),padding={l:t.flow.marginLeft/75,r:t.flow.marginRight/75,top:t.flow.marginTop/75,bottom:t.flow.marginBottom/75},original=padded(at.rect,padding),others=obstacles(at.page,baseT);
+ if(preserveOverlap&&frames.some(frame=>contains(frame,original)))return outcome(source,{unchanged:true,floating_state_preserved:true,existing_overlap_preserved:true});
  const alreadyFree=frames.some(frame=>placementFree(original,frame,others,gap));if(alreadyFree&&!reanchored)return outcome(source,{unchanged:true,floating_state_preserved:true});
  const candidates=alreadyFree?[original]:placementCandidates(original,frames,others,gap);
  for(const candidate of candidates.slice(0,8)){
   const props={...t.selected.properties,horzOffset:t.selected.properties.horzOffset+Math.round((candidate.x-original.x)*75),vertOffset:t.selected.properties.vertOffset+Math.round((candidate.y-original.y)*75)};if(Math.abs(props.horzOffset)>720000||Math.abs(props.vertOffset)>720000)continue;
-  const payload=baseRecords[baseT.selected.record_index].payload.slice();view(payload).setInt32(12,props.horzOffset,true);view(payload).setInt32(8,props.vertOffset,true);const selectedRecord={...baseRecords[baseT.selected.record_index],payload},records=invalidateSectionLayout(baseRecords.map((r,i)=>i===baseT.selected.record_index?selectedRecord:r),baseState.blocks.filter(b=>b.section===t.b.section));
-  const bytes=publishVerifiedPatch(baseSource,baseState,t.b.section,records),after=captureRenderedLayout(HwpDocument,bytes);let moved;try{moved=located(after,baseT);}catch(e){if(!e.code)throw e;continue;}
+  const payload=baseRecords[baseT.selected.record_index].payload.slice();view(payload).setInt32(12,props.horzOffset,true);view(payload).setInt32(8,props.vertOffset,true);const selectedRecord={...baseRecords[baseT.selected.record_index],payload},records=invalidateSectionLayout(baseRecords.map((r,i)=>i===baseT.selected.record_index?selectedRecord:r),baseState.blocks.filter(b=>b.section===baseT.b.section));
+  const bytes=publishVerifiedPatch(baseSource,baseState,baseT.b.section,records),after=captureRenderedLayout(HwpDocument,bytes);let moved;try{moved=located(after,baseT);}catch(e){if(!e.code)throw e;continue;}
   if(moved.page.page!==at.page.page||moved.page.limitations.some(paginationUncertain)||!columnFrames(baseState,baseT,moved.page,op.destination_column).some(frame=>placementFree(padded(moved.rect,padding),frame,obstacles(moved.page,baseT),gap)))continue;
-  let remap;
-  if(reanchored){const finalState=inspectLocalComplex(HwpDocument,bytes,{includeDocumentInfo:false,verifyCharacterModel:false}),positions=new Map(anchored.records.map((r,i)=>[r,i])),origins=rs.map(r=>{const i=positions.get(r);return i===undefined?r:baseRecords[i];});remap=floatingTargetRemap(state,finalState,records,origins,t.selected,selectedRecord);}
-  return outcome(bytes,{...(remap?{_target_remap:remap,structure_changed:true,...(!t.selected.id?{_relocated_picture_hosts:[t.b.id,standardBlockId(t.b)]}:{} )}:{}),floating_state_preserved:true,picture_group_changed:Boolean(t.selected.pictures),picture_changed:!t.selected.contents_read_only&&!t.selected.pictures&&!t.selected.paragraphs,opaque_drawing_moved:Boolean(t.selected.contents_read_only),text_box_changed:Boolean(t.selected.paragraphs),placement:{page:at.page.page,previous_page:originalAt.page.page,clearance,...(op.destination_column!==undefined?{column:op.destination_column}:{}),before:{x:originalAt.rect.x,y:originalAt.rect.y},after:{x:moved.rect.x,y:moved.rect.y},properties:props,engine_checked:true,native_layout_verified:false},raw_preservation_scope:'selected_floating_offsets_optional_body_anchor_text_style_indices_and_mapped_line_caches; flow_size_images_matrices_other_controls_and_streams_exact'});
+  return outcome(bytes,{...(remap?{_target_remap:remap,structure_changed:true,...(!t.selected.id?{_relocated_picture_hosts:[t.b.id,standardBlockId(t.b)]}:{} )}:{}),floating_state_preserved:true,picture_group_changed:Boolean(t.selected.pictures),picture_changed:!t.selected.contents_read_only&&!t.selected.pictures&&!t.selected.paragraphs,opaque_drawing_moved:Boolean(t.selected.contents_read_only),text_box_changed:Boolean(t.selected.paragraphs),placement:{page:at.page.page,previous_page:originalAt?.page.page??null,clearance,...(op.destination_column!==undefined?{column:op.destination_column}:{}),before:originalAt?{x:originalAt.rect.x,y:originalAt.rect.y}:null,after:{x:moved.rect.x,y:moved.rect.y},properties:props,engine_checked:true,engine_limitations:at.page.limitations.map(l=>l.code),native_layout_verified:false},raw_preservation_scope:'selected_floating_offsets_optional_anchor_subtree_levels_host_text_style_indices_and_mapped_line_caches; flow_size_images_matrices_other_controls_and_streams_exact'});
  }
  fail('NO_FLOATING_PLACEMENT_SPACE');
 }
