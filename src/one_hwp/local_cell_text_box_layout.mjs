@@ -4,30 +4,12 @@ import {view,fail} from './local_complex_records.mjs';
 import {layoutObjectIdentity} from './local_layout_identity.mjs';
 import {textBoxGeometry} from './local_text_box_geometry.mjs';
 import {captureRenderedLayout,contains,intersects} from './local_rendered_layout.mjs';
+import {projectNestedAnchor,nestedTextBand} from './local_nested_anchor.mjs';
+import {locateCell} from './local_cell_frame.mjs';
+export {locateCell} from './local_cell_frame.mjs';
 const same=(a,b)=>JSON.stringify(a)===JSON.stringify(b);
-const finite=r=>r&&['x','y','w','h'].every(k=>Number.isFinite(r[k]))&&r.w>0&&r.h>0;
-const dimensions=(c,t)=>c.rowCount===t.dimensions.rowCount&&c.colCount===t.dimensions.colCount&&Math.abs(c.w-t.properties.tableWidth/75)<2;
 
-export function locateCell(state,box,snapshot,tick){
- const path=box.cell_path,root=state.tables.find(t=>t.section===box.section&&t.paragraph===box.paragraph&&!t.cell_path.length&&t.control===path[0].controlIndex);
- if(!root)return null;
- const roots=snapshot.pages.flatMap(page=>page.controls.filter(c=>{tick();return c.type==='table'&&same(c.stableIndex,[box.section,box.paragraph,root.control])&&dimensions(c,root);}).map(table=>({page,table})));
- if(roots.length!==1)return null;
- const {page}=roots[0];let frame=roots[0].table;
- for(let depth=0;depth<path.length;depth++){
-  const cells=frame.cells?.filter(c=>c.cellIdx===path[depth].cellIndex)??[];if(cells.length!==1||!finite(cells[0]))return null;
-  const cell=cells[0];if(depth===path.length-1)return {page,cell,root_table:root,root_frame:roots[0].table};
-  const prefix=path.slice(0,depth+1),next=state.tables.find(t=>t.section===box.section&&t.paragraph===box.paragraph&&same(t.cell_path,prefix)&&t.control===path[depth+1].controlIndex);if(!next)return null;
-  // Core currently truncates some nested identities. Only a unique matching
-  // raw table and contained rendered frame may resolve that missing path.
-  const peers=state.tables.filter(t=>t.section===box.section&&t.paragraph===box.paragraph&&same(t.cell_path,prefix)&&t.dimensions.rowCount===next.dimensions.rowCount&&t.dimensions.colCount===next.dimensions.colCount&&t.properties.tableWidth===next.properties.tableWidth);
-  if(peers.length!==1)return null;
-  const frames=page.controls.filter(c=>{tick();return c.type==='table'&&c!==frame&&dimensions(c,next)&&contains(cell,c,2);});if(frames.length!==1)return null;frame=frames[0];
- }
- return null;
-}
-
-export function diagnoseCellTextBoxes(state,{HwpDocument,bytes,snapshot:provided,estimateHeight,estimateCellHeight,estimateTableHeight,getContainer},add){
+export function diagnoseCellTextBoxes(state,{HwpDocument,bytes,snapshot:provided,estimateHeight,estimateParagraphHeight,estimateCellHeight,estimateTableHeight,getContainer},add){
  const boxes=(state.text_boxes??[]).filter(b=>b.cell_path.length),limitations=[];let checks=0,checked=0;
  const result=()=>({status:!boxes.length?'not_applicable':limitations.length?'inconclusive':'checked_supported_profiles',checks,checked_boxes:checked,total_boxes:boxes.length,limitations,native_layout_verified:false});
  if(!boxes.length)return result();
@@ -45,6 +27,13 @@ export function diagnoseCellTextBoxes(state,{HwpDocument,bytes,snapshot:provided
   if(estimate>p.height)issue('CELL_TEXT_BOX_CONTENT_MAY_EXCEED_FRAME_HEIGHT',estimate,p.height,'font_estimate');
   const cellFlags=view(rs[container.cell.start].payload).getUint32(4,true);
   if(!textBoxGeometry(state,box)||f.vertRelTo!==2||f.horzRelTo!==2||box.cell_path.at(-1).cellParaIndex!==0||(cellFlags&7)!==0){limit('CELL_TEXT_BOX_ANCHOR_OR_FRAME_UNVERIFIED',box);continue;}
+  if(box.cell_path.length>1){let projected,band;try{projected=projectNestedAnchor(state,box,snapshot);if(estimateParagraphHeight)band=nestedTextBand(state,box,projected,estimateParagraphHeight);}catch(error){if(!(error instanceof GuardError))throw error;projected=null;limit(error.code,box);}
+   if(projected){checked++;limit('NESTED_FLOATING_RENDER_ORIGIN_DISAGREEMENT',box);const rect={...projected.rect,h:Math.max(projected.rect.h,estimate/75)},frame=projected.frame,extra={page:projected.page,basis:'hwp_column_and_root_paragraph_reference_with_measured_inline_prefix'};
+    for(const [code,amount]of [['LEFT',frame.x-rect.x],['RIGHT',rect.x+rect.w-frame.x-frame.w],['TOP',frame.y-rect.y],['BOTTOM',rect.y+rect.h-frame.y-frame.h]])if(amount>.5)issue('CELL_TEXT_BOX_PROJECTED_'+code+'_BOUNDARY',Math.ceil(amount*75),0,'font_estimate',extra);
+    if(band?.h&&intersects(rect,band))issue('CELL_TEXT_BOX_PROJECTED_CELL_TEXT_INTERSECTION',Math.ceil((Math.min(rect.y+rect.h,band.y+band.h)-Math.max(rect.y,band.y))*75),0,'font_estimate',extra);
+    continue;
+   }
+  }
   const at=locateCell(state,box,snapshot,tick);if(!at){limit('CELL_TEXT_BOX_RENDER_IDENTITY_UNVERIFIED',box);continue;}
   for(const l of at.page.limitations)if(!limitations.some(x=>x.code===l.code&&x.page===l.page))limitations.push(l);
   const paddingX=(container.cell.width-container.width)/75,paddingY=(container.cell.height-container.height)/75;

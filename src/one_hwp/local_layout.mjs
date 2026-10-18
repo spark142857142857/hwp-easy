@@ -17,7 +17,7 @@ export function minimumGlyphWidth(block){
  }return width;
 }
 /** Font-based risk estimate, never a native line-height or pagination proof. */
-function textHeight(block,width){
+export function textHeight(block,width){
  if(width<=0)return 0;const points=[...block.text],runs=block.character_runs??[];let x=0,h=0,line=0,run=0;
  const spacing=block.paragraph_properties?.lineSpacingType===0?Math.max(100,block.paragraph_properties.lineSpacing??160)/100:1.6;
  for(let i=0;i<points.length;i++){
@@ -81,15 +81,15 @@ export function analyzeLocalLayout(state,options={}){
    const extent=Math.ceil(boundWidth+Math.max(0,props.horzOffset)-1e-7);if(extent>parent.width)add('PICTURE_EXCEEDS_CELL_WIDTH',b,extent,parent.width,'geometry',{picture_index:p.picture_index,object_identity:layoutObjectIdentity(state,p)});}
   for(const g of state.groups.filter(g=>g.block_id===b.id)){checks++;const p=g.properties,extent=p.width+Math.max(0,p.horzOffset);if(extent>parent.width)add('GROUP_EXCEEDS_CELL_WIDTH',b,extent,parent.width,'geometry',{group_id:g.id,object_identity:layoutObjectIdentity(state,g)});}
   for(const box of (state.text_boxes??[]).filter(box=>box.block_id===b.id&&!box.flow.treatAsChar&&box.flow.widthRelTo===4&&box.flow.horzRelTo===2&&box.flow.horzAlign===0)){
-   checks++;const p=box.properties,extent=p.width+Math.max(0,p.horzOffset)+box.flow.marginLeft+box.flow.marginRight;
+   checks++;const p=box.properties,extent=p.width+(box.cell_path.length>1?0:Math.max(0,p.horzOffset))+box.flow.marginLeft+box.flow.marginRight;
    if(extent>parent.width)add('TEXT_BOX_EXCEEDS_CELL_WIDTH',b,extent,parent.width,'geometry',{text_box_id:box.id,object_identity:layoutObjectIdentity(state,box)});
-   if(p.horzOffset<box.flow.marginLeft)add('TEXT_BOX_EXCEEDS_CELL_LEFT_BOUNDARY',b,box.flow.marginLeft-p.horzOffset,0,'geometry',{text_box_id:box.id,object_identity:layoutObjectIdentity(state,box)});
+   if(box.cell_path.length===1&&p.horzOffset<box.flow.marginLeft)add('TEXT_BOX_EXCEEDS_CELL_LEFT_BOUNDARY',b,box.flow.marginLeft-p.horzOffset,0,'geometry',{text_box_id:box.id,object_identity:layoutObjectIdentity(state,box)});
   }
  }
  const tableEstimates=tableHeightEstimator(state);cellPageRisks(state,add,tableEstimates.tableHeight);
  const estimateHeight=state.text_boxes?.length?textBoxHeightEstimator(state):()=>0;
  checks+=fixedTextBoxRisks(state,add,estimateHeight);
- const cell_text_boxes=diagnoseCellTextBoxes(state,{...options,estimateHeight,estimateCellHeight:tableEstimates.cellHeight,estimateTableHeight:tableEstimates.tableHeight,getContainer:b=>cellContainer(state,b)},add);checks+=cell_text_boxes.checks;
+ const cell_text_boxes=diagnoseCellTextBoxes(state,{...options,estimateHeight,estimateParagraphHeight:textHeight,estimateCellHeight:tableEstimates.cellHeight,estimateTableHeight:tableEstimates.tableHeight,getContainer:b=>cellContainer(state,b)},add);checks+=cell_text_boxes.checks;
  return {status:issues.length?'issues_detected':cell_text_boxes.status==='inconclusive'?'inconclusive':'no_checked_geometry_overflow',checks,issues,cell_text_boxes,geometry_overflows:issues.filter(x=>x.certainty==='geometry').length,font_warnings:issues.filter(x=>x.certainty==='font_estimate').length,layout_verified:false,scope:'mapped cell geometry, font-based height risks and bounded rendered cell text-box observations',not_checked:['native page pagination','stored minimum row height versus actual reflow','exact multi-line text height and nonzero internal text-box padding','unverified cell text-box anchors and ambiguous rendered identities','general floating-object overlap','font substitution','arbitrary shape transforms']};
 }
 export function newLayoutIssues(before,after,remap={},removedObjects=[]){

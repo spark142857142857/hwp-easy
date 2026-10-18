@@ -8,10 +8,11 @@ import {invalidateSectionLayout} from './local_layout_cache.mjs';
 import {reanchorFloating} from './local_floating_anchor.mjs';
 import {padded,placementFree,placementCandidates} from './local_floating_space.mjs';
 import {textBoxHeightEstimator} from './local_layout.mjs';
+import {placeNestedFloating} from './local_nested_floating.mjs';
 
 export function placeCellFloating(HwpDocument,source,state,t,clearance){
  const box=t.selected,path=t.b.cell_path,rs=state.recordSets.get(t.b.section);
- if(path.length!==1)fail('PLACEMENT_CELL_NESTED_ANCHOR_UNVERIFIED');
+ if(path.length>1)return placeNestedFloating(HwpDocument,source,state,t,clearance);
  if(!box.paragraphs||!textBoxGeometry(state,box)||t.flow.vertRelTo!==2||t.flow.horzRelTo!==2||path.at(-1).cellParaIndex!==0||t.flow.textWrap!==3)fail('PLACEMENT_CELL_PROFILE_UNSUPPORTED');
  const list=rs[box.record_index+2];if(list?.tag!==72||list.payload.length!==33||list.payload.subarray(8).some(n=>n!==0)||textBoxHeightEstimator(state)(box)>box.properties.height)fail('PLACEMENT_CELL_CONTENT_FRAME_UNVERIFIED');
  const table=state.tables.find(a=>a.section===t.b.section&&a.paragraph===t.b.paragraph&&equal(a.cell_path,path.slice(0,-1))&&a.control===path.at(-1).controlIndex),cell=table?.cells.find(c=>c.cell===path.at(-1).cellIndex);
