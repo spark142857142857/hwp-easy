@@ -6,6 +6,8 @@ import {complexParagraphProperties} from './local_complex_paragraph.mjs';
 import {layoutObjectIdentity} from './local_layout_identity.mjs';
 import {diagnoseCellTextBoxes} from './local_cell_text_box_layout.mjs';
 import {captureRenderedLayout} from './local_rendered_layout.mjs';
+import {nestedFloatingObject} from './local_nested_object.mjs';
+import {nestedReferenceLayout} from './local_nested_reference.mjs';
 import {projectNestedAnchor} from './local_nested_anchor.mjs';
 import {GuardError} from '../../probes/sites-runtime/guard/records.mjs';
 function padding(state,table,cell){const v=view(state.recordSets.get(table.section)[cell.start].payload);return (v.getUint32(4,true)&0x10000)?[24,26,28,30].map(at=>v.getUint16(at,true)):['paddingLeft','paddingRight','paddingTop','paddingBottom'].map(k=>table.properties[k]);}
@@ -76,14 +78,17 @@ function cellPageRisks(state,add,tableHeight){
 }
 export function analyzeLocalLayout(state,options={}){
  const issues=[];let checks=0;const add=(code,b,size,available,certainty='geometry',extra={})=>{issues.push({code,block_id:b.id,section:b.section,cell_path:b.cell_path,size,available,certainty,...extra,signature:createHash('sha256').update(JSON.stringify([code,b.section,size,available])).digest('hex')});};
- let snapshot=options.snapshot;if(!snapshot&&state.text_boxes?.some(b=>b.cell_path.length)&&options.HwpDocument&&options.bytes){try{snapshot=captureRenderedLayout(options.HwpDocument,options.bytes);}catch(error){if(!(error instanceof GuardError))throw error;}}
+ let snapshot=options.snapshot;if(!snapshot&&[...(state.text_boxes??[]),...(state.pictures??[]),...(state.groups??[])].some(o=>state.blocks.find(b=>b.id===o.block_id)?.cell_path.length)&&options.HwpDocument&&options.bytes){try{snapshot=captureRenderedLayout(options.HwpDocument,options.bytes);}catch(error){if(!(error instanceof GuardError))throw error;}}
  for(const b of state.blocks){const parent=cellContainer(state,b);if(!parent)continue;checks++;
   if(parent.width<=0)add('CELL_PADDING_EXCEEDS_WIDTH',b,parent.cell.width-parent.width,parent.cell.width);
   const glyph=minimumGlyphWidth(b);if(glyph&&parent.width>0&&glyph>parent.width)add('CELL_SINGLE_GLYPH_MAY_CLIP',b,glyph,parent.width,'font_estimate');
   for(const t of state.tables.filter(t=>t.parent_id===b.id)){checks++;if(t.properties.tableWidth>parent.width)add('NESTED_TABLE_EXCEEDS_CELL_WIDTH',b,t.properties.tableWidth,parent.width,'geometry',{table_id:t.id,object_identity:layoutObjectIdentity(state,t)});}
-  for(const p of state.pictures.filter(p=>p.block_id===b.id)){checks++;const props=p.properties,theta=props.rotationAngle*Math.PI/180,boundWidth=Math.abs(Math.cos(theta))*props.width+Math.abs(Math.sin(theta))*props.height;
-   const extent=Math.ceil(boundWidth+Math.max(0,props.horzOffset)-1e-7);if(extent>parent.width)add('PICTURE_EXCEEDS_CELL_WIDTH',b,extent,parent.width,'geometry',{picture_index:p.picture_index,object_identity:layoutObjectIdentity(state,p)});}
-  for(const g of state.groups.filter(g=>g.block_id===b.id)){checks++;const p=g.properties,extent=p.width+Math.max(0,p.horzOffset);if(extent>parent.width)add('GROUP_EXCEEDS_CELL_WIDTH',b,extent,parent.width,'geometry',{group_id:g.id,object_identity:layoutObjectIdentity(state,g)});}
+  for(const object of [...state.pictures,...state.groups].filter(o=>o.block_id===b.id)){
+   checks++;let projected=null;if(snapshot)try{const reference=nestedReferenceLayout(state,object,{...options,snapshot});projected=projectNestedAnchor(state,nestedFloatingObject(state,object),reference);}catch(error){if(!(error instanceof GuardError))throw error;}
+   const p=object.properties,isPicture=object.picture_index!==undefined,theta=(p.rotationAngle??0)*Math.PI/180,width=projected?p.width:Math.abs(Math.cos(theta))*p.width+Math.abs(Math.sin(theta))*p.height,extent=Math.ceil(width+(projected?0:Math.max(0,p.horzOffset))-1e-7),extra={...(isPicture?{picture_index:object.picture_index}:{group_id:object.id}),object_identity:layoutObjectIdentity(state,object)};
+   if(extent>parent.width)add(isPicture?'PICTURE_EXCEEDS_CELL_WIDTH':'GROUP_EXCEEDS_CELL_WIDTH',b,extent,parent.width,'geometry',extra);
+   if(projected){const r=projected.rect,f=projected.frame;for(const [side,amount]of [['LEFT',f.x-r.x],['RIGHT',r.x+r.w-f.x-f.w],['TOP',f.y-r.y],['BOTTOM',r.y+r.h-f.y-f.h]])if(amount>.5)add((isPicture?'CELL_PICTURE_PROJECTED_':'CELL_GROUP_PROJECTED_')+side+'_BOUNDARY',b,Math.ceil(amount*75),0,'font_estimate',{...extra,basis:'hwp_column_and_root_paragraph_reference',page:projected.page});}
+  }
   for(const box of (state.text_boxes??[]).filter(box=>box.block_id===b.id&&!box.flow.treatAsChar&&box.flow.widthRelTo===4&&box.flow.horzRelTo===2&&box.flow.horzAlign===0)){
    let projected=false;if(snapshot)try{projected=Boolean(projectNestedAnchor(state,box,snapshot));}catch(error){if(!(error instanceof GuardError))throw error;}
    checks++;const p=box.properties,extent=p.width+(box.cell_path.length>1||projected?0:Math.max(0,p.horzOffset))+box.flow.marginLeft+box.flow.marginRight;

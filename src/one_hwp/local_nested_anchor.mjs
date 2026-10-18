@@ -6,7 +6,7 @@ import {trackPositions} from './local_complex_table.mjs';
 import {parseRecords} from '../../probes/sites-runtime/guard/records.mjs';
 
 const plain=p=>p&&['left','justify'].includes(p.alignment)&&['marginLeft','marginRight','indent','spacingBefore','spacingAfter'].every(k=>p[k]===0)&&p.lineSpacingType===0&&p.lineSpacing>=100&&!p.pageBreakBefore;
-const tableFlow=r=>{if(r?.tag!==71||r.payload.length<36)fail('NESTED_PLACEMENT_TABLE_PROFILE_UNSUPPORTED');const v=view(r.payload),f=v.getUint32(4,true);return {treatAsChar:Boolean(f&1),widthRelTo:(f>>>15)&7,heightRelTo:(f>>>18)&3,vertRelTo:(f>>>3)&3,horzRelTo:(f>>>8)&3,vertAlign:(f>>>5)&7,horzAlign:(f>>>10)&7,vertOffset:v.getInt32(8,true),horzOffset:v.getInt32(12,true),marginLeft:v.getUint16(28,true),marginTop:v.getUint16(32,true)};};
+const tableFlow=r=>{if(r?.tag!==71||r.payload.length<36)fail('NESTED_PLACEMENT_TABLE_PROFILE_UNSUPPORTED');const v=view(r.payload),f=v.getUint32(4,true);return {treatAsChar:Boolean(f&1),widthRelTo:(f>>>15)&7,heightRelTo:(f>>>18)&3,vertRelTo:(f>>>3)&3,horzRelTo:(f>>>8)&3,vertAlign:(f>>>5)&7,horzAlign:(f>>>10)&7,vertOffset:v.getInt32(8,true),horzOffset:v.getInt32(12,true),marginLeft:v.getUint16(28,true),marginTop:v.getUint16(32,true),marginBottom:v.getUint16(34,true)};};
 function pads(rs,table,cell){const v=view(rs[cell.start].payload);return (v.getUint32(4,true)&0x10000)?[24,26,28,30].map(at=>v.getUint16(at,true)/75):['Left','Right','Top','Bottom'].map(k=>table.properties['padding'+k]/75);}
 function cellBox(rs,table,cell,origin){
  const flags=view(rs[cell.start].payload).getUint32(4,true);
@@ -37,7 +37,7 @@ export function projectNestedAnchor(state,box,snapshot){
  if(rs.slice(host.record_index+1,host.records_end).some(r=>r.tag===71&&r.level===host.raw_level+1&&r!==rs[root.record_index]&&!['dces','dloc'].includes(Buffer.from(r.payload.subarray(0,4)).toString())))fail('NESTED_PLACEMENT_ROOT_UNVERIFIED');
  const ancestors=new Set(at.lineage.map(l=>l.table));for(const t of state.tables.filter(t=>t.section===box.section&&t.paragraph===box.paragraph&&!ancestors.has(t))){
   const disjoint=t.cell_path.some((p,i)=>i<box.cell_path.length&&equal(t.cell_path.slice(0,i),box.cell_path.slice(0,i))&&p.controlIndex===box.cell_path[i].controlIndex&&p.cellIndex!==box.cell_path[i].cellIndex);
-  const owner=disjoint&&locateCell(state,{...box,cell_path:t.cell_path},snapshot,()=>{if(++checks>200000)fail('NESTED_PLACEMENT_CHECK_LIMIT');}),entry=owner?.lineage.at(-1),c=entry?.table.cells.find(c=>c.cell===t.cell_path.at(-1).cellIndex);
+  const owner=disjoint&&locateCell(state,{...box,cell_path:t.cell_path},snapshot,()=>{if(++checks>200000)fail('NESTED_PLACEMENT_CHECK_LIMIT');}),entry=owner?.lineage?.at(-1),c=entry?.table.cells.find(c=>c.cell===t.cell_path.at(-1).cellIndex);
   if(!owner||!c||Math.abs(owner.cell.h-c.height/75)>2||t.properties.tableWidth/75>owner.cell.w-12||t.properties.tableHeight/75>owner.cell.h-12)fail('NESTED_PLACEMENT_OTHER_TABLE_UNVERIFIED');
  }
  const rootFlow=tableFlow(rs[root.record_index]);if(rootFlow.widthRelTo!==4||rootFlow.heightRelTo!==2||!rootFlow.treatAsChar&&(rootFlow.vertRelTo!==2||![2,3].includes(rootFlow.horzRelTo)||rootFlow.vertAlign!==0||rootFlow.horzAlign!==0||rootFlow.vertOffset!==0||rootFlow.horzOffset!==0))fail('NESTED_PLACEMENT_ROOT_UNVERIFIED');
@@ -46,12 +46,18 @@ export function projectNestedAnchor(state,box,snapshot){
   const table=entry.table,rawCell=table.cells.find(c=>c.cell===box.cell_path[depth].cellIndex);if(!rawCell)fail('NESTED_PLACEMENT_GRID_UNVERIFIED');
   if(depth){const parent=at.lineage[depth-1],parentCell=parent.table.cells.find(c=>c.cell===box.cell_path[depth-1].cellIndex),p=pads(rs,parent.table,parentCell),prefix=inlinePrefix(state,snapshot,table),flow=tableFlow(rs[table.record_index]);
    if(!flow.treatAsChar||flow.widthRelTo!==4||flow.heightRelTo!==2)fail('NESTED_PLACEMENT_TABLE_PROFILE_UNSUPPORTED');
-   origin={x:cell.x+p[0]+prefix.width+flow.marginLeft/75,y:cell.y+p[2]+flow.marginTop/75};uncertainty+=prefix.error;
+   const align=(view(rs[parentCell.start].payload).getUint32(4,true)>>>5)&3,contentHeight=(table.properties.tableHeight+flow.marginTop+flow.marginBottom)/75,room=cell.h-p[2]-p[3]-contentHeight,shift=align===1?room/2:align===2?room:0;
+   // A single inline table dominates this verified one-line paragraph. Its
+   // outer vertical margins participate in ancestor-cell alignment. Core also
+   // counts the selected cell-local floating plane in its alignment height;
+   // that plane cannot establish a native origin. Require a fixed raw grid
+   // and one verified inline-table paragraph instead.
+   if(align&&(room<0||parentCell.blocks.length!==1||Math.abs(parent.cell.h-cell.h)>2||Math.abs(entry.frame.y-parent.cell.y-p[2]-shift)>2))fail('NESTED_PLACEMENT_ANCESTOR_ALIGNMENT_UNVERIFIED');
+   origin={x:cell.x+p[0]+prefix.width+flow.marginLeft/75,y:cell.y+p[2]+shift+flow.marginTop/75};uncertainty+=prefix.error;
    if(origin.x-uncertainty<cell.x||origin.x+uncertainty+table.properties.tableWidth/75>cell.x+cell.w+.5)fail('NESTED_PLACEMENT_TABLE_BOUNDS_UNVERIFIED');
   }
   cell=cellBox(rs,table,rawCell,origin);frames.push({table_id:table.id,...origin,w:table.properties.tableWidth/75,h:rawCell.height/75});
   if(Math.abs(entry.cell.w-cell.w)>2||Math.abs(entry.cell.y-entry.frame.y-(cell.y-origin.y))>2||((view(rs[rawCell.start].payload).getUint32(4,true)>>>5)&3)!==0&&Math.abs(entry.cell.h-cell.h)>2)fail('NESTED_PLACEMENT_REFLOWED_GRID_UNVERIFIED');
-  if(depth<at.lineage.length-1&&(view(rs[rawCell.start].payload).getUint32(4,true)&0x60)!==0)fail('NESTED_PLACEMENT_ANCESTOR_ALIGNMENT_UNVERIFIED');
  }
  const table=at.lineage.at(-1).table,rawCell=table.cells.find(c=>c.cell===box.cell_path.at(-1).cellIndex),p=pads(rs,table,rawCell),frame={x:cell.x+p[0]+uncertainty,y:cell.y+p[2],w:cell.w-p[0]-p[1]-uncertainty*2,h:cell.h-p[2]-p[3]};
  if(frame.w<=0||frame.h<=0||box.properties.width/75>frame.w||box.properties.height/75>frame.h)fail('NESTED_PLACEMENT_FRAME_TOO_SMALL');
@@ -60,9 +66,9 @@ export function projectNestedAnchor(state,box,snapshot){
  return {page:at.page.page,anchor,cell,frame,rect,frames,prefix_tolerance:uncertainty,lineage:at.lineage,raw_cell:rawCell,table,host:state.blocks.find(b=>b.id===box.block_id)};
 }
 
-export function nestedTextBand(state,box,projection,estimate){
+export function nestedTextBand(state,box,projection,estimate,verifiedFloats=null){
  const rs=state.recordSets.get(box.section),blocks=projection.raw_cell.blocks;
- const floats=new Set(state.text_boxes.filter(o=>o.section===box.section&&!o.flow.treatAsChar&&o.flow.textWrap===3&&o.flow.vertRelTo===2&&o.flow.horzRelTo===2).map(o=>o.record_index));
+ const floats=verifiedFloats??new Set(state.text_boxes.filter(o=>o.section===box.section&&!o.flow.treatAsChar&&o.flow.textWrap===3&&o.flow.vertRelTo===2&&o.flow.horzRelTo===2).map(o=>o.record_index));
  if(blocks.length>16||blocks.some(b=>!b.unit_styles||!plain(b.paragraph_properties)||rs.slice(b.record_index+1,b.records_end).some((r,i)=>r.tag===71&&r.level===b.raw_level+1&&!floats.has(b.record_index+1+i))))fail('NESTED_PLACEMENT_CONTENT_UNVERIFIED');
  const fonts=blocks.some(b=>!b.text)?[...parseRecords(state.raw.streams.get('DocInfo'))].filter(r=>r.tag===21):[];
  const height=blocks.reduce((n,b)=>{let emptySize=1000;if(!b.text){const font=fonts[b.unit_styles[0]];if(!font||font.payload.length<46)fail('NESTED_PLACEMENT_FONT_UNVERIFIED');emptySize=view(font.payload).getUint32(42,true);}return n+Math.max(estimate(b,projection.frame.w*75),wordHeight(b,projection.frame.w*75,emptySize));},0)/75;

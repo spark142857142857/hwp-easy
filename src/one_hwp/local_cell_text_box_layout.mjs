@@ -6,6 +6,7 @@ import {textBoxGeometry} from './local_text_box_geometry.mjs';
 import {captureRenderedLayout,contains,intersects} from './local_rendered_layout.mjs';
 import {projectNestedAnchor,nestedTextBand} from './local_nested_anchor.mjs';
 import {locateCell} from './local_cell_frame.mjs';
+import {nestedReferenceLayout} from './local_nested_reference.mjs';
 export {locateCell} from './local_cell_frame.mjs';
 const same=(a,b)=>JSON.stringify(a)===JSON.stringify(b);
 
@@ -27,7 +28,10 @@ export function diagnoseCellTextBoxes(state,{HwpDocument,bytes,snapshot:provided
   if(estimate>p.height)issue('CELL_TEXT_BOX_CONTENT_MAY_EXCEED_FRAME_HEIGHT',estimate,p.height,'font_estimate');
   const cellFlags=view(rs[container.cell.start].payload).getUint32(4,true);
   if(!textBoxGeometry(state,box)||f.vertRelTo!==2||f.horzRelTo!==2||(cellFlags&7)!==0){limit('CELL_TEXT_BOX_ANCHOR_OR_FRAME_UNVERIFIED',box);continue;}
-  {let projected,band;try{projected=projectNestedAnchor(state,box,snapshot);if(estimateParagraphHeight)band=nestedTextBand(state,box,projected,estimateParagraphHeight);}catch(error){if(!(error instanceof GuardError))throw error;projected=null;limit(error.code,box);}
+  {let projected,band;try{
+    const reference=nestedReferenceLayout(state,box,{HwpDocument,bytes,snapshot});
+    projected=projectNestedAnchor(state,box,reference);if(estimateParagraphHeight)band=nestedTextBand(state,box,projected,estimateParagraphHeight);
+   }catch(error){if(!(error instanceof GuardError))throw error;projected=null;limit(error.code,box);}
    if(projected){checked++;limit('NESTED_FLOATING_RENDER_ORIGIN_DISAGREEMENT',box);const rect={...projected.rect,h:Math.max(projected.rect.h,estimate/75)},frame=projected.frame,extra={page:projected.page,basis:'hwp_column_and_root_paragraph_reference_with_measured_inline_prefix'};
     for(const [code,amount]of [['LEFT',frame.x-rect.x],['RIGHT',rect.x+rect.w-frame.x-frame.w],['TOP',frame.y-rect.y],['BOTTOM',rect.y+rect.h-frame.y-frame.h]])if(amount>.5)issue('CELL_TEXT_BOX_PROJECTED_'+code+'_BOUNDARY',Math.ceil(amount*75),0,'font_estimate',extra);
     if(band?.h&&intersects(rect,band))issue('CELL_TEXT_BOX_PROJECTED_CELL_TEXT_INTERSECTION',Math.ceil((Math.min(rect.y+rect.h,band.y+band.h)-Math.max(rect.y,band.y))*75),0,'font_estimate',extra);

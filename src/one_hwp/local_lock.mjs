@@ -32,7 +32,9 @@ function acquireOwnerDirectory(folder){
     // Publish an already nonempty directory. There is no empty initialization
     // window in which two claimants can accidentally share the same directory.
     for(let attempt=0;attempt<12;attempt++){
-      if(fs.existsSync(folder)){const s=fs.lstatSync(folder);if(!s.isDirectory()||s.isSymbolicLink())busy();}
+      // Another dead-owner reaper can remove the directory before this stat.
+      // An absent path is eligible for the same atomic rename below.
+      try{const s=fs.lstatSync(folder);if(!s.isDirectory()||s.isSymbolicLink())busy();}catch(e){if(e.code!=='ENOENT')throw e;}
       try{fs.renameSync(staging,folder);moved=true;return {recovered,release(){try{fs.unlinkSync(path.join(folder,name));}catch(e){if(e.code!=='ENOENT')throw e;}emptyRemove(folder);}};}
       catch(e){
         if(!['EEXIST','ENOTEMPTY','EPERM','EACCES','ENOTDIR','EISDIR'].includes(e.code))throw e;
