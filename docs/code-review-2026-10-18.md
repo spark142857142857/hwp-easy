@@ -2,23 +2,23 @@
 
 [남은 작업](remaining-work.md) · [프로젝트 상태](project-status.md) · [지원 기능](supported-features.md)
 
-점검일: **2026년 10월 18일**. 검토 기준은 `e593a0c`의 소스와 실제 Codex **0.2.25 설치 runner**다. 이번 변경은 점검 기록과 문서 정리이며, 아래 오류의 런타임 수정이나 앱 설치 갱신은 포함하지 않는다.
+점검일: **2026년 10월 18일**. 검토 기준은 `e593a0c`의 소스와 실제 Codex **0.2.25 설치 runner**다. 아래는 발견 당시의 관측을 보관한 기록이다. **후속 0.2.26 소스·검증 패키지에서 B1·B2 수정과 I1 지원 프로필 보완을 완료**했다. 실제 설치는 0.2.25이며 새 패키지의 완료 범위·예외는 [0.2.26 기록](local-release-0.2.26.md)을 따른다.
 
 ## 결과
 
 | 구분 | 결과 |
 | --- | --- |
-| 미수정 오류 | **B1** 강제 종료 후 남은 잠금 · **B2** 같은 문단의 그림 간 넘침 비교 누락 |
+| 점검 당시 미수정 오류 | **B1** 강제 종료 후 남은 잠금 · **B2** 같은 문단의 그림 간 넘침 비교 누락 |
 | 확인된 개선점 | **I1** 쪽 하단 고정 글상자의 장문 넘침 경고 |
 | 기존 회귀 | Node/WASM 483개 통과. Python 291개 실행, 4개 건너뜀 |
 | 실제 HWP 흐름 | 설치본 편집·같은 파일 저장·원본/편집본 복구, 분리 패키지 배치 15건과 독립 원시 판독 통과 |
 | 네이티브 확인 | 고정 글상자 수정 전·후·복구본 3개 파일·3쪽. 복구 1쪽 픽셀 일치, 편집본의 하단 잘림 확인 |
 
-기존 회귀 통과와 새 재현의 실패를 함께 기록한다. B1·B2는 공개 준비 전에 우선 처리할 오류이며, I1은 현재 진단 범위를 넓히는 개선이다. 세 항목은 [작업 목록](remaining-work.md#우선-처리할-오류와-개선)에 미수정으로 등록했다.
+기존 회귀 통과와 새 재현의 실패를 함께 기록한다. B1·B2는 공개 준비 전에 우선 처리할 오류이며, I1은 현재 진단 범위를 넓히는 개선이다. 당시 등록한 세 항목은 [작업 목록](remaining-work.md#우선-처리할-오류와-개선)에 후속 완료 범위를 연결했다.
 
 ## B1 종료 후 남은 잠금이 편집·복구를 계속 차단
 
-**P2 · 미해결** — [저장 잠금 획득](../src/one_hwp/local_file.mjs#L115), [잠금 정리](../src/one_hwp/local_file.mjs#L136)
+**발견 당시 P2 · 미해결** — [저장 잠금 획득](https://github.com/spark142857142857/hwp-easy/blob/e593a0c0abc70ac14fbdd3f023a31354792bfab8/src/one_hwp/local_file.mjs#L115), [잠금 정리](https://github.com/spark142857142857/hwp-easy/blob/e593a0c0abc70ac14fbdd3f023a31354792bfab8/src/one_hwp/local_file.mjs#L136)
 
 정상 저장은 `finally`에서 잠금을 지우지만 프로세스가 종료되면 실행되지 않는다. 기존 잠금은 항상 `DOCUMENT_BUSY`로 처리하며 내용에는 작업 소유자나 종료 여부를 판별할 정보가 없다. 이후 `restore`도 같은 저장 경로를 쓰므로 원본 백업이 있어도 복구가 막힌다.
 
@@ -35,7 +35,7 @@
 
 ## B2 같은 문단의 그림 사이에서 새 넘침을 놓침
 
-**P2 · 미해결** — [새 위험 비교 키](../src/one_hwp/local_layout.mjs#L52), [엄격 정책 적용](../src/one_hwp/local_runner.mjs#L160)
+**발견 당시 P2 · 미해결** — [새 위험 비교 키](https://github.com/spark142857142857/hwp-easy/blob/e593a0c0abc70ac14fbdd3f023a31354792bfab8/src/one_hwp/local_layout.mjs#L52), [엄격 정책 적용](https://github.com/spark142857142857/hwp-easy/blob/e593a0c0abc70ac14fbdd3f023a31354792bfab8/src/one_hwp/local_runner.mjs#L160)
 
 `newLayoutIssues`는 문단 ID·종류·구역·크기·가용 폭으로 기존 위험을 상쇄한다. 결과에 있는 `picture_index` 등 개체 식별은 비교 키에 없다. 같은 문단에서 한 그림의 넘침을 없애고 다른 그림에 같은 크기의 넘침을 만들면 이전 위험으로 취급한다.
 
@@ -52,7 +52,7 @@
 
 ## I1 쪽 하단 고정 글상자의 장문 넘침 경고
 
-**개선 필요 · 미완료** — [현재 배치 검사 진입](../src/one_hwp/local_runner.mjs#L29), [글상자 부분 편집](../src/one_hwp/local_text_boxes.mjs#L46)
+**발견 당시 개선 필요 · 미완료** — [현재 배치 검사 진입](https://github.com/spark142857142857/hwp-easy/blob/e593a0c0abc70ac14fbdd3f023a31354792bfab8/src/one_hwp/local_runner.mjs#L29), [글상자 부분 편집](https://github.com/spark142857142857/hwp-easy/blob/e593a0c0abc70ac14fbdd3f023a31354792bfab8/src/one_hwp/local_text_boxes.mjs#L46)
 
 표가 없는 문서는 현재 셀 중심의 배치 검사에서 검사 대상이 비어 있다. 글상자의 텍스트 보존·고정 도형 보존과 실제 페이지에서 모든 글자가 보이는지는 별개다. 엄격 정책도 아직 이 범위를 검사하지 않는다.
 
