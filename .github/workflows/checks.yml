@@ -1,23 +1,7 @@
 name: Source checks
 
 on:
-  push:
-    # Skip human-facing docs only; SKILL.md and skill references still need checks.
-    paths-ignore:
-      - 'README.md'
-      - 'README.en.md'
-      - 'docs/**'
-      - 'plugins/archive/README.md'
-      - 'probes/sites-runtime/README.md'
-      - 'vendor/local-preview/README.md'
-  pull_request:
-    paths-ignore:
-      - 'README.md'
-      - 'README.en.md'
-      - 'docs/**'
-      - 'plugins/archive/README.md'
-      - 'probes/sites-runtime/README.md'
-      - 'vendor/local-preview/README.md'
+  # Run at development milestones and before releases, rather than every commit.
   workflow_dispatch:
 
 permissions:

@@ -56,7 +56,9 @@ npm --prefix probes/sites-runtime ci --ignore-scripts --no-audit --no-fund
 
 ## 검사
 
-GitHub Actions의 [Source checks](../.github/workflows/checks.yml)는 push와 pull request에서 실행합니다. 루트의 `README.md`·`README.en.md`, `docs/`, `plugins/archive/README.md`, `probes/sites-runtime/README.md`, `vendor/local-preview/README.md`만 변경한 경우에는 자동 CI를 생략합니다. 문서와 함께 코드·의존성·빌드 설정을 변경하면 기존 전체 검사를 실행합니다. `SKILL.md`와 스킬의 참조 문서는 실행 동작에 영향을 주므로 생략 대상에 넣지 않습니다. 필요한 경우 GitHub의 **Actions → Source checks → Run workflow**에서 전체 검사를 수동 실행할 수 있습니다.
+GitHub Actions의 [Source checks](../.github/workflows/checks.yml)는 **수동 실행 전용**입니다. push·pull request마다 자동 실행하지 않으며, GitHub의 **Actions → Source checks → Run workflow** 또는 `gh workflow run checks.yml --ref main`으로 시작합니다. Windows·Linux의 기존 전체 검사 구성은 유지합니다.
+
+전체 CI는 핵심 기능 묶음 완료, 저장·복구 공통 경로 통합, 설치본 갱신·배포 준비 등 주요 단계에서 실행합니다. 작은 수정마다 반복 실행하지 않으며, 작업 중에는 변경 범위에 맞는 로컬 검사로 확인합니다. 단계별 CI 기록에는 실행 대상 커밋과 실제 결과를 남기고, 이전 커밋의 통과 결과를 최신 소스의 통과로 기록하지 않습니다.
 
 문서만 변경했을 때도 아래 링크 검사는 로컬에서 실행합니다.
 
