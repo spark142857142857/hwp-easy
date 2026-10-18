@@ -25,7 +25,7 @@
 
 | 흐름 | 결과와 근거 |
 | --- | --- |
-| 0.2.32 F1 추가 | 조상 셀 정렬·셀 그림/그룹과 동일 파일 저장·복구·독립 판독·대표 실제 한글 배치. [검증 결과와 남은 F1-B](local-release-0.2.32.md) |
+| 0.2.32 F1 추가 | 관련 회귀 223개, 최종 패키지 77건의 저장·복구·독립 판독, 네이티브 111개 파일·111쪽과 복구 37쪽 픽셀 일치. 조상 셀 정렬·셀 그림/그룹 추가. 소스 `b24b606`의 [Windows/Linux CI 10개 작업](https://github.com/spark142857142857/hwp-easy/actions/runs/39124136730) 모두 성공. [검증 결과와 남은 F1-B](local-release-0.2.32.md) |
 | 0.2.31 F1 확장 | 관련 회귀 191개, 새 패키지 29건·기존 28건의 저장·복구·독립 판독. 네이티브 87개 파일·99쪽, 복구 33쪽 픽셀 일치. 소스 `f53c030`의 [Windows/Linux CI 10개 작업](https://github.com/spark142857142857/hwp-easy/actions/runs/39120133055) 모두 성공. [지원 범위와 남은 F1](local-release-0.2.31.md) |
 | 0.2.30 중첩 셀 | 관련 Node/WASM 149개, 새 패키지 9건·저장 전 거부 2회, 기존 F1 9건·배치 19건의 저장·복구·독립 판독. 네이티브 27개 파일·27쪽과 복구 9쪽 픽셀 일치. 전체 CI 미실행. [범위와 제한](local-release-0.2.30.md) |
 | 0.2.29 F1 | 관련 Node/WASM 130개·새 분리 패키지 8건과 중첩 셀 거부 2회, 기존 19건의 저장·복구·독립 판독 통과. 네이티브 24개 파일·39쪽과 복구 13쪽 픽셀 일치. 전체 CI 미실행. [범위와 제한](local-release-0.2.29.md) |
@@ -48,7 +48,7 @@
 
 최신 소스 검사는 [0.2.32 검증 기록](local-release-0.2.32.md), 실제 Codex 설치·모델 호출도 [0.2.25 검증 기록](local-release-0.2.25.md)에 정리합니다. 검증 코드 `0d04fb5`의 [Windows·Linux CI 10개 작업](https://github.com/spark142857142857/hwp-easy/actions/runs/38353110296)이 모두 통과했습니다. 0.2.21 기능 커밋 `eb8b35b`의 [Windows·Linux CI 10개 작업](https://github.com/spark142857142857/hwp-easy/actions/runs/38362789720)도 모두 통과했습니다. 0.2.22 최종 기능 커밋 `9499e7a`의 [Windows·Linux CI 10개 작업](https://github.com/spark142857142857/hwp-easy/actions/runs/38379018791)도 모두 통과했습니다. 0.2.23 기능 커밋 `bd4aa8d`의 [Windows·Linux CI 10개 작업](https://github.com/spark142857142857/hwp-easy/actions/runs/38385246383)도 모두 통과했습니다. 0.2.24 검증 커밋 `35b5e71`의 [Windows·Linux CI 10개 작업](https://github.com/spark142857142857/hwp-easy/actions/runs/38706600137)도 모두 통과했습니다. 0.2.25 CI 정리 커밋 `0bb3620`의 [Windows·Linux CI 10개 작업](https://github.com/spark142857142857/hwp-easy/actions/runs/38715305302)도 모두 통과했습니다. 첫 실행은 모든 테스트 단계 성공 후 Windows 정리 시간 제한으로 취소됐으며, 중복 검사 10개를 각 플랫폼의 복잡한 개체 작업에 모아 전체 검사 범위를 유지했습니다. 이후 변경의 상태는 [Actions](https://github.com/spark142857142857/hwp-easy/actions)에서 확인합니다.
 
-전체 CI는 [주요 단계의 수동 실행](developer-guide.md#검사)으로 운영합니다. 0.2.30까지의 기록은 해당 단계의 로컬 검사입니다. 0.2.31의 전체 CI는 [최신 검증 기록](local-release-0.2.31.md#수동-ci)에 소스 커밋과 실제 결과를 남깁니다.
+전체 CI는 [주요 단계의 수동 실행](developer-guide.md#검사)으로 운영합니다. 0.2.30까지의 기록은 해당 단계의 로컬 검사입니다. 0.2.32의 전체 CI는 [최신 검증 기록](local-release-0.2.32.md#수동-ci)에 소스 커밋과 성공한 10개 작업을 남겼습니다.
 
 ## 남은 작업
 
