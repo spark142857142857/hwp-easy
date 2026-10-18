@@ -7,7 +7,7 @@ import {structuralProfileSupported,recordsByBlock,compareRecords,verifyCellHeade
 import {cellPicturePath} from './local_cell_picture.mjs';
 import {imageSize} from './local_image.mjs';
 import {anchors,objectGroups,rewritePictureBlock,changedPictureProperties} from './local_picture_records.mjs';
-import {validObjectHeader} from './local_flow_records.mjs';
+import {validObjectHeader,nextObjectInstanceId} from './local_flow_records.mjs';
 const fail=code=>{throw new GuardError(code);},equal=(a,b)=>JSON.stringify(a)===JSON.stringify(b);
 const bytesEqual=(a,b)=>a.length===b.length&&a.every((n,i)=>n===b[i]),view=b=>new DataView(b.buffer,b.byteOffset,b.byteLength);
 const group=data=>{const m=new Map();for(const r of parseRecords(data)){if(!m.has(r.tag))m.set(r.tag,[]);m.get(r.tag).push(r);}return m;};
@@ -17,7 +17,7 @@ const bodyHeader=Buffer.from('206f736700000a000000000000000000201c0000100e000001
 export function rawPictureRecords(level,width,height,pixels,binId,instance,inline){
  const header=Uint8Array.from(bodyHeader),shape=Uint8Array.from(component),pic=Uint8Array.from(picture);
  if(inline)view(header).setUint32(4,0x000a0001,true);
- view(header).setUint32(16,width,true);view(header).setUint32(20,height,true);view(header).setUint32(24,instance,true);
+ view(header).setUint32(16,width,true);view(header).setUint32(20,height,true);view(header).setUint32(36,instance,true);
  for(const pos of [20,28])view(shape).setUint32(pos,width,true);for(const pos of [24,32])view(shape).setUint32(pos,height,true);
  for(const pos of [20,28])view(pic).setUint32(pos,width,true);for(const pos of [32,40])view(pic).setUint32(pos,height,true);
  for(const pos of [52,82])view(pic).setUint32(pos,pixels.width*75,true);for(const pos of [56,86])view(pic).setUint32(pos,pixels.height*75,true);view(pic).setUint16(71,binId,true);
@@ -67,9 +67,9 @@ export function pictureEdit(HwpDocument,source,hash,op){
     // HWP table 70: bits 15..17=4 and 18..19=2 mean absolute size.
     // Inline placement must retain them; zero makes dimensions percentages.
     if(p<2||newObjects.some((r,i)=>r.tag!==[71,76,85][i]))fail('PICTURE_RECORD_MISMATCH');if(cell){const v=view(newObjects[0].payload);v.setUint32(4,0x000a0001,true);v.setInt32(8,0,true);v.setInt32(12,0,true);}
-    const header=Uint8Array.from(bodyHeader),shape=Uint8Array.from(component),pic=Uint8Array.from(picture);if(cell)view(header).setUint32(4,0x000a0001,true);view(header).setUint32(16,op.width,true);view(header).setUint32(20,op.height,true);const instance=view(newObjects[0].payload).getUint32(24,true);if(!instance)fail('PICTURE_RECORD_MISMATCH');view(header).setUint32(24,instance,true);
+    const header=Uint8Array.from(bodyHeader),shape=Uint8Array.from(component),pic=Uint8Array.from(picture);if(cell)view(header).setUint32(4,0x000a0001,true);view(header).setUint32(16,op.width,true);view(header).setUint32(20,op.height,true);const instance=nextObjectInstanceId(raw);view(header).setUint32(36,view(newObjects[0].payload).getUint32(36,true),true);view(header).setUint32(24,view(newObjects[0].payload).getUint32(24,true),true);
     for(const pos of [20,28])view(shape).setUint32(pos,op.width,true);for(const pos of [24,32])view(shape).setUint32(pos,op.height,true);for(const pos of [20,28])view(pic).setUint32(pos,op.width,true);for(const pos of [32,40])view(pic).setUint32(pos,op.height,true);for(const pos of [52,82])view(pic).setUint32(pos,pixels.width*75,true);for(const pos of [56,86])view(pic).setUint32(pos,pixels.height*75,true);view(pic).setUint16(71,binId,true);
-    if([header,shape,pic].some((p,i)=>!bytesEqual(p,newObjects[i].payload)))fail('PICTURE_RECORD_MISMATCH');nextGroups.splice(index,0,newObjects);
+    if([header,shape,pic].some((p,i)=>!bytesEqual(p,newObjects[i].payload)))fail('PICTURE_RECORD_MISMATCH');view(newObjects[0].payload).setUint32(36,instance,true);nextGroups.splice(index,0,newObjects);
    }else{const v=view(nextGroups[index][2].payload);v.setUint16(71,binId,true);v.setInt32(44,0,true);v.setInt32(48,0,true);for(const pos of [52,82])v.setUint32(pos,pixels.width*75,true);for(const pos of [56,86])v.setUint32(pos,pixels.height*75,true);wanted={...prior,sourceWidth:pixels.width*75,sourceHeight:pixels.height*75,cropLeft:0,cropTop:0,cropRight:0,cropBottom:0};}
   }else if(deleting){change={raw:oldAnchors[index].raw,insert:false};nextGroups.splice(index,1);}
   else{const props=op.props,allowed=['width','height','horzOffset','vertOffset','cropLeft','cropTop','cropRight','cropBottom','rotationAngle'];if(!props||Object.getPrototypeOf(props)!==Object.prototype||!Object.keys(props).length||Object.entries(props).some(([k,n])=>!allowed.includes(k)||!Number.isSafeInteger(n)||Math.abs(n)>720000||['width','height'].includes(k)&&n<=0||k.startsWith('crop')&&n<0||k==='rotationAngle'&&Math.abs(n)>359))fail('INVALID_PICTURE_PROPERTIES');const updated=changedPictureProperties(nextGroups[index],prior,props);nextGroups[index]=updated.records;wanted=updated.properties;}

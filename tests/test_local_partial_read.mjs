@@ -25,6 +25,11 @@ function workspace(t,bytes=invalidTableFixture()){
  t.after(()=>{assert.equal(path.dirname(dir),os.tmpdir());assert.ok(path.basename(dir).startsWith('hwp-partial-read-'));fs.rmSync(dir,{recursive:true,force:true});});
  const source=path.join(dir,'synthetic.hwp');fs.writeFileSync(source,bytes);return {source,dir,bytes};
 }
+
+test('rendered layout remains available with explicit uncertainty when raw mapping fails',async t=>{
+ const {source,bytes}=workspace(t),read=await runLocal({action:'read',source,max_chars:64000}),layout=await runLocal({action:'layout',source,expected_sha256:read.source_sha256,scope:'rendered'});
+ assert.equal(layout.cell_text_boxes.status,'inconclusive');assert.equal(layout.diagnostics_complete,false);assert.ok(layout.engine_limitations.some(l=>l.code==='CELL_TEXT_BOX_MAPPING_UNVERIFIED'));assert.equal(layout.layout_verified,false);assert.deepEqual(fs.readFileSync(source),Buffer.from(bytes));
+});
 test('a field document with unverified table geometry exposes only read-only body blocks',async t=>{
  const {source,dir,bytes}=workspace(t),before=fs.statSync(source),result=await runLocal({action:'read',source,max_chars:64000});
  assert.equal(result.partial_read_only,true);assert.equal(result.partial_read_reason,'TARGET_MAPPING_UNVERIFIED');

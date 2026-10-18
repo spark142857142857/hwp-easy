@@ -4,6 +4,7 @@ import {fail,view} from './local_complex_records.mjs';
 import {parseRecords} from '../../probes/sites-runtime/guard/records.mjs';
 import {complexParagraphProperties} from './local_complex_paragraph.mjs';
 import {layoutObjectIdentity} from './local_layout_identity.mjs';
+import {diagnoseCellTextBoxes} from './local_cell_text_box_layout.mjs';
 function padding(state,table,cell){const v=view(state.recordSets.get(table.section)[cell.start].payload);return (v.getUint32(4,true)&0x10000)?[24,26,28,30].map(at=>v.getUint16(at,true)):['paddingLeft','paddingRight','paddingTop','paddingBottom'].map(k=>table.properties[k]);}
 export function cellContainer(state,block){
  const parent=state.tables.flatMap(t=>t.cells.map(c=>({table:t,cell:c}))).find(({cell})=>cell.blocks.some(b=>b.id===block.id));
@@ -27,14 +28,9 @@ function textHeight(block,width){
   x+=w;line=Math.max(line,size*spacing);
  }return Math.ceil(h+line+(points.at(-1)==='\n'?(runs.at(-1)?.properties.fontSize??1000)*spacing:0));
 }
-function fixedTextBoxRisks(state,add){
- const boxes=state.text_boxes??[];if(!boxes.length)return 0;
- const defs=[...parseRecords(state.raw.streams.get('DocInfo'))].filter(r=>r.tag===21);let checks=0;
- for(const box of boxes){
-  const f=box.flow,p=box.properties,rs=state.recordSets.get(box.section),pages=rs.filter(r=>r.tag===73);
-  if(box.cell_path.length||f.treatAsChar||f.vertRelTo!==0||f.vertAlign!==0||f.widthRelTo!==4||f.heightRelTo!==2||p.width<=0||p.vertOffset<0||pages.length!==1||pages[0].payload.length!==40)continue;
-  const page=view(pages[0].payload);if(page.getUint32(36,true)!==0||page.getUint32(0,true)>page.getUint32(4,true))continue;
-  let estimate=0;
+function textBoxHeightEstimator(state){
+ const defs=[...parseRecords(state.raw.streams.get('DocInfo'))].filter(r=>r.tag===21);
+ return box=>{let estimate=0;const rs=state.recordSets.get(box.section);
   for(const paragraph of box.paragraphs){
    const runs=[];for(const token of paragraph.tokens.filter(t=>t.text)){
     const id=paragraph.unit_styles[token.unit],payload=defs[id]?.payload;if(!payload||payload.length<46)fail('TEXT_BOX_FONT_UNVERIFIED');
@@ -42,26 +38,40 @@ function fixedTextBoxRisks(state,add){
     else runs.push({start:runs.at(-1)?.end??0,end:(runs.at(-1)?.end??0)+1,properties:{charShapeId:id,fontSize:view(payload).getUint32(42,true),ratios:[...payload.subarray(14,21)],relativeSizes:[...payload.subarray(28,35)]}});
    }
    const props=complexParagraphProperties(state.raw,rs,paragraph);
-   estimate+=textHeight({...paragraph,character_runs:runs,paragraph_properties:props},p.width)+Math.max(0,props.spacingBefore)/2+Math.max(0,props.spacingAfter)/2;
-  }
+   estimate+=textHeight({...paragraph,character_runs:runs,paragraph_properties:props},box.properties.width)+Math.max(0,props.spacingBefore)/2+Math.max(0,props.spacingAfter)/2;
+  }return Math.ceil(estimate);
+ };
+}
+function fixedTextBoxRisks(state,add,estimateHeight){
+ const boxes=state.text_boxes??[];if(!boxes.length)return 0;let checks=0;
+ for(const box of boxes){
+  const f=box.flow,p=box.properties,rs=state.recordSets.get(box.section),pages=rs.filter(r=>r.tag===73);
+  if(box.cell_path.length||f.treatAsChar||f.vertRelTo!==0||f.vertAlign!==0||f.widthRelTo!==4||f.heightRelTo!==2||p.width<=0||p.vertOffset<0||pages.length!==1||pages[0].payload.length!==40)continue;
+  const page=view(pages[0].payload);if(page.getUint32(36,true)!==0||page.getUint32(0,true)>page.getUint32(4,true))continue;
+  const estimate=estimateHeight(box);
   checks++;const available=page.getUint32(4,true)-p.vertOffset,needed=Math.max(p.height,Math.ceil(estimate)),host=state.blocks.find(b=>b.id===box.block_id);
   if(host&&needed>available)add('FIXED_TEXT_BOX_MAY_EXCEED_PAGE_HEIGHT',host,needed,available,'font_estimate',{text_box_id:box.id,object_identity:layoutObjectIdentity(state,box),advice:'shorten only if requested or explicitly reposition the box; automatic box resizing and native pagination are unverified'});
  }
  return checks;
 }
-function cellPageRisks(state,add){
- if(!state.recordSets)return;const memo=new Map();
- const bodyHeight=section=>{const p=state.recordSets.get(section)?.find(r=>r.tag===73&&r.payload.length>=40);if(!p)return null;const v=view(p.payload);return v.getUint32(4,true)-[16,20,24,28].reduce((n,at)=>n+v.getUint32(at,true),0);};
- const tableHeight=t=>{if(memo.has(t.id))return memo.get(t.id);if(t.dimensions.rowCount>512)fail('LAYOUT_TABLE_LIMIT');memo.set(t.id,0);const rows=Array(t.dimensions.rowCount).fill(0);
+function tableHeightEstimator(state){
+ const memo=new Map();
+ const rows=t=>{if(memo.has(t.id))return memo.get(t.id);if(t.dimensions.rowCount>512)fail('LAYOUT_TABLE_LIMIT');const heights=Array(t.dimensions.rowCount).fill(0);memo.set(t.id,heights);
   for(const c of t.cells){const pads=padding(state,t,c),width=c.width-pads[0]-pads[1];let height=pads[2]+pads[3];
    for(const b of c.blocks){height+=textHeight(b,width);for(const child of state.tables.filter(x=>x.parent_id===b.id))height+=tableHeight(child);}
-   height=Math.max(c.height,height);for(let i=c.row;i<c.row+c.rowSpan&&i<rows.length;i++)rows[i]=Math.max(rows[i],height/c.rowSpan);
-  }const height=Math.ceil(rows.reduce((a,b)=>a+b,0));memo.set(t.id,height);return height;};
+   height=Math.max(c.height,height);for(let i=c.row;i<c.row+c.rowSpan&&i<heights.length;i++)heights[i]=Math.max(heights[i],height/c.rowSpan);
+  }return heights;};
+ const tableHeight=t=>Math.ceil(rows(t).reduce((a,b)=>a+b,0));
+ return {tableHeight,cellHeight:({table,cell})=>Math.ceil(rows(table).slice(cell.row,cell.row+cell.rowSpan).reduce((a,b)=>a+b,0))};
+}
+function cellPageRisks(state,add,tableHeight){
+ if(!state.recordSets)return;
+ const bodyHeight=section=>{const p=state.recordSets.get(section)?.find(r=>r.tag===73&&r.payload.length>=40);if(!p)return null;const v=view(p.payload);return v.getUint32(4,true)-[16,20,24,28].reduce((n,at)=>n+v.getUint32(at,true),0);};
  for(const t of state.tables){if(!t.cell_path?.length)continue;const height=tableHeight(t),available=bodyHeight(t.section),host=state.blocks.find(b=>b.id===t.parent_id);
   if(host&&available>0&&height>available)add('NESTED_TABLE_MAY_EXCEED_PAGE_HEIGHT',host,height,available,'font_estimate',{table_id:t.id,object_identity:layoutObjectIdentity(state,t),advice:'shorten the answer or explicitly restructure the nested table; automatic nested-table page splitting is unverified'});
  }
 }
-export function analyzeLocalLayout(state){
+export function analyzeLocalLayout(state,options={}){
  const issues=[];let checks=0;const add=(code,b,size,available,certainty='geometry',extra={})=>{issues.push({code,block_id:b.id,section:b.section,cell_path:b.cell_path,size,available,certainty,...extra,signature:createHash('sha256').update(JSON.stringify([code,b.section,size,available])).digest('hex')});};
  for(const b of state.blocks){const parent=cellContainer(state,b);if(!parent)continue;checks++;
   if(parent.width<=0)add('CELL_PADDING_EXCEEDS_WIDTH',b,parent.cell.width-parent.width,parent.cell.width);
@@ -76,11 +86,17 @@ export function analyzeLocalLayout(state){
    if(p.horzOffset<box.flow.marginLeft)add('TEXT_BOX_EXCEEDS_CELL_LEFT_BOUNDARY',b,box.flow.marginLeft-p.horzOffset,0,'geometry',{text_box_id:box.id,object_identity:layoutObjectIdentity(state,box)});
   }
  }
- cellPageRisks(state,add);
- checks+=fixedTextBoxRisks(state,add);
- return {status:issues.length?'issues_detected':'no_checked_geometry_overflow',checks,issues,geometry_overflows:issues.filter(x=>x.certainty==='geometry').length,font_warnings:issues.filter(x=>x.certainty==='font_estimate').length,layout_verified:false,scope:'mapped cell geometry, font-based nested-table and paper-fixed rectangle height risks',not_checked:['native page pagination','stored minimum row height versus actual reflow','exact multi-line text height and internal text-box padding','non-paper-anchored or vertical text-box pagination','floating-object overlap','font substitution','arbitrary shape transforms']};
+ const tableEstimates=tableHeightEstimator(state);cellPageRisks(state,add,tableEstimates.tableHeight);
+ const estimateHeight=state.text_boxes?.length?textBoxHeightEstimator(state):()=>0;
+ checks+=fixedTextBoxRisks(state,add,estimateHeight);
+ const cell_text_boxes=diagnoseCellTextBoxes(state,{...options,estimateHeight,estimateCellHeight:tableEstimates.cellHeight,estimateTableHeight:tableEstimates.tableHeight,getContainer:b=>cellContainer(state,b)},add);checks+=cell_text_boxes.checks;
+ return {status:issues.length?'issues_detected':cell_text_boxes.status==='inconclusive'?'inconclusive':'no_checked_geometry_overflow',checks,issues,cell_text_boxes,geometry_overflows:issues.filter(x=>x.certainty==='geometry').length,font_warnings:issues.filter(x=>x.certainty==='font_estimate').length,layout_verified:false,scope:'mapped cell geometry, font-based height risks and bounded rendered cell text-box observations',not_checked:['native page pagination','stored minimum row height versus actual reflow','exact multi-line text height and nonzero internal text-box padding','unverified cell text-box anchors and ambiguous rendered identities','general floating-object overlap','font substitution','arbitrary shape transforms']};
 }
-export function newLayoutIssues(before,after,remap={},removedObjects=[]){const removed=new Set(removedObjects),key=(i,id)=>JSON.stringify([id,i.object_identity??null,i.code,i.section,i.size,i.available]),counts=new Map();for(const i of before.issues){const id=Object.hasOwn(remap,i.block_id)?remap[i.block_id]:i.block_id;if(id===null||removed.has(i.object_identity)||i.object_identity?.startsWith('unverified:'))continue;const k=key(i,id);counts.set(k,(counts.get(k)??0)+1);}return after.issues.filter(i=>{const k=key(i,i.block_id),n=counts.get(k)??0;if(n){counts.set(k,n-1);return false;}return true;});}
+export function newLayoutIssues(before,after,remap={},removedObjects=[]){
+ const removed=new Set(removedObjects),key=(i,id,related=i.related_block_id)=>JSON.stringify([id,i.object_identity??null,i.code,i.section,related??null]),mapped=id=>Object.hasOwn(remap,id)?remap[id]:id,buckets=new Map();
+ for(const i of before.issues){const id=mapped(i.block_id);if(id===null||removed.has(i.object_identity)||i.object_identity?.startsWith('unverified:'))continue;const k=key(i,id,mapped(i.related_block_id));if(!buckets.has(k))buckets.set(k,[]);buckets.get(k).push(i);}
+ return after.issues.filter(i=>{const prior=buckets.get(key(i,i.block_id))??[],at=prior.findIndex(old=>old.size===i.size&&old.available===i.available||i.code.startsWith('CELL_TEXT_BOX_')&&i.size<=old.size&&i.available>=old.available);if(at<0)return true;prior.splice(at,1);return false;});
+}
 export function fitNestedTable(state,b,op){
  if(Object.keys(op).sort().join(',')!==['type','target_id','expected_old','expected_dimensions','expected_properties'].sort().join(','))fail('INVALID_OPERATION');
  const table=state.tables.find(t=>t.cells.some(c=>c.blocks.some(x=>x.id===b.id))),host=state.blocks.find(x=>x.id===table?.parent_id),parent=host&&cellContainer(state,host);

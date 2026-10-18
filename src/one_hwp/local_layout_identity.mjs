@@ -7,9 +7,11 @@ export function layoutObjectIdentity(state,object){
   if(!sections.has(object.section)){
     const rs=state.recordSets?.get(object.section)??[],items=[],ids=new Map(),hashes=new Map();
     for(let at=0;at<rs.length;at++){
-      const r=rs[at];if(r.tag!==71||r.payload.length<28||![' osg',' lbt'].includes(Buffer.from(r.payload.subarray(0,4)).toString()))continue;
+      const r=rs[at];if(r.tag!==71||r.payload.length<40||![' osg',' lbt'].includes(Buffer.from(r.payload.subarray(0,4)).toString()))continue;
       const frame=[r];if(rs[at+1]?.tag===76)frame.push(rs[at+1]);
-      const instance=view(r.payload).getUint32(24,true),hash=createHash('sha256').update(encodeRecords(frame.map((r,i)=>({...r,level:i})))).digest('hex');
+      // HWP5 common-object header: z-order at 24, margins at 28..35,
+      // document instance ID at 36 (Hancom revision 1.3, table 69).
+      const instance=view(r.payload).getUint32(36,true),hash=createHash('sha256').update(encodeRecords(frame.map((r,i)=>({...r,level:i})))).digest('hex');
       items.push({at,instance,hash});ids.set(instance,(ids.get(instance)??0)+1);hashes.set(hash,(hashes.get(hash)??0)+1);
     }
     sections.set(object.section,new Map(items.map(o=>[o.at,o.instance&&ids.get(o.instance)===1?`s${object.section}:instance:${o.instance}`:`unverified:s${object.section}:raw:${o.hash}`+(hashes.get(o.hash)>1?`:record:${o.at}`:'')])));

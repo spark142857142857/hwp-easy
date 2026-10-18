@@ -9,7 +9,7 @@ import {definitionBytes} from './local_complex_format.mjs';
 import {rawPictureRecords} from './local_picture.mjs';
 import {pictureAnchor,changedPictureProperties} from './local_picture_records.mjs';
 import {fail,view,equal,equalBytes,encodeRecords,textTokens} from './local_complex_records.mjs';
-import {validObjectHeader} from './local_flow_records.mjs';
+import {validObjectHeader,nextObjectInstanceId} from './local_flow_records.mjs';
 
 const id=r=>Buffer.from(r.payload.subarray(0,4)).toString('ascii');
 export function complexPictureProperties(raw,group){
@@ -65,7 +65,7 @@ export function prepareComplexPicture(raw,records,block,op){
   // Ordering just drawings loses a field when a picture precedes its marker.
   if(anchors.length!==controls.length||anchors.some((t,i)=>anchorId(t)!==id(records[controls[i]])))fail('PICTURE_ANCHOR_PROFILE_UNSUPPORTED');
   const before=anchors.filter(t=>t.unit<from).length;insertAt=controls[before]??block.records_end;
-  const instances=[];for(const r of records)if(r.tag===71&&[' osg',' lbt'].includes(id(r))&&r.payload.length>=28)instances.push(view(r.payload).getUint32(24,true));const instance=Math.max(0,...instances)+1;if(instance>0xffffffff)fail('PICTURE_INSTANCE_LIMIT');
+  const instance=nextObjectInstanceId(raw);
   image=addComplexImage(raw,op.image);out.splice(insertAt,0,...rawPictureRecords(block.raw_level+1,op.width,op.height,image.pixels,image.binId,instance,true));
  }else{
   if(pictures.length>1&&!Object.hasOwn(op,'picture_index'))fail('PICTURE_INDEX_REQUIRED');const index=op.picture_index??0;selected=pictures.find(p=>p.picture_index===index);if(!Number.isSafeInteger(index)||!selected)fail('PICTURE_TARGET_REQUIRED');
