@@ -1,6 +1,9 @@
 /** Bounded geometry checks. Font estimates are warnings, never a pagination certificate. */
 import {createHash} from 'node:crypto';
 import {fail,view} from './local_complex_records.mjs';
+import {parseRecords} from '../../probes/sites-runtime/guard/records.mjs';
+import {complexParagraphProperties} from './local_complex_paragraph.mjs';
+import {layoutObjectIdentity} from './local_layout_identity.mjs';
 function padding(state,table,cell){const v=view(state.recordSets.get(table.section)[cell.start].payload);return (v.getUint32(4,true)&0x10000)?[24,26,28,30].map(at=>v.getUint16(at,true)):['paddingLeft','paddingRight','paddingTop','paddingBottom'].map(k=>table.properties[k]);}
 export function cellContainer(state,block){
  const parent=state.tables.flatMap(t=>t.cells.map(c=>({table:t,cell:c}))).find(({cell})=>cell.blocks.some(b=>b.id===block.id));
@@ -22,7 +25,29 @@ function textHeight(block,width){
   const w=size*(props?.ratios?.[script]??100)/100*(props?.relativeSizes?.[script]??100)/100*(wide?1:.5);
   if(ch==='\n'||x>0&&x+w>width){h+=line||size*spacing;x=0;line=0;if(ch==='\n')continue;}
   x+=w;line=Math.max(line,size*spacing);
- }return Math.ceil(h+line);
+ }return Math.ceil(h+line+(points.at(-1)==='\n'?(runs.at(-1)?.properties.fontSize??1000)*spacing:0));
+}
+function fixedTextBoxRisks(state,add){
+ const boxes=state.text_boxes??[];if(!boxes.length)return 0;
+ const defs=[...parseRecords(state.raw.streams.get('DocInfo'))].filter(r=>r.tag===21);let checks=0;
+ for(const box of boxes){
+  const f=box.flow,p=box.properties,rs=state.recordSets.get(box.section),pages=rs.filter(r=>r.tag===73);
+  if(box.cell_path.length||f.treatAsChar||f.vertRelTo!==0||f.vertAlign!==0||f.widthRelTo!==4||f.heightRelTo!==2||p.width<=0||p.vertOffset<0||pages.length!==1||pages[0].payload.length!==40)continue;
+  const page=view(pages[0].payload);if(page.getUint32(36,true)!==0||page.getUint32(0,true)>page.getUint32(4,true))continue;
+  let estimate=0;
+  for(const paragraph of box.paragraphs){
+   const runs=[];for(const token of paragraph.tokens.filter(t=>t.text)){
+    const id=paragraph.unit_styles[token.unit],payload=defs[id]?.payload;if(!payload||payload.length<46)fail('TEXT_BOX_FONT_UNVERIFIED');
+    if(runs.at(-1)?.properties.charShapeId===id)runs.at(-1).end++;
+    else runs.push({start:runs.at(-1)?.end??0,end:(runs.at(-1)?.end??0)+1,properties:{charShapeId:id,fontSize:view(payload).getUint32(42,true),ratios:[...payload.subarray(14,21)],relativeSizes:[...payload.subarray(28,35)]}});
+   }
+   const props=complexParagraphProperties(state.raw,rs,paragraph);
+   estimate+=textHeight({...paragraph,character_runs:runs,paragraph_properties:props},p.width)+Math.max(0,props.spacingBefore)/2+Math.max(0,props.spacingAfter)/2;
+  }
+  checks++;const available=page.getUint32(4,true)-p.vertOffset,needed=Math.max(p.height,Math.ceil(estimate)),host=state.blocks.find(b=>b.id===box.block_id);
+  if(host&&needed>available)add('FIXED_TEXT_BOX_MAY_EXCEED_PAGE_HEIGHT',host,needed,available,'font_estimate',{text_box_id:box.id,object_identity:layoutObjectIdentity(state,box),advice:'shorten only if requested or explicitly reposition the box; automatic box resizing and native pagination are unverified'});
+ }
+ return checks;
 }
 function cellPageRisks(state,add){
  if(!state.recordSets)return;const memo=new Map();
@@ -33,7 +58,7 @@ function cellPageRisks(state,add){
    height=Math.max(c.height,height);for(let i=c.row;i<c.row+c.rowSpan&&i<rows.length;i++)rows[i]=Math.max(rows[i],height/c.rowSpan);
   }const height=Math.ceil(rows.reduce((a,b)=>a+b,0));memo.set(t.id,height);return height;};
  for(const t of state.tables){if(!t.cell_path?.length)continue;const height=tableHeight(t),available=bodyHeight(t.section),host=state.blocks.find(b=>b.id===t.parent_id);
-  if(host&&available>0&&height>available)add('NESTED_TABLE_MAY_EXCEED_PAGE_HEIGHT',host,height,available,'font_estimate',{table_id:t.id,advice:'shorten the answer or explicitly restructure the nested table; automatic nested-table page splitting is unverified'});
+  if(host&&available>0&&height>available)add('NESTED_TABLE_MAY_EXCEED_PAGE_HEIGHT',host,height,available,'font_estimate',{table_id:t.id,object_identity:layoutObjectIdentity(state,t),advice:'shorten the answer or explicitly restructure the nested table; automatic nested-table page splitting is unverified'});
  }
 }
 export function analyzeLocalLayout(state){
@@ -41,15 +66,16 @@ export function analyzeLocalLayout(state){
  for(const b of state.blocks){const parent=cellContainer(state,b);if(!parent)continue;checks++;
   if(parent.width<=0)add('CELL_PADDING_EXCEEDS_WIDTH',b,parent.cell.width-parent.width,parent.cell.width);
   const glyph=minimumGlyphWidth(b);if(glyph&&parent.width>0&&glyph>parent.width)add('CELL_SINGLE_GLYPH_MAY_CLIP',b,glyph,parent.width,'font_estimate');
-  for(const t of state.tables.filter(t=>t.parent_id===b.id)){checks++;if(t.properties.tableWidth>parent.width)add('NESTED_TABLE_EXCEEDS_CELL_WIDTH',b,t.properties.tableWidth,parent.width,'geometry',{table_id:t.id});}
+  for(const t of state.tables.filter(t=>t.parent_id===b.id)){checks++;if(t.properties.tableWidth>parent.width)add('NESTED_TABLE_EXCEEDS_CELL_WIDTH',b,t.properties.tableWidth,parent.width,'geometry',{table_id:t.id,object_identity:layoutObjectIdentity(state,t)});}
   for(const p of state.pictures.filter(p=>p.block_id===b.id)){checks++;const props=p.properties,theta=props.rotationAngle*Math.PI/180,boundWidth=Math.abs(Math.cos(theta))*props.width+Math.abs(Math.sin(theta))*props.height;
-   const extent=Math.ceil(boundWidth+Math.max(0,props.horzOffset)-1e-7);if(extent>parent.width)add('PICTURE_EXCEEDS_CELL_WIDTH',b,extent,parent.width,'geometry',{picture_index:p.picture_index});}
-  for(const g of state.groups.filter(g=>g.block_id===b.id)){checks++;const p=g.properties,extent=p.width+Math.max(0,p.horzOffset);if(extent>parent.width)add('GROUP_EXCEEDS_CELL_WIDTH',b,extent,parent.width,'geometry',{group_id:g.id});}
+   const extent=Math.ceil(boundWidth+Math.max(0,props.horzOffset)-1e-7);if(extent>parent.width)add('PICTURE_EXCEEDS_CELL_WIDTH',b,extent,parent.width,'geometry',{picture_index:p.picture_index,object_identity:layoutObjectIdentity(state,p)});}
+  for(const g of state.groups.filter(g=>g.block_id===b.id)){checks++;const p=g.properties,extent=p.width+Math.max(0,p.horzOffset);if(extent>parent.width)add('GROUP_EXCEEDS_CELL_WIDTH',b,extent,parent.width,'geometry',{group_id:g.id,object_identity:layoutObjectIdentity(state,g)});}
  }
  cellPageRisks(state,add);
- return {status:issues.length?'issues_detected':'no_checked_geometry_overflow',checks,issues,geometry_overflows:issues.filter(x=>x.certainty==='geometry').length,font_warnings:issues.filter(x=>x.certainty==='font_estimate').length,layout_verified:false,scope:'mapped cell geometry and font-based nested-table height risks',not_checked:['native page pagination','stored minimum row height versus actual reflow','exact multi-line text height','floating-object overlap','font substitution','arbitrary shape transforms']};
+ checks+=fixedTextBoxRisks(state,add);
+ return {status:issues.length?'issues_detected':'no_checked_geometry_overflow',checks,issues,geometry_overflows:issues.filter(x=>x.certainty==='geometry').length,font_warnings:issues.filter(x=>x.certainty==='font_estimate').length,layout_verified:false,scope:'mapped cell geometry, font-based nested-table and paper-fixed rectangle height risks',not_checked:['native page pagination','stored minimum row height versus actual reflow','exact multi-line text height and internal text-box padding','non-paper-anchored or vertical text-box pagination','floating-object overlap','font substitution','arbitrary shape transforms']};
 }
-export function newLayoutIssues(before,after,remap={}){const key=(i,id)=>JSON.stringify([id,i.code,i.section,i.size,i.available]),counts=new Map();for(const i of before.issues){const id=Object.hasOwn(remap,i.block_id)?remap[i.block_id]:i.block_id;if(id===null)continue;const k=key(i,id);counts.set(k,(counts.get(k)??0)+1);}return after.issues.filter(i=>{const k=key(i,i.block_id),n=counts.get(k)??0;if(n){counts.set(k,n-1);return false;}return true;});}
+export function newLayoutIssues(before,after,remap={},removedObjects=[]){const removed=new Set(removedObjects),key=(i,id)=>JSON.stringify([id,i.object_identity??null,i.code,i.section,i.size,i.available]),counts=new Map();for(const i of before.issues){const id=Object.hasOwn(remap,i.block_id)?remap[i.block_id]:i.block_id;if(id===null||removed.has(i.object_identity)||i.object_identity?.startsWith('unverified:'))continue;const k=key(i,id);counts.set(k,(counts.get(k)??0)+1);}return after.issues.filter(i=>{const k=key(i,i.block_id),n=counts.get(k)??0;if(n){counts.set(k,n-1);return false;}return true;});}
 export function fitNestedTable(state,b,op){
  if(Object.keys(op).sort().join(',')!==['type','target_id','expected_old','expected_dimensions','expected_properties'].sort().join(','))fail('INVALID_OPERATION');
  const table=state.tables.find(t=>t.cells.some(c=>c.blocks.some(x=>x.id===b.id))),host=state.blocks.find(x=>x.id===table?.parent_id),parent=host&&cellContainer(state,host);

@@ -152,7 +152,7 @@ jobs:
         run: python -m pip install olefile==0.47
       - name: Verify fields, nested cells and grouped pictures in isolated runtime
         run: |
-          node --test --test-concurrency=2 tests/test_local_complex.mjs tests/test_local_complex_format.mjs tests/test_local_partial_read.mjs tests/test_local_complex_mapping.mjs tests/test_local_complex_picture.mjs tests/test_local_complex_table.mjs tests/test_local_complex_merged.mjs tests/test_local_complex_field.mjs tests/test_local_complex_group.mjs tests/test_local_freedom.mjs tests/test_local_reflow.mjs tests/test_local_placement.mjs tests/test_local_public_regressions.mjs tests/test_local_preview.mjs
+          node --test --test-concurrency=2 tests/test_local_complex.mjs tests/test_local_complex_format.mjs tests/test_local_partial_read.mjs tests/test_local_complex_mapping.mjs tests/test_local_complex_picture.mjs tests/test_local_complex_table.mjs tests/test_local_complex_merged.mjs tests/test_local_complex_field.mjs tests/test_local_complex_group.mjs tests/test_local_freedom.mjs tests/test_local_reflow.mjs tests/test_local_placement.mjs tests/test_local_public_regressions.mjs tests/test_local_review_fixes.mjs tests/test_local_preview.mjs
           node scripts/package_local_plugin.mjs
           node scripts/check-local-complex.mjs
           python scripts/check-local-complex.py
@@ -168,6 +168,8 @@ jobs:
           python scripts/check-local-reflow.py
           node scripts/check-local-placement.mjs
           python scripts/check-local-placement.py
+          node scripts/check-local-review-fixes.mjs
+          python scripts/check-local-review-fixes.py outputs/local-review-fixes
 
   local-large-text:
     name: Local large text / ${{ matrix.os }}

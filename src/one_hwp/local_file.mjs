@@ -3,6 +3,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { createHash, randomUUID } from 'node:crypto';
 import { GuardError } from '../../probes/sites-runtime/guard/records.mjs';
+import {acquireLocalLock} from './local_lock.mjs';
 const fail = code => { throw new GuardError(code); };
 export const digest = data => createHash('sha256').update(data).digest('hex');
 const MAX_BYTES = 4 * 1024 * 1024;
@@ -110,10 +111,9 @@ export function saveLocal(snapshot, bytes, { output, expected_output_sha256 } = 
       backup_id: null, persistence: 'local_file' };
   }
   const directory = backupDirectory(target), lock = path.join(directory, `${digest(Buffer.from(key(target)))}.lock`);
-  let locked = false, temporary;
+  let heldLock, temporary;
   try {
-    try { writeExclusive(lock, Buffer.from('HWP Easy local save\n')); locked = true; }
-    catch (error) { if (error.code === 'EEXIST') fail('DOCUMENT_BUSY'); throw error; }
+    heldLock=acquireLocalLock(lock);
     checkedCurrent(snapshot);
     if (destination) checkedCurrent(destination);
     temporary = path.join(path.dirname(target), `.hwp-easy-${randomUUID()}.tmp`);
@@ -131,11 +131,12 @@ export function saveLocal(snapshot, bytes, { output, expected_output_sha256 } = 
     return { source: snapshot.source, source_sha256: snapshot.sha256, saved_path: published.source,
       output_sha256: published.sha256, saved: true, save_mode: same ? 'same_file' : 'save_as',
       selected_file_updated: same, file_location: 'current_execution_environment', backup_id, persistence: 'local_file',
+      abandoned_lock_recovered:heldLock.recovered,
       warnings: ['Version checks guard ordinary concurrent edits; this is not an operating-system transaction with unrelated applications.',
         ...(process.platform === 'win32' ? ['Inherited Windows file ACLs and power-loss durability are not independently certified.'] : [])] };
   } finally {
     if (temporary && fs.existsSync(temporary)) fs.unlinkSync(temporary);
-    if (locked) fs.unlinkSync(lock);
+    heldLock?.release();
   }
 }
 export function restoreLocal(snapshot, backup_id) {

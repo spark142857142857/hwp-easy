@@ -26,7 +26,7 @@ const HwpDocument=createLocalDocumentClass(UpstreamHwpDocument);
 let initialized = false;
 export function initializeLocal(wasmBytes) { if (!initialized) { initSync({module:wasmBytes}); initialized=true; } }
 const fail = code => { throw new GuardError(code); };
-function layoutState(bytes){const raw=readHwp(bytes),hasTables=raw.profile.sections.some(({section})=>[...parseRecords(raw.streams.get(`BodyText/Section${section}`))].some(r=>r.tag===77));return hasTables?inspectLocalComplex(HwpDocument,bytes,{includeDocumentInfo:false,verifyCharacterModel:false}):{blocks:[],tables:[],pictures:[],groups:[]};}
+function layoutState(bytes){const raw=readHwp(bytes),hasObjects=raw.profile.sections.some(({section})=>[...parseRecords(raw.streams.get(`BodyText/Section${section}`))].some(r=>r.tag===77||r.tag===76&&Buffer.from(r.payload.subarray(0,4)).toString()==='cer$'));return hasObjects?inspectLocalComplex(HwpDocument,bytes,{includeDocumentInfo:false,verifyCharacterModel:false}):{blocks:[],tables:[],pictures:[],groups:[]};}
 function rangeEligibleBlocks(document,version,raw,structural) {
   let model=structural;
   if(!model){
@@ -68,7 +68,7 @@ export async function runLocal(request) {
   object(request,schema,request.action==='capabilities'?['action']:request.action==='read'?['action','source']:['action','source','expected_sha256']);
   if(request.action==='capabilities')return {engine:'@rhwp/core',engine_version:'0.8.6',transport:'local_execution',
     save_default:'same_file',selected_file_updated:true,file_location:'current_execution_environment',uploads_required:false,web_browser_required:false,
-    read:true,preview:true,edit:true,restore:true,find:true,layout_diagnostics:true,reject_new_geometry_overflow:true,reject_new_layout_risk:true,fit_nested_table_to_cell:true,automatic_selected_paragraph_reflow:true,automatic_selected_floating_object_reflow:true,reposition_floating_preserves_anchor:true,opaque_body_drawing_placement:true,protect_section_bottom:true,plain_body_text_boxes:true,plain_cell_text_boxes:true,local_recovery_history:true,new_paragraphs:true,multiline_body_and_cells:true,new_simple_tables:true,
+    read:true,preview:true,edit:true,restore:true,find:true,layout_diagnostics:true,reject_new_geometry_overflow:true,reject_new_layout_risk:true,paper_fixed_text_box_height_risks:true,dead_local_save_owner_recovery:true,fit_nested_table_to_cell:true,automatic_selected_paragraph_reflow:true,automatic_selected_floating_object_reflow:true,reposition_floating_preserves_anchor:true,opaque_body_drawing_placement:true,protect_section_bottom:true,plain_body_text_boxes:true,plain_cell_text_boxes:true,local_recovery_history:true,new_paragraphs:true,multiline_body_and_cells:true,new_simple_tables:true,
     delete_paragraphs:true,merge_adjacent_paragraphs:true,split_paragraph:true,splice_text:true,mixed_style_multiline_insertion:true,
     move_body_paragraphs:true,move_complete_tables:true,duplicate_plain_body_and_cell_paragraphs:true,
     insert_delete_table_rows_columns:true,
@@ -154,10 +154,11 @@ export async function runLocal(request) {
     });
     candidate=await document.edit({expected_sha256:version,operations});
   }
-  let {bytes,_layout_target_remap,...verification}=candidate;
+  let {bytes,_layout_target_remap,_layout_removed_objects,...verification}=candidate;
+  if(request.operations.every(op=>op.type==='replace_text'&&op.expected_old===op.new_text))bytes=snapshot.bytes;
   try{const oldState=layoutState(snapshot.bytes),newState=layoutState(bytes),beforeLayout=analyzeLocalLayout(oldState),afterLayout=analyzeLocalLayout(newState),remap={};
     if(_layout_target_remap)for(const b of oldState.blocks){const key=Object.hasOwn(_layout_target_remap,b.id)?b.id:standardBlockId(b),name=_layout_target_remap[key];remap[b.id]=newState.blocks.find(x=>x.id===name||standardBlockId(x)===name)?.id??null;}
-    verification.layout_diagnostics={...afterLayout,new_issues:newLayoutIssues(beforeLayout,afterLayout,remap)};
+    verification.layout_diagnostics={...afterLayout,new_issues:Buffer.from(bytes).equals(Buffer.from(snapshot.bytes))?[]:newLayoutIssues(beforeLayout,afterLayout,remap,_layout_removed_objects)};
     if(request.layout_policy==='reject_new_overflow'&&verification.layout_diagnostics.new_issues.some(i=>i.certainty==='geometry'))fail('NEW_LAYOUT_OVERFLOW');
     if(request.layout_policy==='reject_new_risk'&&verification.layout_diagnostics.new_issues.length)fail('NEW_LAYOUT_RISK');
   }catch(error){if(['NEW_LAYOUT_OVERFLOW','NEW_LAYOUT_RISK'].includes(error.code)||['reject_new_overflow','reject_new_risk'].includes(request.layout_policy))throw error;if(!(error instanceof GuardError))throw error;verification.layout_diagnostics={status:'unavailable',reason:error.code,layout_verified:false};}

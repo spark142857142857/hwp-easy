@@ -102,7 +102,7 @@ test('backup cannot be restored to a different selected document',async t=>{
 });
 test('same-file publication failure preserves source and verified recovery',t=>{
  const {source}=workspace(t),snapshot=readLocal(source),original=Buffer.from(snapshot.bytes),rename=fs.renameSync;
- try {fs.renameSync=()=>{const error=new Error('test failure');error.code='EACCES';throw error;};
+ try {fs.renameSync=(from,to)=>{if(to!==source)return rename(from,to);const error=new Error('test failure');error.code='EACCES';throw error;};
    assert.throws(()=>saveLocal(snapshot,fixture({table:false})));}
  finally {fs.renameSync=rename;}
  assert.deepEqual(fs.readFileSync(source),original);

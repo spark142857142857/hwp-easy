@@ -11,6 +11,8 @@ import {hasLocalComplexContent,editLocalComplex,inspectLocalComplex} from './loc
 import {reflowLocal} from './local_reflow.mjs';
 import {placementLocal} from './local_placement.mjs';
 import {editTextBox} from './local_text_boxes.mjs';
+import {layoutObjectIdentity} from './local_layout_identity.mjs';
+import {standardBlockId} from './local_complex_table.mjs';
 
 const fail=code=>{throw new GuardError(code);};
 const pictureTypes=new Set(['insert_picture','update_picture','delete_picture','replace_picture']);
@@ -56,7 +58,7 @@ export async function editLocalBatch(HwpDocument,source,initialVersion,operation
       const id=rawTarget(value,initialVersion);identities.set(id,id);
     }
   }
-  let bytes=source,last,layoutRemap=null;const outcomes=[];
+  let bytes=source,last,layoutRemap=null;const outcomes=[],removedObjects=new Set();
   for(const [index,op] of operations.entries()){
     const currentVersion=digest(bytes),operation=structuredClone(op);
     for(const {key,index,value} of references(op)){
@@ -64,7 +66,13 @@ export async function editLocalBatch(HwpDocument,source,initialVersion,operation
       if(current===null)fail('BATCH_TARGET_REMOVED');
       if(index===undefined)operation[key]=target(current,currentVersion);else operation[key][index]=target(current,currentVersion);
     }
+    let removed;
+    if(operation.type==='delete_picture'){
+      const state=inspectLocalComplex(HwpDocument,bytes,{includeDocumentInfo:false,verifyCharacterModel:false}),id=rawTarget(operation.target_id,currentVersion),b=state.blocks.find(b=>b.id===id||standardBlockId(b)===id),pictures=state.pictures.filter(p=>p.block_id===b?.id),p=pictures.find(p=>p.picture_index===(operation.picture_index??0));
+      if(p)removed=layoutObjectIdentity(state,p);
+    }
     const result=await applyLocalOperation(HwpDocument,bytes,currentVersion,operation);
+    if(removed)removedObjects.add(removed);
     if(result.content_verified!==true||result.raw_preservation_verified!==true)fail('BATCH_VERIFICATION_FAILED');
     const {_target_remap,bytes:next,...verification}=result;
     if(_target_remap){
@@ -86,7 +94,7 @@ export async function editLocalBatch(HwpDocument,source,initialVersion,operation
     }
     outcomes.push({index,type:op.type,...verification});bytes=next;last=verification;
   }
-  if(operations.length===1)return {bytes,...last,_layout_target_remap:layoutRemap};
+  if(operations.length===1)return {bytes,...last,_layout_target_remap:layoutRemap,_layout_removed_objects:[...removedObjects]};
   return {bytes,content_verified:true,raw_preservation_verified:true,
     raw_preservation_scope:'each_operation_verified_before_one_final_save',
     operation_count:operations.length,atomic_batch:true,
@@ -99,5 +107,5 @@ export async function editLocalBatch(HwpDocument,source,initialVersion,operation
     page_layout_changed:outcomes.some(o=>o.page_layout_changed===true),
     text_box_changed:outcomes.some(o=>o.text_box_changed===true),
     flow_changed:outcomes.some(o=>o.flow_changed===true),
-    layout_verified:false,operations:outcomes,_layout_target_remap:layoutRemap};
+    layout_verified:false,operations:outcomes,_layout_target_remap:layoutRemap,_layout_removed_objects:[...removedObjects]};
 }
