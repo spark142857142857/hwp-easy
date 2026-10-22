@@ -64,7 +64,9 @@ for c in cases:
  edit=next((op for op in c['operations'] if op['type']=='splice_text'),None)
  if edit:
   raw=edit['expected_old'].encode('utf-16le');tokens=[raw[i:i+2].hex() for i in range(0,len(raw),2)];matches=[i for i in range(len(old)-len(tokens)+1) if all(old[i+j][0]=='t' and old[i+j][1]==token for j,token in enumerate(tokens))];assert len(matches)==1
-  at=matches[0];previous=old[at:at+len(tokens)];assert len({json.dumps([v[2],v[3],v[4]]) for v in previous})==1;raw=edit['new_text'].encode('utf-16le');old[at:at+len(tokens)]=[['t',raw[i:i+2].hex(),*previous[0][2:]] for i in range(0,len(raw),2)]
+  at=matches[0];text=edit['expected_old'];start=len(text[:edit['start']].encode('utf-16le'))//2;stop=len(text[:edit['end']].encode('utf-16le'))//2;previous=old[at+start:at+stop]
+  if previous:assert len({json.dumps([v[2],v[3],v[4]]) for v in previous})==1
+  inherited=(previous or [old[at+max(0,start-1)]])[0];raw=edit['new_text'].encode('utf-16le');old[at+start:at+stop]=[['t',raw[i:i+2].hex(),*inherited[2:]] for i in range(0,len(raw),2)]
  assert old==new,(name,'logical text/anchors/styles/order')
 summary=dict(status='PASS',cases=len(cases),logical_anchor_order_and_utf16_styles_exact=True,cell_paragraph_counts_verified=True,retained_controls_widths_padding_borders_instances_exact=True,other_streams_and_definitions_exact=True,exact_restore=True)
 (root/'independent-summary.json').write_text(json.dumps(summary,indent=2)+'\n',encoding='utf-8');print(json.dumps(summary))

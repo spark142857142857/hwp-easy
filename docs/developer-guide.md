@@ -4,7 +4,7 @@
 
 [프로젝트 개요](../README.md) · [문서 인덱스](README.md) · [아키텍처](architecture.md)
 
-소스를 변경하거나 배포 패키지를 생성할 때 필요한 환경과 검사 명령입니다. 현재 소스·검증 패키지는 **로컬 HWP Easy 0.2.37**입니다. 같은 버전의 앱별 패키지는 공통 실행기를 포함하며 실제 설치 버전은 [프로젝트 상태](project-status.md)에서 구분합니다. 파일 편집 절차는 [사용 가이드](quick-start.md), 실제 설치·호출 결과는 [프로젝트 상태](project-status.md)에 정리합니다.
+소스를 변경하거나 배포 패키지를 생성할 때 필요한 환경과 검사 명령입니다. 현재 소스·검증 패키지는 **로컬 HWP Easy 0.2.38**입니다. 같은 버전의 앱별 패키지는 공통 실행기를 포함하며 실제 설치 버전은 [프로젝트 상태](project-status.md)에서 구분합니다. 파일 편집 절차는 [사용 가이드](quick-start.md), 실제 설치·호출 결과는 [프로젝트 상태](project-status.md)에 정리합니다.
 
 ## 환경과 구성
 
@@ -60,9 +60,9 @@ GitHub Actions의 [Source checks](../.github/workflows/checks.yml)는 **수동 �
 
 전체 CI는 핵심 기능 묶음 완료, 저장·복구 공통 경로 통합, 설치본 갱신·배포 준비 등 주요 단계에서 실행합니다. 작은 수정마다 반복 실행하지 않으며, 작업 중에는 변경 범위에 맞는 로컬 검사로 확인합니다. 단계별 CI 기록에는 실행 대상 커밋과 실제 결과를 남기고, 이전 커밋의 통과 결과를 최신 소스의 통과로 기록하지 않습니다.
 
-Windows/Linux 복합 검사는 소스·기본 패키지와 부동 개체 패키지의 두 작업으로 나눈다. 전체 16개 작업이며 각 실행 명령은 독립 단계여서 앞선 실패 뒤에 다른 명령이 계속 실행되어 오류를 숨기지 않는다. 편집 후보는 `verified_edit_sha256`으로 계획/저장을 대조하고, 파생 미리보기의 성공/시간 초과에 따라 달라질 수 있는 최종 `output_sha256`과 구분한다.
+Windows/Linux 복합 검사는 소스·기본 패키지와 부동 개체 패키지의 두 작업으로 나눈다. 전체 18개 작업이며 각 실행 명령은 독립 단계여서 앞선 실패 뒤에 다른 명령이 계속 실행되어 오류를 숨기지 않는다. 편집 후보는 `verified_edit_sha256`으로 계획/저장을 대조하고, 파생 미리보기의 성공/시간 초과에 따라 달라질 수 있는 최종 `output_sha256`과 구분한다.
 
-수동 실행의 기본 `scope: all`은 전체 검사를 실행한다. 표 흐름 CI만 재확인할 때는 `scope: table-flow` 또는 `gh workflow run checks.yml --ref main -f scope=table-flow`로 Windows/Linux 표 작업 2개만 실행한다. 표 사이 글·본문 호스트 검사는 `scope: table-text` 또는 `gh workflow run checks.yml --ref main -f scope=table-text`로 관련 Windows/Linux 2개 작업만 실행한다. 이 범위에는 기존 표 소스 회귀도 포함한다. 부분 실행의 성공은 전체 16개 작업 성공과 구분해 기록한다. 기존 표 작업은 패키지 38건과 Windows 정리 시간을 포함해 10분을 허용하며 개별 편집·미리보기 제한은 유지한다.
+수동 실행의 기본 `scope: all`은 전체 검사를 실행한다. 표 흐름 CI만 재확인할 때는 `scope: table-flow` 또는 `gh workflow run checks.yml --ref main -f scope=table-flow`로 Windows/Linux 표 작업 2개만 실행한다. 표 사이 글·본문 호스트 검사는 `scope: table-text` 또는 `gh workflow run checks.yml --ref main -f scope=table-text`로 관련 Windows/Linux 2개 작업만 실행한다. 좁은 셀·문자 지표는 `scope: table-metrics` 또는 `gh workflow run checks.yml --ref main -f scope=table-metrics`로 관련 2개 작업만 실행한다. 각 부분 실행에는 기존 표 소스 회귀도 포함한다. 부분 실행의 성공은 전체 18개 작업 성공과 구분해 기록한다. 기존 표 작업은 패키지 38건과 Windows 정리 시간을 포함해 10분을 허용하며 개별 편집·미리보기 제한은 유지한다.
 
 문서만 변경했을 때도 아래 링크 검사는 로컬에서 실행합니다.
 
@@ -93,9 +93,9 @@ python scripts/archive_agent_skills.py
 
 | 배포 대상 | 생성 ZIP |
 | --- | --- |
-| Codex | `outputs/plugin-package/hwp-easy-0.2.37.zip` |
-| Claude Code | `outputs/agent-packages/hwp-easy-claude-code-0.2.37.zip` |
-| Cursor | `outputs/agent-packages/hwp-easy-cursor-0.2.37.zip` |
+| Codex | `outputs/plugin-package/hwp-easy-0.2.38.zip` |
+| Claude Code | `outputs/agent-packages/hwp-easy-claude-code-0.2.38.zip` |
+| Cursor | `outputs/agent-packages/hwp-easy-cursor-0.2.38.zip` |
 
 패키지 생성은 앱 설치나 공개 게시를 수행하지 않습니다. Claude Code·Cursor의 설치 검사와 격리된 폴더에 설치한 실행기의 검증은 다음으로 재현합니다.
 
@@ -120,7 +120,7 @@ node scripts/install_agent_skill.mjs --client cursor --package outputs/agent-pac
 OpenAI 포털의 기존 MCP 등록은 서버 없는 패키지로 변경할 수 없어, 로컬판에는 별도 식별자 `hwp-easy-local`을 사용합니다. 다음 명령은 검증한 ZIP에서 등록 이름·호출 안내·표시 필드만 조정하고 모든 실행 자원의 바이트 일치를 검사합니다. 업로드·설치·심사 제출을 수행하지 않습니다.
 
 ```bash
-python scripts/package_directory_plugin.py outputs/plugin-package/hwp-easy-0.2.37.zip outputs/directory-package
+python scripts/package_directory_plugin.py outputs/plugin-package/hwp-easy-0.2.38.zip outputs/directory-package
 ```
 
 포털 관측과 남은 차단 항목은 [로컬 디렉터리 등록 기록](local-directory-submission.md)에 정리합니다.
@@ -203,3 +203,5 @@ python scripts/check-local-table-reflow.py
 0.2.36의 정렬 셀·복수 중첩 표 호스트는 `node scripts/check-local-table-hosts.mjs`와 `python scripts/check-local-table-sync.py outputs/local-table-hosts`로 검사한다. 같은 네이티브 스크립트에 `outputs/local-table-hosts`를 전달하면 원본 이미지·복구 픽셀에 더해 메모리에서만 글자 색을 바꾼 검사 이미지로 실제 답변 줄과 형제 표의 표시 순서·비겹침을 확인한다. HWP는 저장하지 않는다. [지원 범위](local-release-0.2.36.md)
 
 0.2.35의 재열기 후 높이 동기화·복잡 꼬리말 검사는 `node scripts/check-local-table-sync.mjs`와 `python scripts/check-local-table-sync.py`를 사용한다. 실제 한글 검사는 같은 두 네이티브 스크립트에 `outputs/local-table-sync`를 넘긴다. 선택한 셀의 글/상속 서식과 비대상 레코드를 독립 대조하고, 꼬리말은 홀짝 적용·쪽 번호 숫자 영역 외의 고정 픽셀을 확인한다.
+
+0.2.38 문자 지표 검사는 `node scripts/check-local-table-metrics.mjs`와 `python scripts/check-local-table-text-flow.py outputs/local-table-metrics`를 사용한다. 실제 한글에서는 `scripts/render-local-table-reflow-native.py outputs/local-table-metrics`와 Pillow 환경의 `scripts/check-local-table-metrics-native.py outputs/local-table-metrics`로 원래 색의 페이지와 각 문자 위치의 실제 줄·셀 프레임을 대조한다. 좁은 셀은 검사용 색 변경도 한글의 재조판을 유발할 수 있어 색 표시를 사용하지 않는다. [지원 경계와 검증](local-release-0.2.38.md)

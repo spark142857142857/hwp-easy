@@ -6,6 +6,7 @@ import {view,equal,equalBytes,fail} from './local_complex_records.mjs';
 import {publishVerifiedPatch} from './local_verified_patch.mjs';
 import {invalidateSectionLayout} from './local_layout_cache.mjs';
 import {createNaturalTextMeasurer} from './local_rendered_layout.mjs';
+import {tableParagraphHeight as paragraphHeight} from './local_table_text_metrics.mjs';
 import {GuardError} from '../../probes/sites-runtime/guard/records.mjs';
 import {hostRoots,rootForest,normalizeTableHosts} from './local_table_hosts.mjs';
 import {digest as digestForHost} from './local_file.mjs';
@@ -31,17 +32,6 @@ export function tablePaginationEnabled(state,t){
  const host=state.blocks.find(b=>b.id===t.parent_id),parent=host&&state.tables.find(p=>p.cells.some(c=>c.blocks.some(b=>b.id===host.id))),rs=state.recordSets.get(t.section),p=rs[t.record_index]?.payload;
  if(!p||!tableHeader(p))return false;const f=objectFlow(rs[t.record_index]),v=view(p),flags=view(rs[t.table_record].payload).getUint32(0,true);
  return !f.treatAsChar&&f.textWrap===0&&[0,1].includes(f.textFlow)&&f.vertRelTo===2&&f.horzRelTo===2&&!f.vertAlign&&!f.horzAlign&&!(v.getUint32(4,true)&(1<<20))&&!prevention(p)&&(flags&3)===2&&(!t.cell_path.length||Boolean(parent&&tablePaginationEnabled(state,parent)));
-}
-function paragraphHeight(b,width,measure){
- const p=b.paragraph_properties;if(!b.text_mapping_verified||!b.unit_styles||!p||p.lineSpacingType!==0||p.lineSpacing<100||p.lineSpacing>300||p.keepLines||p.keepWithNext||p.marginLeft||p.marginRight||p.indent||p.spacingBefore||p.spacingAfter||p.pageBreakBefore||b.text.length>10000)fail('TABLE_REFLOW_PARAGRAPH_PROFILE_UNSUPPORTED');
- if(b.character_runs.some(r=>r.properties.ratios.some(n=>n!==100)||r.properties.relativeSizes.some(n=>n!==100)))fail('TABLE_REFLOW_FONT_PROFILE_UNSUPPORTED');
- // Stored heights are minima. Reserve additional room for reader font metrics;
- // widths/page breaks are still recomputed by the user's HWP reader.
- const sizes=new Set(b.character_runs.map(r=>r.properties.fontSize));if(sizes.size>1)fail('TABLE_REFLOW_FONT_PROFILE_UNSUPPORTED');const size=[...sizes][0]??1000;if(b.text&&width<size*2)fail('TABLE_REFLOW_NARROW_CELL_UNVERIFIED');const points=[...b.text],widths=measure(b.text,b.character_runs);let index=0,x=0,lines=1,word=[];
- const put=w=>{if(w>width*.96)fail('TABLE_REFLOW_GLYPH_WIDTH_UNSUPPORTED');if(x>0&&x+w>width*.96){lines++;x=0;}x+=w;};
- const flush=()=>{const total=word.reduce((n,w)=>n+w,0);if(total<=width*.96)put(total);else for(const w of word)put(w);word=[];};
- for(const ch of points){if(!/^[A-Za-z0-9]$/.test(ch))flush();if(ch==='\n'){lines++;x=0;continue;}const w=widths[index++]*75*1.04;if(!Number.isFinite(w)||w<0)fail('TABLE_REFLOW_FONT_PROFILE_UNSUPPORTED');if(/^[A-Za-z0-9]$/.test(ch))word.push(w);else put(w);}flush();
- return Math.max(1600,Math.ceil(lines*size*p.lineSpacing/100*1.08));
 }
 function reflowSingle(HwpDocument,source,version,op,blockFlow=false,selectedRoots=[]){
  if(op.type!=='reflow_table'||!equal(Object.keys(op).sort(),['type','target_id','expected_old','expected_tables'].sort()))fail('INVALID_OPERATION');

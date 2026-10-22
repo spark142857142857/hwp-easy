@@ -1,6 +1,6 @@
 # Detailed HWP editing and recovery guidance
 
-For 0.2.37 table growth/page continuation, use the explicit `reflow_table` root context in [requests.md](requests.md). Inspect the plan and retain native-layout uncertainty. A root tree already matching the complete flow profile automatically synchronizes supported later text, font and cell-paragraph edits before the one final save, including after reopening. `table_auto_sync` reports the roots checked. The operation covers the whole selected root tree, including ancestor rows; it does not implicitly restructure other tables. Stored minima grow conservatively and do not shrink when text is removed.
+For 0.2.38 table growth/page continuation, use the explicit `reflow_table` root context in [requests.md](requests.md). Inspect the plan and retain native-layout uncertainty. A root tree already matching the complete flow profile automatically synchronizes supported later text, font and cell-paragraph edits before the one final save, including after reopening. `table_auto_sync` reports the roots checked. The operation covers the whole selected root tree, including ancestor rows; it does not implicitly restructure other tables. Stored minima grow conservatively and do not shrink when text is removed.
 
 Use only when explicitly invoked for the current task. The user's instructions take precedence over this workflow.
 
