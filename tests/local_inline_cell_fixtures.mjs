@@ -8,6 +8,7 @@ import {prepareComplexBoundary} from '../src/one_hwp/local_complex_boundary.mjs'
 import {reanchorFloating} from '../src/one_hwp/local_floating_anchor.mjs';
 import {publishVerifiedPatch} from '../src/one_hwp/local_verified_patch.mjs';
 import {invalidateSectionLayout} from '../src/one_hwp/local_layout_cache.mjs';
+import {parseRecords} from '../probes/sites-runtime/guard/records.mjs';
 
 export const inlineCellProfiles=[
  {duplicate:true,selected:0},{duplicate:true,selected:1},{duplicate:true,selected:1,ancestorAlignment:[1]},{duplicate:true,selected:1,ancestorAlignment:[2]},
@@ -16,6 +17,7 @@ export const inlineCellProfiles=[
  {prefix:'문'.repeat(24),wide:true},{prefix:'문'.repeat(24),wide:true,ancestorAlignment:[2]},
  {prior:true},{prior:true,following:true,ancestorAlignment:[1]},{prior:true,following:true,ancestorAlignment:[2]},
  {depth:3,prefix:'',prior:true,narrow:true,ancestorAlignment:[1,2]},
+ {prior:true,following:true,ancestorAlignment:[2],spacing:300},
 ];
 export function inlineCellFixture(options={}){
  let bytes=options.duplicate?ambiguousNestedFloatingFixture():nestedFloatingFixture(options),state=inspectLocalComplex(HwpDocument,bytes),rs=state.recordSets.get(0);
@@ -33,5 +35,6 @@ export function inlineCellFixture(options={}){
   const first=state.blocks.find(b=>b.cell_path.length===1&&b.cell_path[0].cellIndex===0);rs=prepareComplexBoundary(state,first,{type:'split_paragraph',target_id:'fixture',expected_old:first.text,offset:4},'').records;reload();
   if(options.following){const t=state.tables.find(t=>t.cell_path.length===1),host=state.blocks.find(b=>b.id===t.parent_id);rs=prepareComplexBoundary(state,host,{type:'insert_paragraphs',target_id:'fixture',expected_old:host.text,paragraphs:['뒤 문단']},'').records;reload();}
  }
+ if(options.spacing){const defs=[...parseRecords(state.raw.streams.get('DocInfo'))].map(r=>({...r,payload:r.payload.slice()}));for(const r of defs.filter(r=>r.tag===25)){view(r.payload).setInt32(24,options.spacing,true);if(r.payload.length>=54&&view(r.payload).getUint32(50,true)>0)view(r.payload).setInt32(50,options.spacing,true);}bytes=publishVerifiedPatch(bytes,state,0,rs,encodeRecords(defs));state=inspectLocalComplex(HwpDocument,bytes);rs=state.recordSets.get(0);}
  rs=invalidateSectionLayout(rs,state.blocks);reload();return bytes;
 }

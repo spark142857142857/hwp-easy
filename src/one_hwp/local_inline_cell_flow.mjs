@@ -22,6 +22,7 @@ export function needsComposedCellFlow(state,box){
  * Stored cell sizes are minima: insufficient room is refused, never interpreted
  * as a new grid. Limits bound hostile documents and ambiguous wrap decisions. */
 export function composeCellTables(state,root,snapshot,selectedRootCell){
+ const rs=state.recordSets.get(root.section);for(const t of state.tables)if(t!==root&&t.section===root.section&&t.paragraph===root.paragraph)inlineTableFlow(rs[t.record_index]);
  const samples=[.96,1,1.04].map(scale=>compose(state,root,snapshot,selectedRootCell,scale)),middle=samples[1];
  for(const [table,layout]of middle)for(const [child,p]of layout.children){
   const positions=samples.map(s=>s.get(table).children.get(child));
@@ -54,7 +55,7 @@ function compose(state,root,snapshot,selectedRootCell,scale){
    cells.set(c.cell,{x:xs[c.col]/75,y:ys[c.row]/75,w:c.width/75,h:c.height/75,pad});
    // Later root rows cannot move a preceding cell's origin. Their automatic
    // growth/pagination remains outside this placement proof (F2).
-   if(t===root&&c.row>=selectedRootCell.row+selectedRootCell.rowSpan)continue;
+   if(t===root&&c.row>=selectedRootCell.row+selectedRootCell.rowSpan){for(const b of c.blocks)for(const child of state.tables.filter(t=>t.parent_id===b.id))tableLayout(child);continue;}
    if(h<=0)fail('NESTED_PLACEMENT_FLOW_EXCEEDS_FIXED_CELL');
    let y=0,lastGap=0,error=0;const positions=[];
    for(const b of c.blocks){

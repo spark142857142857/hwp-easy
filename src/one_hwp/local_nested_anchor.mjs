@@ -83,7 +83,23 @@ function projectComposedAnchor(state,box,snapshot){
  if(!contains(at.page.body,cell)||frame.w<=0||frame.h<=0||box.properties.width/75>frame.w||box.properties.height/75>frame.h)fail('NESTED_PLACEMENT_FRAME_TOO_SMALL');
  const refs=at.page.body_runs.filter(r=>r.secIdx===box.section&&r.paraIdx===box.paragraph&&r.parentParaIdx==null&&r.cellIdx==null&&r.charStart===0);if(refs.length!==1||Math.abs(refs[0].y-at.root_frame.y)>2)fail('NESTED_PLACEMENT_PARAGRAPH_ORIGIN_UNVERIFIED');
  const anchor={x:at.page.info.columns[0].x,y:refs[0].y},rect={x:anchor.x+box.properties.horzOffset/75,y:anchor.y+box.properties.vertOffset/75,w:box.properties.width/75,h:box.properties.height/75};
- return {page:at.page.page,anchor,cell,frame,rect,frames,prefix_tolerance:error,lineage,raw_cell:rawCell,table,host:state.blocks.find(b=>b.id===box.block_id),composed_flow:true};
+ // Core may put a nested frame outside its own ancestor even after stripping
+ // the selected drawing. Match observed cell text to full raw ancestry for
+ // obstacle classification only; its displayed origin is still not native.
+ const composedFrames=new Set([at.root_frame]),rawTables=state.tables.filter(t=>t.section===box.section&&t.paragraph===box.paragraph&&t.cell_path.length);let checks=0;
+ const tick=()=>{if(++checks>200000)fail('NESTED_PLACEMENT_CHECK_LIMIT');};
+ for(const observed of at.page.controls){
+  tick();if(observed.type!=='table'||observed.secIdx!==box.section||!(observed.stableIndex?.length>3))continue;
+  const owned=rawTables.some(raw=>{
+   tick();if(observed.controlIdx!==raw.control||observed.paraIdx!==raw.cell_path.at(-1).cellParaIndex||observed.rowCount!==raw.dimensions.rowCount||observed.colCount!==raw.dimensions.colCount||Math.abs(observed.w-raw.properties.tableWidth/75)>=2)return false;
+   return at.page.body_runs.some(run=>{
+    tick();if(run.secIdx!==box.section||run.parentParaIdx!==box.paragraph||!equal(run.cellPath?.slice(0,raw.cell_path.length),raw.cell_path)||run.cellPath?.[raw.cell_path.length]?.controlIndex!==raw.control)return false;
+    return observed.cells?.some(cell=>{tick();return cell.cellIdx===run.cellPath[raw.cell_path.length].cellIndex&&contains(cell,{x:run.x,y:run.y,w:0,h:0},2);});
+   });
+  });
+  if(owned)composedFrames.add(observed);
+ }
+ return {page:at.page.page,anchor,cell,frame,rect,frames,prefix_tolerance:error,lineage,raw_cell:rawCell,table,host:state.blocks.find(b=>b.id===box.block_id),composed_frames:composedFrames};
 }
 
 export function nestedTextBand(state,box,projection,estimate,verifiedFloats=null){

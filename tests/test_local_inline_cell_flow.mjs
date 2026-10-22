@@ -1,6 +1,7 @@
 import test from 'node:test';import assert from 'node:assert/strict';import fs from 'node:fs';import path from 'node:path';import os from 'node:os';
 import {initializeLocal,runLocal} from '../src/one_hwp/local_runner.mjs';
 import {inlineCellFixture,inlineCellProfiles} from './local_inline_cell_fixtures.mjs';
+import {HwpDocument} from '@rhwp/core';import {inspectLocalComplex} from '../src/one_hwp/local_complex.mjs';import {placeNestedFloating} from '../src/one_hwp/local_nested_floating.mjs';
 initializeLocal(fs.readFileSync(new URL('../node_modules/@rhwp/core/rhwp_bg.wasm',import.meta.url)));
 const read=source=>runLocal({action:'read',source,max_chars:64000,max_blocks:128});
 const move=s=>{const b=s.text_boxes[0];return {type:'reposition_floating_object',target_id:b.target_id,expected_old:s.blocks.find(p=>p.id===b.block_id).text,expected_properties:b.properties,expected_flow:b.flow,clearance:150};};
@@ -21,4 +22,11 @@ test('ambiguous wrap decisions reject an entire batch before saving or history',
 test('identical second table remains the target after an earlier paragraph insertion',async t=>{
  const w=workspace(t,inlineCellFixture({duplicate:true,selected:1})),s=await read(w.source),operations=[{type:'insert_paragraphs',target_id:s.blocks[0].target_id,expected_old:s.blocks[0].text,paragraphs:['earlier insertion']},move(s)],saved=await runLocal({action:'edit',source:w.source,expected_sha256:s.source_sha256,operations,layout_policy:'reject_new_risk'}),a=await read(w.source);
  assert.equal(a.text_boxes[0].cell_path.at(-1).controlIndex,1);assert.equal(a.blocks.filter(b=>b.text==='inner label').length,2);assert.deepEqual(a.text_boxes[0].flow,s.text_boxes[0].flow);await runLocal({action:'restore',source:w.source,expected_sha256:a.source_sha256,backup_id:saved.backup_id});assert.ok(fs.readFileSync(w.source).equals(Buffer.from(w.bytes)));
+});
+test('an unrelated body table remains a placement obstacle for composed cell flow',()=>{
+ const bytes=inlineCellFixture({duplicate:true,selected:1}),state=inspectLocalComplex(HwpDocument,bytes),box=state.text_boxes[0],host=state.blocks.find(b=>b.id===box.block_id);
+ // Model an additional observed body table covering this cell. It has its own
+ // body identity, so it must remain an obstacle even with a nested-table root.
+ class WithOtherBodyTable extends HwpDocument{getPageControlLayout(page){const result=JSON.parse(super.getPageControlLayout(page)),root=result.controls.find(c=>c.type==='table'&&c.stableIndex.length===3);result.controls.push({...root,paraIdx:99,stableIndex:[0,99,0]});return JSON.stringify(result);}}
+ assert.throws(()=>placeNestedFloating(WithOtherBodyTable,bytes,state,{selected:box,b:host,flow:box.flow},150),/NO_FLOATING_PLACEMENT_SPACE/);
 });
