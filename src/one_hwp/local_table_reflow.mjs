@@ -18,7 +18,7 @@ export function tableFlowDescriptor(state,t){
 }
 export function tableReflowContexts(state,version){
  return state.tables.filter(t=>!t.cell_path.length).map(root=>{try{
-  const first=root.cells[0]?.blocks[0];if(!first?.text_mapping_verified)fail('TABLE_REFLOW_ROOT_UNVERIFIED');
+  const first=root.cells[0]?.blocks[0];if(!first?.text_mapping_verified)fail('TABLE_REFLOW_ROOT_UNVERIFIED');if(first.text.length>10000)fail('TABLE_REFLOW_PARAGRAPH_PROFILE_UNSUPPORTED');
   return {root_table_id:root.id,scope:'whole_root_tree',target_id:target(first.id,version),expected_old:first.text,
    expected_tables:state.tables.filter(t=>t.section===root.section&&t.record_index>=root.record_index&&t.end<=root.end).map(t=>tableFlowDescriptor(state,t))};
  }catch(error){if(!(error instanceof GuardError))throw error;return {root_table_id:root.id,read_only_reason:error.code};}});
@@ -66,7 +66,13 @@ export function reflowTableLocal(HwpDocument,source,version,op){
   const anchors=host.tokens.filter(x=>x.code===11),anchor=anchors.find(x=>Buffer.from(rs[host.text_record].payload.subarray(x.unit*2+2,x.unit*2+6)).toString()===' lbt');
   if(anchors.length!==1||!anchor||host.tokens.some(x=>x.unit>anchor.unit&&x.text)||host.tokens.some(x=>!x.text&&![2,11,13].includes(x.code)))fail('TABLE_REFLOW_ANCHOR_UNVERIFIED');
   const peers=state.tables.filter(x=>x.parent_id===host.id);if(peers.length!==1)fail('TABLE_REFLOW_ANCHOR_UNVERIFIED');
-  const rows=Array(t.dimensions.rowCount).fill(0);
+  // A merged cell constrains the sum of its rows, not each row separately.
+  // Start with recoverable existing tracks, then satisfy shorter spans first.
+  // Assigning only the deficit to the final row preserves earlier boundaries
+  // and makes a second synchronization byte-for-byte idempotent.
+  let oldRows;try{const ys=trackPositions(t,'row');if(ys.every(n=>n!==null))oldRows=ys.slice(1).map((n,i)=>n-ys[i]);}catch(error){if(!(error instanceof GuardError))throw error;}
+  if(oldRows?.some(n=>n<=0))fail('TABLE_REFLOW_ROW_GEOMETRY_UNVERIFIED');
+  const rows=oldRows??Array(t.dimensions.rowCount).fill(1),constraints=[];
   for(const c of t.cells){
    const flags=view(rs[c.start].payload).getUint32(4,true),padding=pads(state,t,c),width=c.width-padding[0]-padding[1];if((flags&0x7f)!==0||width<=0)fail('TABLE_REFLOW_CELL_PROFILE_UNSUPPORTED');
    let needed=padding[2]+padding[3];
@@ -77,13 +83,14 @@ export function reflowTableLocal(HwpDocument,source,version,op){
     for(const ch of child){const f=objectFlow(rs[ch.record_index]);if(ch.properties.tableWidth+f.marginLeft+f.marginRight>width)fail('TABLE_REFLOW_CHILD_WIDTH_UNSUPPORTED');needed+=heights.get(ch.id)+f.marginTop+f.marginBottom;}
    }
    needed=Math.max(c.height,Math.ceil(needed));if(needed>720000)fail('TABLE_REFLOW_HEIGHT_LIMIT');
-   for(let row=c.row;row<c.row+c.rowSpan;row++)rows[row]=Math.max(rows[row],Math.ceil(needed/c.rowSpan));
+   constraints.push({row:c.row,span:c.rowSpan,needed});
   }
-  // Only horizontally merged cells are supported until vertically merged page
-  // continuations have independent native evidence.
-  if(t.cells.some(c=>c.rowSpan!==1))fail('TABLE_REFLOW_VERTICAL_MERGE_UNSUPPORTED');
+  for(const c of constraints.sort((a,b)=>a.span-b.span||a.row-b.row)){
+   const current=rows.slice(c.row,c.row+c.span).reduce((n,h)=>n+h,0);
+   rows[c.row+c.span-1]+=Math.max(0,c.needed-current);
+  }
   const height=rows.reduce((a,n)=>a+n,0);if(height>720000||height/bodyHeight>12)fail('TABLE_REFLOW_HEIGHT_LIMIT');heights.set(t.id,height);
-  for(const c of t.cells)patch(c.start).setUint32(20,rows[c.row],true);
+  for(const c of t.cells)patch(c.start).setUint32(20,rows.slice(c.row,c.row+c.rowSpan).reduce((n,h)=>n+h,0),true);
   const p=patch(t.record_index),mask=1|4|(3<<3)|(7<<5)|(3<<8)|(7<<10)|(1<<13)|(1<<14)|(1<<20)|(7<<21)|(3<<24);
   p.setUint32(4,((p.getUint32(4,true)&~mask)|(2<<3)|(2<<8)|8192)>>>0,true);p.setInt32(12,0,true);p.setUint32(20,height,true);if(validObjectHeader(h))p.setUint32(40,0,true);
   const parent=t.cell_path.length?tables.find(t=>t.cells.some(c=>c.blocks.some(b=>b.id===host.id))):null,cell=parent?.cells.find(c=>c.blocks.some(b=>b.id===host.id)),padding=cell?pads(state,parent,cell):[];

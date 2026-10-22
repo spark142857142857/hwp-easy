@@ -82,12 +82,20 @@ function footerCompensation(state,rs,delta){
  if(maps.length!==1||maps[0].payload.length<56||view(maps[0].payload).getUint32(52,true)!==shapes.length)fail('FORMAT_DEFINITION_MISMATCH');
  for(let i=0;i<rs.length;i++){
   const r=rs[i];if(r.tag!==71||r.level!==1||Buffer.from(r.payload.subarray(0,4)).toString()!=='toof')continue;footers++;let end=i+1;while(end<rs.length&&rs[end].level>r.level)end++;
-  const inside=rs.slice(i+1,end),heads=inside.filter(x=>x.tag===66);if(!heads.length||inside.some(x=>![66,67,68,69,72].includes(x.tag))||inside.filter(x=>x.tag===72).some(x=>x.payload.length<8||(view(x.payload).getUint32(4,true)&7)!==0))fail('FOOTER_COMPENSATION_PROFILE_UNSUPPORTED');
+  const inside=rs.slice(i+1,end),heads=inside.filter(x=>x.tag===66),roots=heads.filter(x=>x.level===r.level+1);if(!roots.length||inside.some(x=>![66,67,68,69,71,72,77].includes(x.tag))||inside.filter(x=>x.tag===72).some(x=>x.payload.length<8||(view(x.payload).getUint32(4,true)&7)!==0))fail('FOOTER_COMPENSATION_PROFILE_UNSUPPORTED');
+  // Footer-local inline tables and automatic page numbers move with the first
+  // footer paragraph. Floating drawings, unknown fields and vertical lists
+  // have independent coordinate systems and must not be shifted implicitly.
+  for(const control of inside.filter(x=>x.tag===71)){
+   const id=Buffer.from(control.payload.subarray(0,4)).toString();
+   if(id===' lbt'){if(control.payload.length<42||!(view(control.payload).getUint32(4,true)&1))fail('FOOTER_COMPENSATION_PROFILE_UNSUPPORTED');}
+   else if(id!=='onta'||control.payload.length!==16)fail('FOOTER_COMPENSATION_PROFILE_UNSUPPORTED');
+  }
   for(const h of heads){if(h.payload.length<22||h.payload[11]!==0||view(h.payload).getUint16(14,true)!==0)fail('FOOTER_COMPENSATION_PROFILE_UNSUPPORTED');const at=rs.indexOf(h);let stop=at+1;while(stop<end&&rs[stop].level>h.level)stop++;
-   for(let j=at+1;j<stop;j++){if(rs[j].tag===67&&textTokens(rs[j].payload).some(t=>!t.text&&t.code!==13))fail('FOOTER_COMPENSATION_PROFILE_UNSUPPORTED');if(rs[j].tag===69)remove.add(j);}
+   for(let j=at+1;j<stop;j++){if(rs[j].tag===67&&textTokens(rs[j].payload).some(t=>!t.text&&![11,13,18].includes(t.code)))fail('FOOTER_COMPENSATION_PROFILE_UNSUPPORTED');if(rs[j].tag===69)remove.add(j);}
    const bytes=h.payload.slice();view(bytes).setUint16(16,0,true);headerChanges.set(at,bytes);
   }
-  const first=heads[0],old=shapes[view(first.payload).getUint16(8,true)];if(!old||![46,54,58].includes(old.payload.length)||(view(old.payload).getUint32(0,true)&((1<<19)|(1<<29))))fail('FOOTER_COMPENSATION_PROFILE_UNSUPPORTED');
+  const first=roots[0],old=shapes[view(first.payload).getUint16(8,true)];if(!old||![46,54,58].includes(old.payload.length)||(view(old.payload).getUint32(0,true)&((1<<19)|(1<<29))))fail('FOOTER_COMPENSATION_PROFILE_UNSUPPORTED');
   const wanted=old.payload.slice(),value=view(wanted).getInt32(16,true)+delta*2;if(value<0||value>720000)fail('FOOTER_COMPENSATION_PROFILE_UNSUPPORTED');view(wanted).setInt32(16,value,true);
   let id=[...shapes.map(r=>r.payload),...newShapes].findIndex(p=>equalBytes(p,wanted));if(id<0){id=shapes.length+newShapes.length;if(id>=65535)fail('FORMAT_DEFINITION_MISMATCH');newShapes.push(wanted);}
   view(headerChanges.get(rs.indexOf(first))).setUint16(8,id,true);i=end-1;

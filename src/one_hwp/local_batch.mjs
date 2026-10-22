@@ -1,5 +1,5 @@
 /** Verified in-memory operation sequence; the caller publishes only the final bytes. */
-import {GuardError} from '../../probes/sites-runtime/guard/records.mjs';
+import {GuardError,parseRecords} from '../../probes/sites-runtime/guard/records.mjs';
 import {readHwp} from '../../probes/sites-runtime/guard/container.mjs';
 import {createDocumentEngine} from '../../probes/sites-runtime/engine/document.mjs';
 import {digest} from './local_file.mjs';
@@ -9,7 +9,7 @@ import {tableFormatEdit} from './local_table_format.mjs';
 import {moveLocalBlock} from './local_move.mjs';
 import {hasLocalComplexContent,editLocalComplex,inspectLocalComplex} from './local_complex.mjs';
 import {reflowLocal} from './local_reflow.mjs';
-import {reflowTableLocal} from './local_table_reflow.mjs';
+import {reflowTableLocal,tablePaginationEnabled,tableReflowContexts} from './local_table_reflow.mjs';
 import {placementLocal} from './local_placement.mjs';
 import {editTextBox} from './local_text_boxes.mjs';
 import {transformTextBox} from './local_text_box_geometry.mjs';
@@ -58,6 +58,26 @@ export async function applyLocalOperation(HwpDocument,bytes,version,operation){
 }
 
 export async function editLocalBatch(HwpDocument,source,initialVersion,operations){
+  // Recognize the standard flow profile established by reflow_table. No
+  // private stream or external session state is needed after reopening a file.
+  const synchronized=new Map();
+  const rootKey=(state,root)=>`${root.section}:${Buffer.from(state.recordSets.get(root.section)[root.record_index].payload.subarray(36,40)).toString('hex')}`;
+  const remember=bytes=>{
+    const raw=readHwp(bytes);let found=false;
+    for(const {section} of raw.profile.sections)for(const r of parseRecords(raw.streams.get(`BodyText/Section${section}`)))if(r.tag===71&&r.payload.length>=42&&Buffer.from(r.payload.subarray(0,4)).toString()===' lbt'){
+      const flags=new DataView(r.payload.buffer,r.payload.byteOffset,r.payload.byteLength).getUint32(4,true);
+      if((flags&(1|(3<<3)|(3<<8)|(7<<21)|(1<<20)))===((2<<3)|(2<<8)))found=true;
+    }
+    if(!found)return;
+    const state=inspectLocalComplex(HwpDocument,bytes,{includeDocumentInfo:false,verifyCharacterModel:false});
+    for(const root of state.tables.filter(t=>!t.cell_path.length&&tablePaginationEnabled(state,t))){
+      const tree=state.tables.filter(t=>t.section===root.section&&t.record_index>=root.record_index&&t.end<=root.end);
+      if(tree.every(t=>tablePaginationEnabled(state,t)))synchronized.set(rootKey(state,root),signature(state,root));
+    }
+  };
+  const blockShape=b=>b&&[b.text,b.unit_styles,b.paragraph_properties,b.character_runs];
+  const signature=(state,root)=>JSON.stringify({host:blockShape(state.blocks.find(b=>b.id===root.parent_id)),page:state.recordSets.get(root.section).filter(r=>r.tag===73).map(r=>[...r.payload]),tables:state.tables.filter(t=>t.section===root.section&&t.record_index>=root.record_index&&t.end<=root.end).map(t=>({properties:t.properties,cells:t.cells.map(c=>({row:c.row,col:c.col,rowSpan:c.rowSpan,colSpan:c.colSpan,width:c.width,height:c.height,header:Buffer.from(state.recordSets.get(t.section)[c.start].payload).toString('base64'),blocks:c.blocks.map(blockShape)}))}))});
+  remember(source);
   const identities=new Map(),keys=['target_id','previous_target_id','after_target_id','destination_target_id'];
   const references=op=>{const refs=keys.filter(k=>k==='target_id'||Object.hasOwn(op,k)).map(key=>({key,value:op[key]}));if(Object.hasOwn(op,'protected_objects')){if(!Array.isArray(op.protected_objects)||op.protected_objects.length>16)fail('INVALID_PROTECTED_OBJECTS');op.protected_objects.forEach((value,index)=>refs.push({key:'protected_objects',index,value}));}return refs;};
   // Every target belongs to the caller's initial read, even when it moves in
@@ -82,7 +102,19 @@ export async function editLocalBatch(HwpDocument,source,initialVersion,operation
       const state=inspectLocalComplex(HwpDocument,bytes,{includeDocumentInfo:false,verifyCharacterModel:false}),id=rawTarget(operation.target_id,currentVersion),b=state.blocks.find(b=>b.id===id||standardBlockId(b)===id),pictures=state.pictures.filter(p=>p.block_id===b?.id),p=pictures.find(p=>p.picture_index===(operation.picture_index??0));
       if(p)removed=layoutObjectIdentity(state,p);
     }
-    const result=await applyLocalOperation(HwpDocument,bytes,currentVersion,operation);
+    let result;
+    if(synchronized.size&&['replace_text','splice_text','format_text','format_paragraph','split_paragraph','merge_paragraph','insert_paragraphs','duplicate_paragraph','delete_paragraph'].includes(operation.type)){
+      const state=inspectLocalComplex(HwpDocument,bytes,{includeDocumentInfo:false,verifyCharacterModel:false}),id=rawTarget(operation.target_id,currentVersion),block=state.blocks.find(b=>b.id===id||standardBlockId(b)===id);
+      const root=block?.cell_path.length?state.tables.find(t=>!t.cell_path.length&&t.section===block.section&&t.record_index<block.record_index&&t.end>block.record_index):null;
+      // A flowing root can contain HWP line-break characters even without any
+      // nested controls. Keep those paragraphs on the verified raw edit path.
+      if(root&&synchronized.has(rootKey(state,root))){
+        const actual={...operation,target_id:target(block.id,currentVersion)};
+        if(actual.previous_target_id){const previous=rawTarget(actual.previous_target_id,currentVersion),raw=state.blocks.find(b=>b.id===previous||standardBlockId(b)===previous);if(!raw)fail('INVALID_TARGET');actual.previous_target_id=target(raw.id,currentVersion);}
+        result=editLocalComplex(HwpDocument,bytes,currentVersion,actual);
+      }
+    }
+    result??=await applyLocalOperation(HwpDocument,bytes,currentVersion,operation);
     if(removed)removedObjects.add(removed);
     if(result.content_verified!==true||result.raw_preservation_verified!==true)fail('BATCH_VERIFICATION_FAILED');
     const {_target_remap,_relocated_picture_hosts,bytes:next,...verification}=result;
@@ -105,8 +137,22 @@ export async function editLocalBatch(HwpDocument,source,initialVersion,operation
       }
     }
     outcomes.push({index,type:op.type,...verification});bytes=next;last=verification;
+    if(op.type==='reflow_table')remember(bytes);
   }
-  if(operations.length===1)return {bytes,...last,_layout_target_remap:layoutRemap,_layout_removed_objects:[...removedObjects]};
+  const automatic=[];
+  if(synchronized.size){
+    let state=inspectLocalComplex(HwpDocument,bytes,{includeDocumentInfo:false,verifyCharacterModel:false});
+    for(const [key,old] of synchronized){
+      const candidates=state.tables.filter(t=>!t.cell_path.length&&rootKey(state,t)===key);if(candidates.length>1)fail('TABLE_AUTO_SYNC_IDENTITY_UNVERIFIED');const root=candidates[0];
+      if(!root||!tablePaginationEnabled(state,root)||signature(state,root)===old)continue;
+      const version=digest(bytes),context=tableReflowContexts(state,version).find(c=>c.root_table_id===root.id);
+      if(!context?.target_id)fail('TABLE_AUTO_SYNC_UNVERIFIED');
+      const result=reflowTableLocal(HwpDocument,bytes,version,{type:'reflow_table',target_id:context.target_id,expected_old:context.expected_old,expected_tables:context.expected_tables});
+      bytes=result.bytes;automatic.push({root_table_id:root.id,changed:!result.unchanged});state=inspectLocalComplex(HwpDocument,bytes,{includeDocumentInfo:false,verifyCharacterModel:false});
+    }
+  }
+  const sync=automatic.length?{table_auto_sync:automatic,...(automatic.some(t=>t.changed)?{table_formatting_changed:true,flow_changed:true,raw_preservation_scope:'requested_operations_and_verified_automatic_table_height_flow_sync; retained_text_styles_widths_borders_and_other_streams_exact'}:{})}:{};
+  if(operations.length===1)return {bytes,...last,...sync,_layout_target_remap:layoutRemap,_layout_removed_objects:[...removedObjects]};
   return {bytes,content_verified:true,raw_preservation_verified:true,
     raw_preservation_scope:'each_operation_verified_before_one_final_save',
     operation_count:operations.length,atomic_batch:true,
@@ -120,5 +166,5 @@ export async function editLocalBatch(HwpDocument,source,initialVersion,operation
     text_box_changed:outcomes.some(o=>o.text_box_changed===true),
     text_box_geometry_changed:outcomes.some(o=>o.text_box_geometry_changed===true),
     flow_changed:outcomes.some(o=>o.flow_changed===true),
-    layout_verified:false,operations:outcomes,_layout_target_remap:layoutRemap,_layout_removed_objects:[...removedObjects]};
+    ...sync,layout_verified:false,operations:outcomes,_layout_target_remap:layoutRemap,_layout_removed_objects:[...removedObjects]};
 }

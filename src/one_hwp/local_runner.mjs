@@ -21,7 +21,7 @@ import {standardBlockId} from './local_complex_table.mjs';
 import {analyzeRenderedLayout} from './local_rendered_layout.mjs';
 import {sectionPages} from './local_page_state.mjs';
 import {publicTextBoxes} from './local_text_boxes.mjs';
-import {tableReflowContexts} from './local_table_reflow.mjs';
+import {tableReflowContexts,tablePaginationEnabled} from './local_table_reflow.mjs';
 const HwpDocument=createLocalDocumentClass(UpstreamHwpDocument);
 
 let initialized = false;
@@ -75,7 +75,7 @@ export async function runLocal(request) {
     insert_delete_table_rows_columns:true,
     insert_delete_merged_table_rows_columns:true,font_family_change:true,
     split_merge_table_cells:true,format_text:true,format_paragraph:true,
-    resize_table_columns_rows:true,format_cell_layout:true,format_table_padding:true,selected_root_table_reflow:true,
+    resize_table_columns_rows:true,format_cell_layout:true,format_table_padding:true,selected_root_table_reflow:true,flowing_table_auto_sync:true,
     atomic_operation_batches:true,max_operations:100,batch_target_ids:'initial_read; stable identity through verified position changes',
     complex_local:{recursive_table_cell_text:true,max_cell_depth:8,clickhere_field_values:true,clickhere_creation:true,clickhere_removal_preserves_value:true,rectangular_nested_table_axes:true,merged_nested_table_axes:true,nested_table_cell_merge_split:true,nested_table_sizing_padding:true,controlled_cell_deletion: "explicit expected_cell_sha256 for each affected cell subtree",table_axes_preserve_retained_cell_pictures:true,character_formatting:['bold','italic','underline','strikethrough','fontSize','textColor','fontFamily'],paragraph_formatting:['alignment','lineSpacing','marginLeft','marginRight','indent','spacingBefore','spacingAfter'],opaque_lists_preserved:true,field_format_offsets:'relative to explicit field value, Unicode code points',line_breaks:'HWP character 10 within same paragraph; up to 100 lines per inserted value',duplicate_field_names:'explicit field target ID',picture_groups:'move whole group; crop/replace selected PNG/JPEG child; rotate nested leaves within the transformed immediate parent frame; rotate/resize the outer group with composed child transforms',complex_structure_changes:'verified rectangular/merged table axes and cell boundaries; explicit subtree-confirmed control deletion; ClickHere creation/removal; split/merge mapped paragraphs around intact control subtrees; add/duplicate/delete control-free paragraphs'},
     pictures:{insert:'local PNG/JPEG, verified body or recursively mapped table cell',replace:'local PNG/JPEG, retain frame size and position',update:'size, position, four-edge crop and integer-degree rotation',multiple_per_paragraph:32,picture_index_required_when_multiple:true,delete:true,delete_cleans_unused_embedded_data:false},
@@ -124,7 +124,7 @@ export async function runLocal(request) {
       unsupported:[...result.unsupported,{kind:'complex_read_only_fallback',reason:complexReadFailure}],
       notice:'확인 가능한 본문과 표 셀만 읽기 전용으로 표시합니다. 머리말·글상자 등 다른 개체의 내용은 빠질 수 있으며 이 조회 결과로는 편집할 수 없습니다.',
       source:snapshot.source,persistence:'local_file',saved:false};
-    if(complex)return {...result,table_reflow:tableReflowContexts(inspectLocalComplex(HwpDocument,snapshot.bytes,{includeDocumentInfo:false,verifyCharacterModel:false}),version),source:snapshot.source,persistence:'local_file',saved:false};
+    if(complex)return {...result,table_reflow:document.tableReflowContexts(tableReflowContexts),source:snapshot.source,persistence:'local_file',saved:false};
     let structural;
     if(!result.all_content_supported || result.blocks.some(b=>!b.editable||b.style.profile==='existing_line_breaks_not_editable')) {
       const api=createEngineApi(HwpDocument,{existingLineBreaksEditable:true,mixedStyleSameLength:true}),opened=api.openDocument(snapshot.bytes);
@@ -135,11 +135,17 @@ export async function runLocal(request) {
     result.blocks=result.blocks.map(block=>{const local=structural?.blocks.find(b=>b.id===block.id)??block;return {...block,
       structural_editable:profileSupported&&Boolean(local.editable)&&local.style.char_shape_ids?.length===1,
       text_range_editable:profileSupported&&Boolean(local.editable)&&ranges.has(block.id)&&!/[\u0000-\u001f]/.test(local.text)};});
-    if(result.tables?.length){let state;try{state=inspectLocalComplex(HwpDocument,snapshot.bytes,{includeDocumentInfo:false,verifyCharacterModel:false});}catch(error){if(!(error instanceof GuardError))throw error;}if(state)for(const table of result.tables){const rawTable=state.tables.find(t=>t.section===table.section&&t.paragraph===table.paragraph&&t.control===table.control);for(const cell of table.cells)cell.subtree_sha256=rawTable?.cells[cell.cell]?.subtree_sha256;}}
+    let readState;
+    if(result.tables?.length){let state;try{state=readState=inspectLocalComplex(HwpDocument,snapshot.bytes,{includeDocumentInfo:false,verifyCharacterModel:false});}catch(error){if(!(error instanceof GuardError))throw error;}if(state)for(const table of result.tables){const rawTable=state.tables.find(t=>t.section===table.section&&t.paragraph===table.paragraph&&t.control===table.control);for(const cell of table.cells)cell.subtree_sha256=rawTable?.cells[cell.cell]?.subtree_sha256;}}
     let pictures=[],picture_profile_supported=true;
     try{pictures=localPictures(HwpDocument,snapshot.bytes,version);}catch(error){if(!(error instanceof GuardError))throw error;picture_profile_supported=false;}
-    try{const state=inspectLocalComplex(HwpDocument,snapshot.bytes,{includeDocumentInfo:false,verifyCharacterModel:false});result.page_definitions=sectionPages(state);result.text_boxes=publicTextBoxes(state,version);for(const b of result.blocks){const raw=state.blocks.find(x=>standardBlockId(x)===b.id);if(raw){b.paragraph_properties=raw.paragraph_properties;b.flow_editable=raw.paragraph_format_editable;}}for(const p of pictures){const id=Buffer.from(p.target_id.slice(70),'base64url').toString(),raw=state.pictures.find(x=>x.section===p.section&&standardBlockId(state.blocks.find(b=>b.id===x.block_id))===id&&x.picture_index===p.picture_index);if(raw)p.flow=raw.flow;}if(!picture_profile_supported)pictures=state.pictures.flatMap(p=>{const b=state.blocks.find(b=>b.id===p.block_id),id=standardBlockId(b),target=result.blocks.find(b=>b.id===id)?.target_id;return target?[{target_id:target,picture_index:p.picture_index,section:p.section,paragraph:b.paragraph,properties:p.properties,flow:p.flow,format:'raw_flow_only_picture',editable:false,flow_editable:true}]:[];});}catch(error){if(!(error instanceof GuardError))throw error;}
-    let table_reflow=[];if(result.tables?.length)try{table_reflow=tableReflowContexts(inspectLocalComplex(HwpDocument,snapshot.bytes,{includeDocumentInfo:false,verifyCharacterModel:false}),version);}catch(error){if(!(error instanceof GuardError))throw error;}
+    try{const state=readState??=inspectLocalComplex(HwpDocument,snapshot.bytes,{includeDocumentInfo:false,verifyCharacterModel:false});result.page_definitions=sectionPages(state);result.text_boxes=publicTextBoxes(state,version);for(const b of result.blocks){const raw=state.blocks.find(x=>standardBlockId(x)===b.id);if(raw){b.paragraph_properties=raw.paragraph_properties;b.flow_editable=raw.paragraph_format_editable;}}for(const p of pictures){const id=Buffer.from(p.target_id.slice(70),'base64url').toString(),raw=state.pictures.find(x=>x.section===p.section&&standardBlockId(state.blocks.find(b=>b.id===x.block_id))===id&&x.picture_index===p.picture_index);if(raw)p.flow=raw.flow;}if(!picture_profile_supported)pictures=state.pictures.flatMap(p=>{const b=state.blocks.find(b=>b.id===p.block_id),id=standardBlockId(b),target=result.blocks.find(b=>b.id===id)?.target_id;return target?[{target_id:target,picture_index:p.picture_index,section:p.section,paragraph:b.paragraph,properties:p.properties,flow:p.flow,format:'raw_flow_only_picture',editable:false,flow_editable:true}]:[];});}catch(error){if(!(error instanceof GuardError))throw error;}
+    let table_reflow=[];if(result.tables?.length)try{
+      const state=readState??=inspectLocalComplex(HwpDocument,snapshot.bytes,{includeDocumentInfo:false,verifyCharacterModel:false});table_reflow=tableReflowContexts(state,version);
+      for(const root of state.tables.filter(t=>!t.cell_path.length&&tablePaginationEnabled(state,t))){const tree=state.tables.filter(t=>t.section===root.section&&t.record_index>=root.record_index&&t.end<=root.end);if(!tree.every(t=>tablePaginationEnabled(state,t)))continue;
+        const cells=tree.flatMap(t=>t.cells.flatMap(c=>c.blocks));for(const b of result.blocks){const raw=cells.find(r=>standardBlockId(r)===b.id);if(raw?.text_range_editable){b.text_range_editable=true;b.character_format_editable=true;b.structural_editable=raw.structural_editable;b.editable=raw.tokens.every(t=>t.text||t.code===13);b.automatic_table_sync=true;if(b.style.profile==='existing_line_breaks_not_editable')b.style.profile='flowing_table_raw_preservation';}}
+      }
+    }catch(error){if(!(error instanceof GuardError))throw error;}
     return {...result,table_reflow,pictures,picture_profile_supported,source:snapshot.source,persistence:'local_file',saved:false};
   }
   if(request.action==='preview')return {...document.preview({expected_sha256:version,page:request.page??0}),preview_source:'current_document_render',embedded_preview_cache:'not_used',source:snapshot.source,saved:false};

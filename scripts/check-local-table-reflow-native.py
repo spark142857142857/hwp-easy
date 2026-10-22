@@ -12,7 +12,11 @@ def bands(values,gap=1):
  return groups
 restored=0;checks=[]
 for c in cases:
- name=c['name'];before=results[name+'-before'];after=results[name+'-after'];recovery=results[name+'-restored'];assert before['pages']==recovery['pages'];assert normalized(before['text'])==normalized(after['text'])
+ name=c['name'];before=results[name+'-before'];after=results[name+'-after'];recovery=results[name+'-restored'];assert before['pages']==recovery['pages']
+ edit=next((op for op in c['operations'] if op['type']=='splice_text'),None)
+ expected=normalized(before['text']);old=normalized(edit['expected_old']) if edit else None
+ if edit:assert expected.count(old)==1;expected=expected.replace(old,normalized(edit['new_text']),1)
+ assert expected==normalized(after['text']),(name,'native text')
  for page in range(before['pages']):
   a=Image.open(out/f'{name}-before-{page}.bmp').convert('RGB');b=Image.open(out/f'{name}-restored-{page}.bmp').convert('RGB');assert ImageChops.difference(a,b).getbbox() is None;restored+=1
  markers=after['markers'];assert len(markers)==c['fixture']['lines']+2;pages=[m['page'] for m in markers[:-2]];assert pages==sorted(pages);assert min(pages)>=1 and max(pages)<=after['pages'];assert markers[-2]['page']>=max(pages)
@@ -39,9 +43,22 @@ for c in cases:
    x0=round((p['marginLeft']+p['marginGutter'])/75);x1=round(x0+root_table['properties']['tableWidth']/75)
    rules=[y for y in range(top,bottom+3) if sum(dark(x,y) for x in range(x0+2,x1-2))>(x1-x0-4)*.95];assert rules or markers[-2]['page']>max(pages),(name,'outer frame missing');last_bottom=max(rules) if rules else top
    assert sum(dark(x,y) for y in range(last_bottom+3,bottom) for x in range(x0,x0+50))>30,(name,'body tail not below table')
-  if c['fixture'].get('footer'):
+  if c['fixture'].get('mode')=='footer':
+   variant=c['fixture']['footer'].get('variant',0);old_page=page if page<before['pages'] else page%2 if variant else 0
+   region=(100,round((p['height']-p['marginBottom']-10000)/75)+8,700,1090)
+   present=variant==0 or (variant==1 and page%2==1) or (variant==2 and page%2==0)
+   assert (ImageChops.difference(im.crop(region),Image.new('RGB',im.crop(region).size,'white')).getbbox() is not None)==present,(name,page,'footer parity/content')
+   if present:assert old_page<before['pages'],(name,'missing original footer parity reference')
+   prior=Image.open(out/f'{name}-before-{old_page}.bmp').convert('RGB') if present else Image.new('RGB',im.size,'white')
+   difference=ImageChops.difference(prior.crop(region),im.crop(region));box=difference.getbbox()
+   if c['fixture']['footer'].get('number') and page!=old_page and present:
+    # Only the known generated page-number digit may differ. Title, second
+    # paragraph, absolute vertical position and all other footer pixels match.
+    assert box and 110<=box[0] and box[2]<=125 and 0<=box[1] and box[3]<=24,(name,page,box,'page number did not update in its original area')
+   else:assert box is None,(name,page,'complex footer moved')
+  elif c['fixture'].get('footer'):
    prior=Image.open(out/f'{name}-before-0.bmp').convert('RGB');region=(100,max(1010,bottom+3),700,1040);assert ImageChops.difference(prior.crop(region),im.crop(region)).getbbox() is None,(name,page,'footer moved')
  assert ink_bands>=c['fixture']['lines'],(name,ink_bands,'clipped leaf text')
- checks.append(dict(case=name,pages=after['pages'],marker_count=len(markers)-2,leaf_ink_bands=ink_bands,tail_below_outer_frame=True,footer_preserved=bool(c['fixture'].get('footer'))))
+ checks.append(dict(case=name,pages=after['pages'],marker_count=len(markers)-2,leaf_ink_bands=ink_bands,tail_below_outer_frame=True,footer_preserved=c['fixture'].get('mode')=='footer' or bool(c['fixture'].get('footer'))))
 summary=dict(status='PASS',documents=len(results),pages=sum(r['pages'] for r in results.values()),restored_pages_pixel_exact=restored,native_text_exact=True,checks=checks,layout_verified=False)
 (out/'summary.json').write_text(json.dumps(summary,indent=2)+'\n',encoding='utf-8');print(json.dumps(summary))

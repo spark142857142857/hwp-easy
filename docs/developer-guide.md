@@ -4,7 +4,7 @@
 
 [프로젝트 개요](../README.md) · [문서 인덱스](README.md) · [아키텍처](architecture.md)
 
-소스를 변경하거나 배포 패키지를 생성할 때 필요한 환경과 검사 명령입니다. 현재 소스·검증 패키지는 **로컬 HWP Easy 0.2.34**입니다. 같은 버전의 앱별 패키지는 공통 실행기를 포함하며 실제 설치 버전은 [프로젝트 상태](project-status.md)에서 구분합니다. 파일 편집 절차는 [사용 가이드](quick-start.md), 실제 설치·호출 결과는 [프로젝트 상태](project-status.md)에 정리합니다.
+소스를 변경하거나 배포 패키지를 생성할 때 필요한 환경과 검사 명령입니다. 현재 소스·검증 패키지는 **로컬 HWP Easy 0.2.35**입니다. 같은 버전의 앱별 패키지는 공통 실행기를 포함하며 실제 설치 버전은 [프로젝트 상태](project-status.md)에서 구분합니다. 파일 편집 절차는 [사용 가이드](quick-start.md), 실제 설치·호출 결과는 [프로젝트 상태](project-status.md)에 정리합니다.
 
 ## 환경과 구성
 
@@ -89,9 +89,9 @@ python scripts/archive_agent_skills.py
 
 | 배포 대상 | 생성 ZIP |
 | --- | --- |
-| Codex | `outputs/plugin-package/hwp-easy-0.2.34.zip` |
-| Claude Code | `outputs/agent-packages/hwp-easy-claude-code-0.2.34.zip` |
-| Cursor | `outputs/agent-packages/hwp-easy-cursor-0.2.34.zip` |
+| Codex | `outputs/plugin-package/hwp-easy-0.2.35.zip` |
+| Claude Code | `outputs/agent-packages/hwp-easy-claude-code-0.2.35.zip` |
+| Cursor | `outputs/agent-packages/hwp-easy-cursor-0.2.35.zip` |
 
 패키지 생성은 앱 설치나 공개 게시를 수행하지 않습니다. Claude Code·Cursor의 설치 검사와 격리된 폴더에 설치한 실행기의 검증은 다음으로 재현합니다.
 
@@ -116,7 +116,7 @@ node scripts/install_agent_skill.mjs --client cursor --package outputs/agent-pac
 OpenAI 포털의 기존 MCP 등록은 서버 없는 패키지로 변경할 수 없어, 로컬판에는 별도 식별자 `hwp-easy-local`을 사용합니다. 다음 명령은 검증한 ZIP에서 등록 이름·호출 안내·표시 필드만 조정하고 모든 실행 자원의 바이트 일치를 검사합니다. 업로드·설치·심사 제출을 수행하지 않습니다.
 
 ```bash
-python scripts/package_directory_plugin.py outputs/plugin-package/hwp-easy-0.2.34.zip outputs/directory-package
+python scripts/package_directory_plugin.py outputs/plugin-package/hwp-easy-0.2.35.zip outputs/directory-package
 ```
 
 포털 관측과 남은 차단 항목은 [로컬 디렉터리 등록 기록](local-directory-submission.md)에 정리합니다.
@@ -192,4 +192,6 @@ node scripts/check-local-table-reflow.mjs
 python scripts/check-local-table-reflow.py
 ```
 
-신뢰한 합성 결과의 Windows 한글 검사는 `scripts/render-local-table-reflow-native.py outputs/local-table-reflow`와 Pillow 환경의 `scripts/check-local-table-reflow-native.py outputs/local-table-reflow`를 사용한다. 파일을 저장하지 않는 분리된 자동화 API로 모든 시험 줄의 쪽 위치·셀 잉크·후속 본문·꼬리말·복구 픽셀을 대조한다. CI의 한글 없는 검사와 범위를 구분한다. [0.2.34 지원 범위](local-release-0.2.34.md)
+신뢰한 합성 결과의 Windows 한글 검사는 `scripts/render-local-table-reflow-native.py outputs/local-table-reflow`와 Pillow 환경의 `scripts/check-local-table-reflow-native.py outputs/local-table-reflow`를 사용한다. 파일을 저장하지 않는 분리된 자동화 API로 모든 시험 줄의 쪽 위치·셀 잉크·후속 본문·꼬리말·복구 픽셀을 대조한다. CI의 한글 없는 검사와 범위를 구분한다. [0.2.35 지원 범위](local-release-0.2.35.md)
+
+0.2.35의 재열기 후 높이 동기화·복잡 꼬리말 검사는 `node scripts/check-local-table-sync.mjs`와 `python scripts/check-local-table-sync.py`를 사용한다. 실제 한글 검사는 같은 두 네이티브 스크립트에 `outputs/local-table-sync`를 넘긴다. 선택한 셀의 글/상속 서식과 비대상 레코드를 독립 대조하고, 꼬리말은 홀짝 적용·쪽 번호 숫자 영역 외의 고정 픽셀을 확인한다.

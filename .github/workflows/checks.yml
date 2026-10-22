@@ -215,6 +215,8 @@ jobs:
           node scripts/package_local_plugin.mjs
           node scripts/check-local-table-reflow.mjs
           python scripts/check-local-table-reflow.py
+          node scripts/check-local-table-sync.mjs
+          python scripts/check-local-table-sync.py
 
   local-large-text:
     name: Local large text / ${{ matrix.os }}
