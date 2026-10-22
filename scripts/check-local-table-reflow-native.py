@@ -22,10 +22,14 @@ for c in cases:
  markers=after['markers'];assert len(markers)==c['fixture']['lines']+2;pages=[m['page'] for m in markers[:-2]];assert pages==sorted(pages);assert min(pages)>=1 and max(pages)<=after['pages'];assert markers[-2]['page']>=max(pages)
  if c['fixture']['lines']>40:assert len(set(pages))>=2,(name,'long answer did not continue')
  encoded=edit['target_id'][70:] if edit else '';identity=base64.urlsafe_b64decode(encoded+'='*((-len(encoded))%4)).decode() if edit else 's0:';section=int(identity.split(':')[0][1:])
- tables=[t for t in c['after']['tables'] if t['section']==section];root_table=next(t for t in tables if not t.get('cell_path',[]));leaf=max(tables,key=lambda t:len(t.get('cell_path',[])));p=next(p['properties'] for p in c['after']['page_definitions'] if p['section']==section);left=(p['marginLeft']+p['marginGutter'])/75
- for t in sorted(tables,key=lambda t:len(t.get('cell_path',[]))):
-  if t is leaf:break
-  cell=t['cells'][0]['properties'];left+=(cell['paddingLeft'] if cell['applyInnerMargin'] else t['properties']['paddingLeft'])/75
+ tables=[t for t in c['after']['tables'] if t['section']==section];root_table=next(t for t in tables if not t.get('cell_path',[]));leaf=next((t for t in tables if t['id']==c['fixture'].get('selected_table_id')),None) or max(tables,key=lambda t:len(t.get('cell_path',[])));p=next(p['properties'] for p in c['after']['page_definitions'] if p['section']==section);left=(p['marginLeft']+p['marginGutter'])/75
+ path=leaf.get('cell_path',[])
+ for i,part in enumerate(path):
+  t=next(t for t in tables if t.get('cell_path',[])==path[:i] and t['control']==part['controlIndex']);cell=next(c['properties'] for c in t['cells'] if c['cell']==part['cellIndex']);left+=(cell['paddingLeft'] if cell['applyInnerMargin'] else t['properties']['paddingLeft'])/75
+ # Explicit table offsets include the preserved left outer margin in Hancom.
+ for t in [leaf]:
+  descriptor=next((d for d in c['after']['table_reflow'][0]['expected_tables'] if d['id']==t['id']),None)
+  if descriptor:left+=descriptor['flow']['marginLeft']/75
  cell=leaf['cells'][0]['properties'];padding=cell['paddingLeft'] if cell['applyInnerMargin'] else leaf['properties']['paddingLeft'];right=left+cell['width']/75;content_left=round(left+padding/75);content_right=round(right-(cell['paddingRight'] if cell['applyInnerMargin'] else leaf['properties']['paddingRight'])/75)
  ink_bands=0;last_bottom=None
  for page in range(after['pages']):
@@ -60,6 +64,34 @@ for c in cases:
   elif c['fixture'].get('footer'):
    prior=Image.open(out/f'{name}-before-0.bmp').convert('RGB');region=(100,max(1010,bottom+3),700,1040);assert ImageChops.difference(prior.crop(region),im.crop(region)).getbbox() is None,(name,page,'footer moved')
  assert ink_bands>=c['fixture']['lines'],(name,ink_bands,'clipped leaf text')
- checks.append(dict(case=name,pages=after['pages'],marker_count=len(markers)-2,leaf_ink_bands=ink_bands,tail_below_outer_frame=True,footer_preserved=c['fixture'].get('mode')=='footer' or bool(c['fixture'].get('footer'))))
+ if c['fixture'].get('marked_ink'):
+  red_bands=0;locations={label:[] for label in ['ANSWER']+c['fixture'].get('peer_labels',[])}
+  for page in range(after['pages']):
+   im=Image.open(out/f'{name}-after-marked-{page}.bmp').convert('RGB');original=Image.open(out/f'{name}-after-{page}.bmp').convert('RGB');reds=[]
+   assert original.size==im.size
+   for y in range(im.height):
+    row=[]
+    for x in range(im.width):
+     r,g,b=im.getpixel((x,y));label=None
+     if r>160 and g<100 and b<100:label='ANSWER';row.append(x)
+     elif b>160 and r<100 and g<100:label=c['fixture']['peer_labels'][0]
+     elif 80<g<200 and r<70 and b<70:label=c['fixture']['peer_labels'][1]
+     if label:
+      assert content_left-1<=x<content_right+1,(name,page,label,'ink outside selected cell')
+      assert max(original.getpixel((x,y)))<240,(name,'QA color moved glyphs')
+      locations[label].append((page,y))
+    if row:
+     reds.append(y)
+     assert all(any(max(original.getpixel((xx,y)))<180 for xx in range(round(edge)-2,round(edge)+3)) for edge in [left,right]),(name,page,'visible answer lacks its cell frame')
+   # Thin red antialiasing can leave a six-pixel gap inside one 10pt glyph;
+   # the generated 160% line spacing leaves at least twelve between lines.
+   groups=bands(reds,gap=8);red_bands+=len(groups)
+   assert len(groups)==pages.count(page+1),(name,page,'found answer is not visible exactly once',len(groups),pages.count(page+1))
+  assert red_bands==c['fixture']['lines'],(name,'clipped or overlapping marked answer')
+  assert all(locations.values()),(name,'a peer table has no visible ink')
+  if c['fixture'].get('multi'):
+   labels=list(c['fixture']['peer_labels']);labels.insert(c['fixture'].get('selected',0),'ANSWER')
+   for a,b in zip(labels,labels[1:]):assert max(locations[a])<min(locations[b]),(name,a,b,'sibling tables overlap or changed order')
+ checks.append(dict(case=name,pages=after['pages'],marker_count=len(markers)-2,leaf_ink_bands=ink_bands,tail_below_outer_frame=True,footer_preserved=c['fixture'].get('mode')=='footer' or bool(c['fixture'].get('footer')),marked_visible_lines=red_bands if c['fixture'].get('marked_ink') else None,marked_peer_order_clear=True if c['fixture'].get('multi') else None))
 summary=dict(status='PASS',documents=len(results),pages=sum(r['pages'] for r in results.values()),restored_pages_pixel_exact=restored,native_text_exact=True,checks=checks,layout_verified=False)
 (out/'summary.json').write_text(json.dumps(summary,indent=2)+'\n',encoding='utf-8');print(json.dumps(summary))

@@ -1,7 +1,7 @@
 import {assertPlannedEdit} from '../scripts/local-plan-proof.mjs';
 import test from 'node:test';import assert from 'node:assert/strict';import fs from 'node:fs';import os from 'node:os';import path from 'node:path';
 import {initializeLocal,runLocal} from '../src/one_hwp/local_runner.mjs';
-import {tableReflowFixture,tableAnswer,multipleRootFixture} from './local_table_reflow_fixtures.mjs';
+import {tableReflowFixture,tableAnswer,multipleRootFixture,hostTablesFixture} from './local_table_reflow_fixtures.mjs';
 import {readHwp} from '../probes/sites-runtime/guard/container.mjs';import {parseRecords} from '../probes/sites-runtime/guard/records.mjs';
 import {HwpDocument} from '@rhwp/core';import {inspectLocalComplex} from '../src/one_hwp/local_complex.mjs';import {tableReflowContexts} from '../src/one_hwp/local_table_reflow.mjs';import {view} from '../src/one_hwp/local_complex_records.mjs';import {publishVerifiedPatch} from '../src/one_hwp/local_verified_patch.mjs';
 import {complexFooterFixture} from './local_footer_fixtures.mjs';
@@ -26,10 +26,10 @@ test('full tree expectation refuses before backup',async t=>{
  const w=workspace(t,tableReflowFixture({depth:2})),s=await read(w.source),op=reflowOp(s);for(const expected_tables of [[],op.expected_tables.slice(0,1),[...op.expected_tables].reverse()])await assert.rejects(runLocal({action:'edit',source:w.source,expected_sha256:s.source_sha256,operations:[{...op,expected_tables}]}),/EXPECTED_TABLE_FLOW_MISMATCH/);
  assert.deepEqual(fs.readFileSync(w.source),Buffer.from(w.bytes));assert.equal((await runLocal({action:'history',source:w.source,expected_sha256:s.source_sha256})).entries.length,0);
 });
-for(const profile of ['center','vertical','two-columns'])test(`unsupported ${profile} flow is atomic`,async t=>{
+for(const profile of ['reserved-align','vertical','two-columns','nowrap'])test(`unsupported ${profile} flow is atomic`,async t=>{
  let bytes=tableReflowFixture({depth:2,rows:2,lines:8}),s=inspectLocalComplex(HwpDocument,bytes,{includeDocumentInfo:false,verifyCharacterModel:false}),rs=s.recordSets.get(0).map(r=>({...r,payload:r.payload.slice()}));
  if(profile==='two-columns'){const r=rs.find(r=>r.tag===71&&Buffer.from(r.payload.subarray(0,4)).toString()==='dloc'),p=view(r.payload);p.setUint16(4,(p.getUint16(4,true)&~1020)|(2<<2),true);}
- else{const p=view(rs[s.tables.at(-1).cells[0].start].payload);p.setUint32(4,p.getUint32(4,true)|(profile==='center'?0x20:1),true);}
+ else{const p=view(rs[s.tables.at(-1).cells[0].start].payload);p.setUint32(4,p.getUint32(4,true)|(profile==='reserved-align'?0x60:profile==='nowrap'?8:1),true);}
  bytes=publishVerifiedPatch(bytes,s,0,rs);const w=workspace(t,bytes),snapshot=await read(w.source);await assert.rejects(runLocal({action:'edit',source:w.source,expected_sha256:snapshot.source_sha256,operations:[reflowOp(snapshot)]}),/TABLE_REFLOW_/);assert.deepEqual(fs.readFileSync(w.source),Buffer.from(bytes));assert.equal((await runLocal({action:'history',source:w.source,expected_sha256:snapshot.source_sha256})).entries.length,0);
 });
 test('a shorter unmodeled table header does not break read-only context discovery',()=>{const s=inspectLocalComplex(HwpDocument,tableReflowFixture(),{includeDocumentInfo:false,verifyCharacterModel:false}),t=s.tables[0],r=s.recordSets.get(0)[t.record_index];s.recordSets.get(0)[t.record_index]={...r,payload:r.payload.slice(0,36)};assert.equal(tableReflowContexts(s,'0'.repeat(64))[0].read_only_reason,'TABLE_REFLOW_HEADER_UNSUPPORTED');});

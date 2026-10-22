@@ -285,7 +285,7 @@ jobs:
       - name: Install independent OLE reader
         run: python -m pip install olefile==0.47
       - name: Verify root-tree growth, line splitting, atomic saves and recovery
-        run: node --test tests/test_local_table_reflow.mjs
+        run: node --test tests/test_local_table_reflow.mjs tests/test_local_table_hosts.mjs
       - name: Node package local plugin
         run: node scripts/package_local_plugin.mjs
       - name: Node check local table reflow
@@ -296,6 +296,10 @@ jobs:
         run: node scripts/check-local-table-sync.mjs
       - name: Python check local table sync
         run: python scripts/check-local-table-sync.py
+      - name: Verify aligned cells and multiple host tables through the package
+        run: node scripts/check-local-table-hosts.mjs
+      - name: Independently verify host text, alignment, control order and recovery
+        run: python scripts/check-local-table-sync.py outputs/local-table-hosts
 
   local-large-text:
     name: Local large text / ${{ matrix.os }}

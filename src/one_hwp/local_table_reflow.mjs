@@ -53,19 +53,19 @@ export function reflowTableLocal(HwpDocument,source,version,op){
  if(pages.length!==1||pages[0].payload.length!==40||view(pages[0].payload).getUint32(36,true)!==0||cols.length!==1||cols[0].payload.length<8||((view(cols[0].payload).getUint16(4,true)>>>2)&255)!==1)fail('TABLE_REFLOW_PAGE_PROFILE_UNSUPPORTED');
  const page=view(pages[0].payload),bodyWidth=page.getUint32(0,true)-[8,12,32].reduce((n,i)=>n+page.getUint32(i,true),0),bodyHeight=page.getUint32(4,true)-[16,20,24,28].reduce((n,i)=>n+page.getUint32(i,true),0);
  if(bodyWidth<=0||bodyHeight<7200||root.properties.tableWidth>bodyWidth)fail('TABLE_REFLOW_PAGE_PROFILE_UNSUPPORTED');
- // A root host may carry section/column definitions and a prefix, but no
- // competing drawing, second table or text after the selected table anchor.
+ // A body host still selects one root. Nested hosts may contain several tables;
+ // explicit reflow stacks them below the prefix in their original anchor order.
  const hosts=new Map(tables.map(t=>[t.id,state.blocks.find(b=>b.id===t.parent_id)]));
- const patches=new Map(),heights=new Map(),changes=[],measure=createNaturalTextMeasurer(HwpDocument);
+ const patches=new Map(),heights=new Map(),changes=[],measure=createNaturalTextMeasurer(HwpDocument),hostPeers=new Map();
  const rootHost=hosts.get(root.id);if(!rootHost?.unit_styles||!Array.isArray(rootHost.character_runs)||rootHost.text.includes('\n')||rootHost.text.length>120||measure(rootHost.text,rootHost.character_runs).reduce((n,w)=>n+w*75,0)>bodyWidth*.9)fail('TABLE_REFLOW_ROOT_PREFIX_UNVERIFIED');
  for(const other of state.tables.filter(t=>t.section===root.section&&!t.cell_path.length&&t!==root))if(!objectFlow(rs[other.record_index]).treatAsChar)fail('TABLE_REFLOW_OTHER_FLOATING_TABLE_UNSUPPORTED');
  const patch=i=>{if(!patches.has(i))patches.set(i,rs[i].payload.slice());return view(patches.get(i));};
  for(const t of [...tables].reverse()){
   const xs=trackPositions(t,'col');if(xs.at(-1)!==t.properties.tableWidth||t.cells.some(c=>xs[c.col]===null||xs[c.col+c.colSpan]===null||xs[c.col+c.colSpan]-xs[c.col]!==c.width))fail('TABLE_REFLOW_COLUMN_GEOMETRY_UNVERIFIED');
   const host=hosts.get(t.id),h=rs[t.record_index].payload;if(!host?.text_mapping_verified||!tableHeader(h))fail('TABLE_REFLOW_ANCHOR_UNVERIFIED');const old=objectFlow(rs[t.record_index]);if(old.widthRelTo!==4||old.heightRelTo!==2)fail('TABLE_REFLOW_PROFILE_UNSUPPORTED');
-  const anchors=host.tokens.filter(x=>x.code===11),anchor=anchors.find(x=>Buffer.from(rs[host.text_record].payload.subarray(x.unit*2+2,x.unit*2+6)).toString()===' lbt');
-  if(anchors.length!==1||!anchor||host.tokens.some(x=>x.unit>anchor.unit&&x.text)||host.tokens.some(x=>!x.text&&![2,11,13].includes(x.code)))fail('TABLE_REFLOW_ANCHOR_UNVERIFIED');
-  const peers=state.tables.filter(x=>x.parent_id===host.id);if(peers.length!==1)fail('TABLE_REFLOW_ANCHOR_UNVERIFIED');
+  const anchors=host.tokens.filter(x=>x.code===11),peers=state.tables.filter(x=>x.parent_id===host.id).sort((a,b)=>a.record_index-b.record_index),controls=rs.slice(host.record_index+1,host.records_end).filter(r=>r.tag===71&&r.level===host.raw_level+1&&(t.cell_path.length||!['dces','dloc'].includes(Buffer.from(r.payload.subarray(0,4)).toString())));
+  if(!anchors.length||anchors.length!==peers.length||controls.length!==peers.length||controls.some((r,i)=>r!==rs[peers[i].record_index])||anchors.some(x=>Buffer.from(rs[host.text_record].payload.subarray(x.unit*2+2,x.unit*2+6)).toString()!==' lbt')||host.tokens.some(x=>x.unit>anchors[0].unit&&x.text)||host.tokens.some(x=>!x.text&&![2,11,13].includes(x.code))||!t.cell_path.length&&peers.length!==1)fail('TABLE_REFLOW_ANCHOR_UNVERIFIED');
+  hostPeers.set(host.id,peers);
   // A merged cell constrains the sum of its rows, not each row separately.
   // Start with recoverable existing tracks, then satisfy shorter spans first.
   // Assigning only the deficit to the final row preserves earlier boundaries
@@ -74,10 +74,10 @@ export function reflowTableLocal(HwpDocument,source,version,op){
   if(oldRows?.some(n=>n<=0))fail('TABLE_REFLOW_ROW_GEOMETRY_UNVERIFIED');
   const rows=oldRows??Array(t.dimensions.rowCount).fill(1),constraints=[];
   for(const c of t.cells){
-   const flags=view(rs[c.start].payload).getUint32(4,true),padding=pads(state,t,c),width=c.width-padding[0]-padding[1];if((flags&0x7f)!==0||width<=0)fail('TABLE_REFLOW_CELL_PROFILE_UNSUPPORTED');
+   const flags=view(rs[c.start].payload).getUint32(4,true),padding=pads(state,t,c),width=c.width-padding[0]-padding[1];if((flags&0x1f)!==0||((flags>>>5)&3)>2||width<=0)fail('TABLE_REFLOW_CELL_PROFILE_UNSUPPORTED');
    let needed=padding[2]+padding[3];
    for(const paragraph of c.blocks){
-    const child=tables.filter(x=>x.parent_id===paragraph.id);if(child.length>1)fail('TABLE_REFLOW_ANCHOR_UNVERIFIED');
+    const child=tables.filter(x=>x.parent_id===paragraph.id);
     if(rs.slice(paragraph.record_index+1,paragraph.records_end).some(r=>r.tag===71&&r.level===paragraph.raw_level+1&&Buffer.from(r.payload.subarray(0,4)).toString()!==' lbt'))fail('TABLE_REFLOW_CELL_CONTROL_UNSUPPORTED');
     needed+=paragraphHeight(paragraph,width,measure);
     for(const ch of child){const f=objectFlow(rs[ch.record_index]);if(ch.properties.tableWidth+f.marginLeft+f.marginRight>width)fail('TABLE_REFLOW_CHILD_WIDTH_UNSUPPORTED');needed+=heights.get(ch.id)+f.marginTop+f.marginBottom;}
@@ -93,10 +93,16 @@ export function reflowTableLocal(HwpDocument,source,version,op){
   for(const c of t.cells)patch(c.start).setUint32(20,rows.slice(c.row,c.row+c.rowSpan).reduce((n,h)=>n+h,0),true);
   const p=patch(t.record_index),mask=1|4|(3<<3)|(7<<5)|(3<<8)|(7<<10)|(1<<13)|(1<<14)|(1<<20)|(7<<21)|(3<<24);
   p.setUint32(4,((p.getUint32(4,true)&~mask)|(2<<3)|(2<<8)|8192)>>>0,true);p.setInt32(12,0,true);p.setUint32(20,height,true);if(validObjectHeader(h))p.setUint32(40,0,true);
-  const parent=t.cell_path.length?tables.find(t=>t.cells.some(c=>c.blocks.some(b=>b.id===host.id))):null,cell=parent?.cells.find(c=>c.blocks.some(b=>b.id===host.id)),padding=cell?pads(state,parent,cell):[];
-  const offset=cell?paragraphHeight(host,cell.width-padding[0]-padding[1],measure):0;p.setInt32(8,offset,true);
   const data=patch(t.table_record);data.setUint32(0,(data.getUint32(0,true)&~3)|2,true);
-  changes.push({table_id:t.id,stored_height_before:t.properties.tableHeight,stored_height_after:height,rows,vertOffset:offset});
+  changes.push({table_id:t.id,stored_height_before:t.properties.tableHeight,stored_height_after:height,rows});
+ }
+ // Heights are now known for every sibling. Assign offsets in a separate pass:
+ // reverse bottom-up height evaluation must not read an unmeasured earlier peer.
+ for(const t of tables){
+  const host=hosts.get(t.id),parent=t.cell_path.length?tables.find(p=>p.cells.some(c=>c.blocks.some(b=>b.id===host.id))):null,cell=parent?.cells.find(c=>c.blocks.some(b=>b.id===host.id)),padding=cell?pads(state,parent,cell):[];
+  let offset=cell?paragraphHeight(host,cell.width-padding[0]-padding[1],measure):0;
+  if(cell)for(const peer of hostPeers.get(host.id)){if(peer===t)break;const f=objectFlow(rs[peer.record_index]);offset+=heights.get(peer.id)+f.marginTop+f.marginBottom;}
+  patch(t.record_index).setInt32(8,offset,true);changes.find(c=>c.table_id===t.id).vertOffset=offset;
  }
  // Other drawings are safe only when fixed to paper/page; paragraph drawings
  // can change pages or collide with the growing table and remain explicit work.
@@ -108,5 +114,5 @@ export function reflowTableLocal(HwpDocument,source,version,op){
  const changed=[...patches].some(([i,p])=>!equalBytes(rs[i].payload,p));if(!changed)return {bytes:source,content_verified:true,raw_preservation_verified:true,unchanged:true,layout_verified:false};
  const records=invalidateSectionLayout(rs.map((r,i)=>patches.has(i)?{...r,payload:patches.get(i)}:r),state.blocks.filter(b=>b.section===root.section)),bytes=publishVerifiedPatch(source,state,b.section,records),after=inspectLocalComplex(HwpDocument,bytes,{includeDocumentInfo:false,verifyCharacterModel:false});
  if(!equal(state.blocks.map(b=>[b.id,b.text,b.unit_styles]),after.blocks.map(b=>[b.id,b.text,b.unit_styles]))||!equal(state.fields,after.fields)||tables.some(t=>!tablePaginationEnabled(after,after.tables.find(n=>n.id===t.id))))fail('TABLE_REFLOW_PRESERVATION_MISMATCH');
- return {bytes,content_verified:true,raw_preservation_verified:true,raw_preservation_scope:'selected_root_tree_table_flow_height_pagination_and_section_line_caches; text_styles_widths_margins_borders_other_controls_and_streams_exact',flow_changed:true,table_formatting_changed:true,table_reflow:{root_table_id:root.id,tables:changes.reverse(),pagination:'reader_recomputed_line_split',stored_heights:'conservative_growing_minima',native_layout_verified:false},layout_verified:false};
+ return {bytes,content_verified:true,raw_preservation_verified:true,raw_preservation_scope:'selected_root_tree_table_flow_height_pagination_and_section_line_caches; text_styles_widths_margins_borders_other_controls_and_streams_exact',flow_changed:true,table_formatting_changed:true,table_reflow:{root_table_id:root.id,tables:changes.reverse(),pagination:'reader_recomputed_line_split',stored_heights:'conservative_growing_minima',cell_alignment:'preserved',nested_host_layout:'anchor_order_vertical_stack_below_prefix',native_layout_verified:false},layout_verified:false};
 }
