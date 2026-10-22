@@ -5,10 +5,10 @@ on:
   workflow_dispatch:
     inputs:
       scope:
-        description: Verification scope (all suites, or table flow only)
+        description: Verification scope (all, table flow, or interleaved hosts)
         type: choice
         default: all
-        options: [all, table-flow]
+        options: [all, table-flow, table-text]
 
 permissions:
   contents: read
@@ -267,9 +267,10 @@ jobs:
         run: python scripts/check-local-review-fixes.py outputs/local-review-fixes
 
   local-table-flow:
+    if: ${{ inputs.scope != 'table-text' }}
     name: Table growth and pagination / ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
-    # 38 packaged cases plus 50 source checks; include Windows cleanup time.
+    # 38 packaged cases plus source checks; include Windows cleanup time.
     timeout-minutes: 10
     strategy:
       fail-fast: false
@@ -311,6 +312,48 @@ jobs:
         run: node scripts/check-local-table-hosts.mjs
       - name: Independently verify host text, alignment, control order and recovery
         run: python scripts/check-local-table-sync.py outputs/local-table-hosts
+
+  local-table-text:
+    if: ${{ inputs.scope == 'all' || inputs.scope == 'table-text' }}
+    name: Table text and body hosts / ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 8
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    steps:
+      - name: Check out source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - name: Set up Node
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: '22'
+      - name: Set up independent Python reader
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7
+        with:
+          python-version: '3.12'
+      - name: Install exact engine runtime
+        run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Install exact package builder
+        working-directory: probes/sites-runtime
+        run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Install independent OLE reader
+        run: python -m pip install olefile==0.47
+      - name: Verify all table source regressions during scoped checks
+        if: ${{ inputs.scope == 'table-text' }}
+        run: node --test --test-concurrency=2 tests/test_local_table_reflow.mjs tests/test_local_table_hosts.mjs tests/test_local_table_text_flow.mjs
+      - name: Verify new text flow regressions during full checks
+        if: ${{ inputs.scope == 'all' }}
+        run: node --test tests/test_local_table_text_flow.mjs
+      - name: Build isolated local plugin
+        run: node scripts/package_local_plugin.mjs
+      - name: Verify interleaved text and multiple body roots through package
+        run: node scripts/check-local-table-text-flow.mjs
+      - name: Independently verify logical order, UTF-16 styles and recovery
+        run: python scripts/check-local-table-text-flow.py
 
   local-large-text:
     if: ${{ inputs.scope == 'all' }}

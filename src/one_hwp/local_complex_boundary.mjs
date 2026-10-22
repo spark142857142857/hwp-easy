@@ -26,6 +26,24 @@ function paragraph(original,payload,ids,controls,last,originHeader){
  return [{...original,payload:header,...(originHeader?{originHeader}:{})},...(!empty?[{tag:67,level:level+1,payload}]:[]),{tag:68,level:level+1,payload:shape},...controls.flat()];
 }
 export function boundaryEligible(records,b){try{parts(records,b);return true;}catch{return false;}}
+/** Explicit block flow: retain every text/anchor unit and its style, inserting
+ * paragraph terminators around table anchors instead of moving text past them. */
+export function partitionTableHost(before,b){
+ const records=before.recordSets.get(b.section),p=parts(records,b);
+ if(p.anchors.some(a=>![2,11].includes(a.code))||p.anchors.filter(a=>a.code===11).some(a=>ctrl(a.control[0])!==' lbt')||b.tokens.some(t=>!t.text&&![2,11,13].includes(t.code)))fail('TABLE_HOST_CONTROL_UNSUPPORTED');
+ const cuts=[0];for(const a of p.anchors.filter(a=>a.code===11))cuts.push(a.unit,a.unit+a.length);cuts.push(p.payload.length/2-1);
+ const ranges=cuts.slice(1).map((end,i)=>[cuts[i],end]).filter(([a,z])=>a<z);if(ranges.length<2)fail('TABLE_HOST_PARTITION_UNVERIFIED');
+ const last=Boolean(view(records[b.record_index].payload).getUint32(0,true)&0x80000000),replacement=[],heads=[],fragments=[];
+ for(const [i,[from,to]]of ranges.entries()){
+  const controls=p.anchors.filter(a=>a.unit>=from&&a.unit<to).map(a=>a.control),payload=Buffer.concat([p.payload.subarray(from*2,to*2),Buffer.from('\r','utf16le')]),ids=[...b.unit_styles.slice(from,to),b.unit_styles[i===ranges.length-1?b.unit_styles.length-1:Math.max(from,to-1)]];
+  const part=paragraph(records[b.record_index],payload,ids,controls,last&&i===ranges.length-1,i===0?records[b.record_index]:null);heads.push(part[0]);fragments.push({head:part[0],text:textTokens(payload).map(t=>t.text).join(''),unit_styles:ids});replacement.push(...part);
+ }
+ // Independent segment concatenation, including raw controls and UTF-16 styles.
+ if(!equal([...Buffer.concat(ranges.map(([a,z])=>p.payload.subarray(a*2,z*2)))],[...p.payload.subarray(0,-2)])||!equal(ranges.flatMap(([a,z])=>b.unit_styles.slice(a,z)),b.unit_styles.slice(0,-1)))fail('TABLE_HOST_CONTENT_MISMATCH');
+ let out=[...records.slice(0,b.record_index),...replacement,...records.slice(b.records_end)];
+ if(b.cell_path.length){const owner=before.tables.flatMap(t=>t.cells).find(c=>c.blocks.includes(b));if(!owner)fail('PARAGRAPH_LIST_UNVERIFIED');const original=records[owner.start],header=original.payload.slice(),v=view(header),count=v.getUint16(0,true)+ranges.length-1;if(count>4096)fail('PARAGRAPH_LIST_UNVERIFIED');v.setUint16(0,count,true);out=out.map(r=>r===original?{...r,payload:header}:r);}
+ return {records:out,heads,fragments,delta:ranges.length-1};
+}
 export function prepareComplexBoundary(before,b,op,version){
  const schema={split_paragraph:['offset'],merge_paragraph:['previous_target_id','expected_previous'],insert_paragraphs:['paragraphs'],duplicate_paragraph:[],delete_paragraph:[]}[op.type];
  if(!schema||!equal(Object.keys(op).sort(),['type','target_id','expected_old',...schema].sort()))fail('INVALID_OPERATION');

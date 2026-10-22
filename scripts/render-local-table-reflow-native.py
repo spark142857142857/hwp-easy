@@ -19,7 +19,7 @@ with HancomBackend(visible=False) as backend:
    if state=='after' and c['fixture'].get('marked_ink'):
     # QA-only in-memory foreground colors locate actual visible answer/peer ink.
     # Original images above and all HWP bytes remain unchanged; never save HWP.
-    colors=[(255,[m['text'] for m in markers[:-2]])]+[(color,[label]) for color,label in zip([16711680,32768],c['fixture'].get('peer_labels',[]))]
+    colors=[(g['color'],g['labels']) for g in c['fixture']['marked_groups']] if c['fixture'].get('marked_groups') else [(255,[m['text'] for m in markers[:-2]])]+[(color,[label]) for color,label in zip([16711680,32768],c['fixture'].get('peer_labels',[]))]
     assert len(c['fixture'].get('peer_labels',[]))<=2
     for color,labels in colors:
      for label in labels:

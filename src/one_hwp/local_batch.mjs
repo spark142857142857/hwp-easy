@@ -66,7 +66,7 @@ export async function editLocalBatch(HwpDocument,source,initialVersion,operation
     const raw=readHwp(bytes);let found=false;
     for(const {section} of raw.profile.sections)for(const r of parseRecords(raw.streams.get(`BodyText/Section${section}`)))if(r.tag===71&&r.payload.length>=42&&Buffer.from(r.payload.subarray(0,4)).toString()===' lbt'){
       const flags=new DataView(r.payload.buffer,r.payload.byteOffset,r.payload.byteLength).getUint32(4,true);
-      if((flags&(1|(3<<3)|(3<<8)|(7<<21)|(1<<20)))===((2<<3)|(2<<8)))found=true;
+      if((flags&(1|(3<<3)|(3<<8)|(1<<20)))===((2<<3)|(2<<8)))found=true;
     }
     if(!found)return;
     const state=inspectLocalComplex(HwpDocument,bytes,{includeDocumentInfo:false,verifyCharacterModel:false});
@@ -110,7 +110,7 @@ export async function editLocalBatch(HwpDocument,source,initialVersion,operation
       const root=block?.cell_path.length?state.tables.find(t=>!t.cell_path.length&&t.section===block.section&&t.record_index<block.record_index&&t.end>block.record_index):null;
       // A flowing root can contain HWP line-break characters even without any
       // nested controls. Keep those paragraphs on the verified raw edit path.
-      if(root&&synchronized.has(rootKey(state,root))){
+      if(root&&synchronized.has(rootKey(state,root))||block&&!block.cell_path.length&&state.tables.some(t=>t.section===block.section&&!t.cell_path.length&&synchronized.has(rootKey(state,t)))){
         const actual={...operation,target_id:target(block.id,currentVersion)};
         if(actual.previous_target_id){const previous=rawTarget(actual.previous_target_id,currentVersion),raw=state.blocks.find(b=>b.id===previous||standardBlockId(b)===previous);if(!raw)fail('INVALID_TARGET');actual.previous_target_id=target(raw.id,currentVersion);}
         result=editLocalComplex(HwpDocument,bytes,currentVersion,actual);
@@ -150,10 +150,11 @@ export async function editLocalBatch(HwpDocument,source,initialVersion,operation
       const version=digest(bytes),context=tableReflowContexts(state,version).find(c=>c.root_table_id===root.id);
       if(!context?.target_id)fail('TABLE_AUTO_SYNC_UNVERIFIED');
       const result=reflowTableLocal(HwpDocument,bytes,version,{type:'reflow_table',target_id:context.target_id,expected_old:context.expected_old,expected_tables:context.expected_tables});
-      bytes=result.bytes;automatic.push({root_table_id:root.id,changed:!result.unchanged});state=inspectLocalComplex(HwpDocument,bytes,{includeDocumentInfo:false,verifyCharacterModel:false});
+      if(result._target_remap){if(layoutRemap===null)layoutRemap={...result._target_remap};else for(const [initial,current]of Object.entries(layoutRemap))if(current!==null)layoutRemap[initial]=result._target_remap[current]??null;}
+      bytes=result.bytes;automatic.push({root_table_id:root.id,changed:!result.unchanged,...(result.structure_changed?{structure_changed:true,normalized_hosts:result.table_reflow.normalized_hosts}:{})});state=inspectLocalComplex(HwpDocument,bytes,{includeDocumentInfo:false,verifyCharacterModel:false});
     }
   }
-  const sync=automatic.length?{table_auto_sync:automatic,...(automatic.some(t=>t.changed)?{table_formatting_changed:true,flow_changed:true,raw_preservation_scope:'requested_operations_and_verified_automatic_table_height_flow_sync; retained_text_styles_widths_borders_and_other_streams_exact'}:{})}:{};
+  const sync=automatic.length?{table_auto_sync:automatic,...(automatic.some(t=>t.structure_changed)?{structure_changed:true,paragraph_count_changed:true}:{}),...(automatic.some(t=>t.changed)?{table_formatting_changed:true,flow_changed:true,raw_preservation_scope:'requested_operations_and_verified_automatic_table_height_flow_sync; retained_text_styles_widths_borders_and_other_streams_exact'}:{})}:{};
   if(operations.length===1)return {bytes,...last,...sync,_layout_target_remap:layoutRemap,_layout_removed_objects:[...removedObjects]};
   return {bytes,content_verified:true,raw_preservation_verified:true,
     raw_preservation_scope:'each_operation_verified_before_one_final_save',
