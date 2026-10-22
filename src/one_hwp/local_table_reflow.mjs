@@ -7,6 +7,7 @@ import {publishVerifiedPatch} from './local_verified_patch.mjs';
 import {invalidateSectionLayout} from './local_layout_cache.mjs';
 import {createNaturalTextMeasurer} from './local_rendered_layout.mjs';
 import {tableParagraphHeight as paragraphHeight} from './local_table_text_metrics.mjs';
+import {tableHostParagraphHeight,inlineTableHostObject} from './local_table_host_controls.mjs';
 import {GuardError} from '../../probes/sites-runtime/guard/records.mjs';
 import {hostRoots,rootForest,normalizeTableHosts} from './local_table_hosts.mjs';
 import {digest as digestForHost} from './local_file.mjs';
@@ -70,8 +71,8 @@ function reflowSingle(HwpDocument,source,version,op,blockFlow=false,selectedRoot
    let needed=padding[2]+padding[3];
    for(const paragraph of c.blocks){
     const child=tables.filter(x=>x.parent_id===paragraph.id);
-    if(rs.slice(paragraph.record_index+1,paragraph.records_end).some(r=>r.tag===71&&r.level===paragraph.raw_level+1&&Buffer.from(r.payload.subarray(0,4)).toString()!==' lbt'))fail('TABLE_REFLOW_CELL_CONTROL_UNSUPPORTED');
-    needed+=paragraphHeight(paragraph,width,measure);
+    needed+=tableHostParagraphHeight(state,paragraph,width,measure,paragraphHeight);
+    for(let at=paragraph.record_index+1;at<paragraph.records_end;at++)if(rs[at].tag===71&&rs[at].level===paragraph.raw_level+1&&Buffer.from(rs[at].payload.subarray(0,4)).toString()===' osg'){const p=patch(at);p.setUint32(4,p.getUint32(4,true)|4,true);}
     for(const ch of child){const f=objectFlow(rs[ch.record_index]);if(ch.properties.tableWidth+f.marginLeft+f.marginRight>width)fail('TABLE_REFLOW_CHILD_WIDTH_UNSUPPORTED');needed+=heights.get(ch.id)+f.marginTop+f.marginBottom;}
    }
    needed=Math.max(c.height,Math.ceil(needed));if(needed>720000)fail('TABLE_REFLOW_HEIGHT_LIMIT');
@@ -96,17 +97,17 @@ function reflowSingle(HwpDocument,source,version,op,blockFlow=false,selectedRoot
   if(cell)for(const peer of hostPeers.get(host.id)){if(peer===t)break;const f=objectFlow(rs[peer.record_index]);offset+=heights.get(peer.id)+f.marginTop+f.marginBottom;}
   patch(t.record_index).setInt32(8,offset,true);changes.find(c=>c.table_id===t.id).vertOffset=offset;
  }
- // Other drawings are safe only when fixed to paper/page; paragraph drawings
- // can change pages or collide with the growing table and remain explicit work.
+ // Verified inline objects occupy separate paragraphs. Independent floating
+ // objects still require a protected fixed region or a later collision solver.
  for(const object of [...state.text_boxes,...state.pictures,...state.groups,...state.opaque_drawings]){
-  if(object.section!==b.section)continue;const f=object.flow;if(object.cell_path.length||f.treatAsChar||f.vertRelTo>1)fail('TABLE_REFLOW_FLOATING_CONTROL_UNSUPPORTED');
+  if(object.section!==b.section)continue;const f=object.flow;const host=state.blocks.find(b=>b.id===object.block_id);if(f.treatAsChar){const inline=inlineTableHostObject(state,host,object.record_index),container=state.tables.flatMap(t=>t.cells.map(c=>({t,c}))).find(({c})=>c.blocks.includes(host)),padding=container?pads(state,container.t,container.c):[],available=container?container.c.width-padding[0]-padding[1]:bodyWidth;if((!f.affectLineSpacing&&!((patches.has(object.record_index)?view(patches.get(object.record_index)).getUint32(4,true):0)&4))||inline.width>available||inline.height+1000>bodyHeight||host.text||host.tokens.filter(t=>t.code===11).length!==1)fail('TABLE_HOST_OBJECT_FLOW_UNVERIFIED');continue;}if((object.cell_path??host?.cell_path??[]).length||f.vertRelTo>1)fail('TABLE_REFLOW_FLOATING_CONTROL_UNSUPPORTED');
   const p=object.properties,bottom=p.vertOffset+Math.max(p.height,0)+f.marginBottom,bodyBottom=page.getUint32(4,true)-page.getUint32(20,true)-page.getUint32(28,true),bodyTop=page.getUint32(16,true)+page.getUint32(24,true);
   if(f.vertRelTo!==0||f.vertAlign!==0||!(p.vertOffset-f.marginTop>=bodyBottom||bottom<=bodyTop))fail('TABLE_REFLOW_FIXED_REGION_UNPROTECTED');
  }
  const changed=[...patches].some(([i,p])=>!equalBytes(rs[i].payload,p));if(!changed)return {bytes:source,content_verified:true,raw_preservation_verified:true,unchanged:true,layout_verified:false};
  const records=invalidateSectionLayout(rs.map((r,i)=>patches.has(i)?{...r,payload:patches.get(i)}:r),state.blocks.filter(b=>b.section===root.section)),bytes=publishVerifiedPatch(source,state,b.section,records),after=inspectLocalComplex(HwpDocument,bytes,{includeDocumentInfo:false,verifyCharacterModel:false});
  if(!equal(state.blocks.map(b=>[b.id,b.text,b.unit_styles]),after.blocks.map(b=>[b.id,b.text,b.unit_styles]))||!equal(state.fields,after.fields)||tables.some(t=>!tablePaginationEnabled(after,after.tables.find(n=>n.id===t.id))))fail('TABLE_REFLOW_PRESERVATION_MISMATCH');
- return {bytes,content_verified:true,raw_preservation_verified:true,raw_preservation_scope:'selected_root_tree_table_flow_height_pagination_and_section_line_caches; text_styles_widths_margins_borders_other_controls_and_streams_exact',flow_changed:true,table_formatting_changed:true,table_reflow:{root_table_id:root.id,tables:changes.reverse(),pagination:'reader_recomputed_line_split',stored_heights:'conservative_growing_minima',cell_alignment:'preserved',nested_host_layout:'anchor_order_vertical_stack_below_prefix',native_layout_verified:false},layout_verified:false};
+ return {bytes,content_verified:true,raw_preservation_verified:true,raw_preservation_scope:'selected_root_tree_table_flow_height_pagination_inline_line_spacing_and_section_line_caches; text_styles_widths_margins_borders_other_controls_and_streams_exact',flow_changed:true,table_formatting_changed:true,table_reflow:{root_table_id:root.id,tables:changes.reverse(),pagination:'reader_recomputed_line_split',stored_heights:'conservative_growing_minima',cell_alignment:'preserved',nested_host_layout:'anchor_order_vertical_stack_below_prefix',native_layout_verified:false},layout_verified:false};
 }
 /** Normalize interleaved hosts only after validating the complete caller scope.
  * All intermediate bytes remain in memory until the caller's one guarded save. */
@@ -120,5 +121,5 @@ export function reflowTableLocal(HwpDocument,source,version,op){
  let bytes=prepared.bytes,current=prepared.state;const results=[];
  for(const rootId of prepared.root_ids){const version=digestForHost(bytes),context=tableReflowContexts(current,version).find(c=>c.root_table_id===rootId);if(!context?.target_id)fail('TABLE_HOST_CONTEXT_UNVERIFIED');const result=reflowSingle(HwpDocument,bytes,version,{type:'reflow_table',target_id:context.target_id,expected_old:context.expected_old,expected_tables:context.expected_tables},true,prepared.root_ids);bytes=result.bytes;results.push(result);current=inspectLocalComplex(HwpDocument,bytes,{includeDocumentInfo:false,verifyCharacterModel:false});}
  const remap={...prepared.remap};if(!hasLocalComplexContent(current.raw))for(const [old,id]of Object.entries(remap)){const block=current.blocks.find(b=>b.id===id);if(block)remap[old]=standardBlockId(block);}
- return {bytes,content_verified:true,raw_preservation_verified:true,raw_preservation_scope:'explicit_host_paragraph_partition_retaining_text_anchor_units_styles_and_control_order_then_verified_table_flow',structure_changed:true,paragraph_count_changed:true,flow_changed:true,table_formatting_changed:true,table_reflow:{root_table_id:prepared.root_ids[0],root_table_ids:prepared.root_ids,tables:results.flatMap(r=>r.table_reflow?.tables??[]),host_normalization:'paragraph_segments_around_table_anchors',normalized_hosts:prepared.normalized,pagination:'reader_recomputed_line_split',stored_heights:'conservative_growing_minima',native_layout_verified:false},_target_remap:remap,layout_verified:false};
+ return {bytes,content_verified:true,raw_preservation_verified:true,raw_preservation_scope:'explicit_host_paragraph_partition_retaining_text_anchor_units_styles_fields_and_control_order_with_inline_line_spacing_then_verified_table_flow',structure_changed:true,paragraph_count_changed:true,flow_changed:true,table_formatting_changed:true,table_reflow:{root_table_id:prepared.root_ids[0],root_table_ids:prepared.root_ids,tables:results.flatMap(r=>r.table_reflow?.tables??[]),host_normalization:'paragraph_segments_around_table_anchors',inline_object_layout:'own_paragraph_with_line_spacing_influence',field_ranges_remapped:true,normalized_hosts:prepared.normalized,pagination:'reader_recomputed_line_split',stored_heights:'conservative_growing_minima',native_layout_verified:false},_target_remap:remap,layout_verified:false};
 }

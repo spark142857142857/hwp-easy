@@ -42,7 +42,7 @@ def logical(rs):
  for i,r in enumerate(rs):
   if r[0]==66 and i not in visited:opaque.append(rs[i:end(i,len(rs))])
  return events,opaque
-def inventory(rs):
+def inventory(rs,inline_spacing=False):
  out=[]
  for tag,level,payload in rs:
   if tag in [66,67,68,69]:continue
@@ -50,6 +50,7 @@ def inventory(rs):
   if tag==71 and p[:4]==b' lbt':
    mask=1|4|(3<<3)|(7<<5)|(3<<8)|(7<<10)|(1<<13)|(1<<14)|(1<<20)|(7<<21)|(3<<24);f=struct.unpack_from('<I',p,4)[0];struct.pack_into('<I',p,4,f&~mask);p[8:16]=bytes(8);p[20:24]=bytes(4)
    if len(p)>=46 and len(p)==46+struct.unpack_from('<H',p,44)[0]*2:p[40:44]=bytes(4)
+  elif inline_spacing and tag==71 and p[:4]==b' osg':struct.pack_into('<I',p,4,struct.unpack_from('<I',p,4)[0]&~4)
   elif tag==72 and len(p)>=34:p[:2]=bytes(2);p[20:24]=bytes(4)
   elif tag==77:struct.pack_into('<I',p,0,struct.unpack_from('<I',p)[0]&~3)
   out.append((tag,level,bytes(p)))
@@ -60,13 +61,16 @@ for c in cases:
  name=c['name'];before=root/(name+'-before.hwp');assert before.read_bytes()==(root/(name+'-restored.hwp')).read_bytes();pb,b=load(before);pa,a=load(root/(name+'-after.hwp'));assert set(pb)-{'PrvText','PrvImage'}==set(pa)-{'PrvText','PrvImage'}
  for key in pb:
   if key not in ['BodyText/Section0','PrvText','PrvImage']:assert pb[key]==pa[key],(name,key)
- rb=records(b['BodyText/Section0']);ra=records(a['BodyText/Section0']);old,opaque=logical(rb);new,newopaque=logical(ra);assert opaque==newopaque;assert inventory(rb)==inventory(ra),(name,'unrequested record bytes')
+ rb=records(b['BodyText/Section0']);ra=records(a['BodyText/Section0']);old,opaque=logical(rb);new,newopaque=logical(ra);assert opaque==newopaque;assert inventory(rb,c['fixture'].get('host_controls',False))==inventory(ra,c['fixture'].get('host_controls',False)),(name,'unrequested record bytes')
  edit=next((op for op in c['operations'] if op['type']=='splice_text'),None)
  if edit:
   raw=edit['expected_old'].encode('utf-16le');tokens=[raw[i:i+2].hex() for i in range(0,len(raw),2)];matches=[i for i in range(len(old)-len(tokens)+1) if all(old[i+j][0]=='t' and old[i+j][1]==token for j,token in enumerate(tokens))];assert len(matches)==1
   at=matches[0];text=edit['expected_old'];start=len(text[:edit['start']].encode('utf-16le'))//2;stop=len(text[:edit['end']].encode('utf-16le'))//2;previous=old[at+start:at+stop]
   if previous:assert len({json.dumps([v[2],v[3],v[4]]) for v in previous})==1
   inherited=(previous or [old[at+max(0,start-1)]])[0];raw=edit['new_text'].encode('utf-16le');old[at+start:at+stop]=[['t',raw[i:i+2].hex(),*inherited[2:]] for i in range(0,len(raw),2)]
+ for edit in (op for op in c['operations'] if op['type']=='set_field'):
+  raw=edit['expected_old'].encode('utf-16le');tokens=[raw[i:i+2].hex() for i in range(0,len(raw),2)];matches=[i for i in range(len(old)-len(tokens)+1) if all(old[i+j][0]=='t' and old[i+j][1]==token for j,token in enumerate(tokens))];assert len(matches)==1
+  at=matches[0];previous=old[at:at+len(tokens)];assert len({json.dumps([v[2],v[3],v[4]]) for v in previous})==1;raw=edit['new_text'].encode('utf-16le');old[at:at+len(tokens)]=[['t',raw[i:i+2].hex(),*previous[0][2:]] for i in range(0,len(raw),2)]
  assert old==new,(name,'logical text/anchors/styles/order')
 summary=dict(status='PASS',cases=len(cases),logical_anchor_order_and_utf16_styles_exact=True,cell_paragraph_counts_verified=True,retained_controls_widths_padding_borders_instances_exact=True,other_streams_and_definitions_exact=True,exact_restore=True)
 (root/'independent-summary.json').write_text(json.dumps(summary,indent=2)+'\n',encoding='utf-8');print(json.dumps(summary))

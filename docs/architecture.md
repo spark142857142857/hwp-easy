@@ -8,7 +8,7 @@ HWP Easy는 공통 HWP 엔진과 로컬 실행기를 여러 에이전트 클라�
 
 ## 메인 로컬 파일 흐름
 
-메인 소스·검증 패키지는 **0.2.38**, Codex 설치는 **0.2.25**, Claude Code·Cursor 실제 설치와 공개 ZIP은 **0.2.19**입니다. 같은 버전의 앱별 패키지는 공통 Node 실행기와 WASM을 포함합니다. HWP Easy 서버나 OAuth 연결이 필요하지 않습니다.
+메인 소스·검증 패키지는 **0.2.39**, Codex 설치는 **0.2.25**, Claude Code·Cursor 실제 설치와 공개 ZIP은 **0.2.19**입니다. 같은 버전의 앱별 패키지는 공통 Node 실행기와 WASM을 포함합니다. HWP Easy 서버나 OAuth 연결이 필요하지 않습니다.
 
 ```mermaid
 flowchart LR

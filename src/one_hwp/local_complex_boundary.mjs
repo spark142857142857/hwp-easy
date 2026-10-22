@@ -1,6 +1,7 @@
 /** Paragraph boundaries without serializing retained fields, drawings or table subtrees. */
 import {fail,view,equal,textTokens} from './local_complex_records.mjs';
 import {standardBlockId} from './local_complex_table.mjs';
+import {tableHostFields,inlineTableHostObject} from './local_table_host_controls.mjs';
 const ctrl=r=>Buffer.from(r.payload.subarray(0,4)).toString('ascii');
 const text=value=>{if(typeof value!=='string'||!value.isWellFormed()||value.length>100000||/[\u0000-\u0009\u000b-\u001f]/.test(value)||value.split('\n').length>100)fail('INVALID_EDIT_TEXT');return value;};
 function parts(records,b){
@@ -29,14 +30,19 @@ export function boundaryEligible(records,b){try{parts(records,b);return true;}ca
 /** Explicit block flow: retain every text/anchor unit and its style, inserting
  * paragraph terminators around table anchors instead of moving text past them. */
 export function partitionTableHost(before,b){
+ if(b.tokens.filter(t=>t.length===8&&![4,9].includes(t.code)).length>64)fail('TABLE_HOST_CONTROL_LIMIT');
  const records=before.recordSets.get(b.section),p=parts(records,b);
- if(p.anchors.some(a=>![2,11].includes(a.code))||p.anchors.filter(a=>a.code===11).some(a=>ctrl(a.control[0])!==' lbt')||b.tokens.some(t=>!t.text&&![2,11,13].includes(t.code)))fail('TABLE_HOST_CONTROL_UNSUPPORTED');
+ const fields=tableHostFields(before,b);
+ if(fields.length>32||p.anchors.filter(a=>ctrl(a.control[0])===' osg').length>16)fail('TABLE_HOST_CONTROL_LIMIT');
+ if(p.anchors.some((a,i)=>a.control!==p.controls[i]||![2,3,11].includes(a.code)||a.code===3&&ctrl(a.control[0])!=='klc%')||b.tokens.some(t=>!t.text&&![2,3,4,11,13].includes(t.code)))fail('TABLE_HOST_CONTROL_UNSUPPORTED');
+ for(const a of p.anchors.filter(a=>a.code===11)){const id=ctrl(a.control[0]);if(id!==' lbt'){if(id!==' osg')fail('TABLE_HOST_CONTROL_UNSUPPORTED');inlineTableHostObject(before,b,records.indexOf(a.control[0]));}}
  const cuts=[0];for(const a of p.anchors.filter(a=>a.code===11))cuts.push(a.unit,a.unit+a.length);cuts.push(p.payload.length/2-1);
+ if(cuts.some(c=>fields.some(f=>c>f.from-8&&c<f.to+8)))fail('TABLE_HOST_PARTITION_CROSSES_FIELD');
  const ranges=cuts.slice(1).map((end,i)=>[cuts[i],end]).filter(([a,z])=>a<z);if(ranges.length<2)fail('TABLE_HOST_PARTITION_UNVERIFIED');
  const last=Boolean(view(records[b.record_index].payload).getUint32(0,true)&0x80000000),replacement=[],heads=[],fragments=[];
  for(const [i,[from,to]]of ranges.entries()){
-  const controls=p.anchors.filter(a=>a.unit>=from&&a.unit<to).map(a=>a.control),payload=Buffer.concat([p.payload.subarray(from*2,to*2),Buffer.from('\r','utf16le')]),ids=[...b.unit_styles.slice(from,to),b.unit_styles[i===ranges.length-1?b.unit_styles.length-1:Math.max(from,to-1)]];
-  const part=paragraph(records[b.record_index],payload,ids,controls,last&&i===ranges.length-1,i===0?records[b.record_index]:null);heads.push(part[0]);fragments.push({head:part[0],text:textTokens(payload).map(t=>t.text).join(''),unit_styles:ids});replacement.push(...part);
+  const controls=p.anchors.filter(a=>a.unit>=from&&a.unit<to).map(a=>{if(ctrl(a.control[0])!==' osg')return a.control;const r=a.control[0],payload=r.payload.slice();view(payload).setUint32(4,view(payload).getUint32(4,true)|4,true);return [{...r,payload,originControl:r},...a.control.slice(1)];}),payload=Buffer.concat([p.payload.subarray(from*2,to*2),Buffer.from('\r','utf16le')]),ids=[...b.unit_styles.slice(from,to),b.unit_styles[i===ranges.length-1?b.unit_styles.length-1:Math.max(from,to-1)]];
+  const part=paragraph(records[b.record_index],payload,ids,controls,last&&i===ranges.length-1,i===0?records[b.record_index]:null);heads.push(part[0]);fragments.push({head:part[0],from,to,visible_from:b.tokens.filter(t=>t.unit<from&&t.text).length,text:textTokens(payload).map(t=>t.text).join(''),unit_styles:ids});replacement.push(...part);
  }
  // Independent segment concatenation, including raw controls and UTF-16 styles.
  if(!equal([...Buffer.concat(ranges.map(([a,z])=>p.payload.subarray(a*2,z*2)))],[...p.payload.subarray(0,-2)])||!equal(ranges.flatMap(([a,z])=>b.unit_styles.slice(a,z)),b.unit_styles.slice(0,-1)))fail('TABLE_HOST_CONTENT_MISMATCH');

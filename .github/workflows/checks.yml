@@ -8,7 +8,7 @@ on:
         description: Verification scope (all, table flow, hosts, or text metrics)
         type: choice
         default: all
-        options: [all, table-flow, table-text, table-metrics]
+        options: [all, table-flow, table-text, table-metrics, table-controls]
 
 permissions:
   contents: read
@@ -314,8 +314,8 @@ jobs:
         run: python scripts/check-local-table-sync.py outputs/local-table-hosts
 
   local-table-text:
-    if: ${{ inputs.scope == 'all' || inputs.scope == 'table-text' }}
-    name: Table text and body hosts / ${{ matrix.os }}
+    if: ${{ inputs.scope == 'all' || inputs.scope == 'table-text' || inputs.scope == 'table-controls' }}
+    name: Table text and host controls / ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
     timeout-minutes: 8
     strategy:
@@ -345,15 +345,27 @@ jobs:
       - name: Verify all table source regressions during scoped checks
         if: ${{ inputs.scope == 'table-text' }}
         run: node --test --test-concurrency=2 tests/test_local_table_reflow.mjs tests/test_local_table_hosts.mjs tests/test_local_table_text_flow.mjs
-      - name: Verify new text flow regressions during full checks
+      - name: Verify all table source regressions during host control checks
+        if: ${{ inputs.scope == 'table-controls' }}
+        run: node --test --test-concurrency=2 tests/test_local_table_reflow.mjs tests/test_local_table_hosts.mjs tests/test_local_table_text_flow.mjs tests/test_local_table_text_metrics.mjs tests/test_local_table_controls.mjs
+      - name: Verify new text and host control regressions during full checks
         if: ${{ inputs.scope == 'all' }}
-        run: node --test tests/test_local_table_text_flow.mjs
+        run: node --test --test-concurrency=2 tests/test_local_table_text_flow.mjs tests/test_local_table_controls.mjs
       - name: Build isolated local plugin
         run: node scripts/package_local_plugin.mjs
       - name: Verify interleaved text and multiple body roots through package
+        if: ${{ inputs.scope != 'table-controls' }}
         run: node scripts/check-local-table-text-flow.mjs
       - name: Independently verify logical order, UTF-16 styles and recovery
+        if: ${{ inputs.scope != 'table-controls' }}
         run: python scripts/check-local-table-text-flow.py
+
+      - name: Verify fields and inline host objects through package
+        if: ${{ inputs.scope == 'all' || inputs.scope == 'table-controls' }}
+        run: node scripts/check-local-table-controls.mjs
+      - name: Independently verify field ranges, inline objects and recovery
+        if: ${{ inputs.scope == 'all' || inputs.scope == 'table-controls' }}
+        run: python scripts/check-local-table-text-flow.py outputs/local-table-controls
 
   local-table-metrics:
     if: ${{ inputs.scope == 'all' || inputs.scope == 'table-metrics' }}
