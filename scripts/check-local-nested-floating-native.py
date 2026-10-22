@@ -25,6 +25,7 @@ def cell(im,p,tolerance):
     ys=[yy for yy in range(round(y)-3,round(y)+4) if horizontal(yy)];bottoms=[yy for yy in range(round(y+h)-3,round(y+h)+4) if horizontal(yy)];assert ys and bottoms,('native cell horizontal edges',p,ys,bottoms)
     return left,min(ys,key=lambda n:abs(n-y)),right,min(bottoms,key=lambda n:abs(n-y-h))
 checks=[];sheet=Image.new('RGB',(1200,len(cases)*300),'white');draw=ImageDraw.Draw(sheet)
+assert cases,'No native cases were supplied'
 for i,c in enumerate(cases):
     name=c['name'];a=image(name,'before');b=image(name,'after');r=image(name,'restored');assert all(results[name+'-'+s]['pages']==1 for s in ('before','after','restored'));assert ImageChops.difference(a,r).getbbox() is None,(name,'restore pixels');assert text(results[name+'-before']['text'])==text(results[name+'-after']['text']),(name,'native text/order')
     p=c['verification']['placement'];box=rectangle(b,p['after']);tolerance=math.ceil(p['inline_prefix_tolerance'])+3;grid=cell(b,p['projected_cell'],tolerance);prior=cell(a,p['projected_cell'],tolerance);assert grid==prior,(name,'cell geometry moved')
@@ -35,6 +36,11 @@ for i,c in enumerate(cases):
     ink=[(xx,yy) for yy in range(ct+3,cb-2) for xx in range(cl+3,cr-2) if not in_old(xx,yy) and dark(a,xx,yy)]
     assert not any(left-1<=xx<=right+1 and top-1<=yy<=bottom+1 for xx,yy in ink),(name,'box intersects native cell text',box,grid)
     assert all(dark(b,xx,yy) for xx,yy in ink),(name,'native text position changed')
+    difference=ImageChops.difference(a,b)
+    masked=ImageDraw.Draw(difference)
+    for bounds in (p['before'],p['after']):
+        masked.rectangle((math.floor(bounds['x'])-4,math.floor(bounds['y'])-4,math.ceil(bounds['x']+bounds['w'])+4,math.ceil(bounds['y']+bounds['h'])+4),fill='black')
+    assert difference.getbbox() is None,(name,'non-target native page ink moved')
     checks.append(dict(case=name,depth=len(c['after']['text_boxes'][0]['cell_path']),actual_cell=grid,actual_box=box,cell_edges_unchanged=True,native_text_ink_clear=True))
     region=(max(0,cl-45),max(0,ct-30),min(b.width,cr+250),min(b.height,cb+35))
     for j,(label,im) in enumerate([('before',a),('after',b)]):draw.text((j*600,i*300),f'{name} {label}',fill='black');sheet.paste(im.crop(region),(j*600,i*300+20))

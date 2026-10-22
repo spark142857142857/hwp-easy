@@ -4,6 +4,7 @@ import {locateCell} from './local_cell_frame.mjs';
 import {contains} from './local_rendered_layout.mjs';
 import {trackPositions} from './local_complex_table.mjs';
 import {parseRecords} from '../../probes/sites-runtime/guard/records.mjs';
+import {needsComposedCellFlow,composeCellTables,cellPads} from './local_inline_cell_flow.mjs';
 
 const plain=p=>p&&['left','justify'].includes(p.alignment)&&['marginLeft','marginRight','indent','spacingBefore','spacingAfter'].every(k=>p[k]===0)&&p.lineSpacingType===0&&p.lineSpacing>=100&&!p.pageBreakBefore;
 const tableFlow=r=>{if(r?.tag!==71||r.payload.length<36)fail('NESTED_PLACEMENT_TABLE_PROFILE_UNSUPPORTED');const v=view(r.payload),f=v.getUint32(4,true);return {treatAsChar:Boolean(f&1),widthRelTo:(f>>>15)&7,heightRelTo:(f>>>18)&3,vertRelTo:(f>>>3)&3,horzRelTo:(f>>>8)&3,vertAlign:(f>>>5)&7,horzAlign:(f>>>10)&7,vertOffset:v.getInt32(8,true),horzOffset:v.getInt32(12,true),marginLeft:v.getUint16(28,true),marginTop:v.getUint16(32,true),marginBottom:v.getUint16(34,true)};};
@@ -31,6 +32,7 @@ function inlinePrefix(state,snapshot,table){
 
 export function projectNestedAnchor(state,box,snapshot){
  if(box.cell_path.length<1||box.cell_path.length>3)fail('NESTED_PLACEMENT_DEPTH_UNSUPPORTED');
+ if(needsComposedCellFlow(state,box))return projectComposedAnchor(state,box,snapshot);
  if(box.cell_path.slice(0,-1).some(p=>p.cellParaIndex!==0))fail('NESTED_PLACEMENT_PARAGRAPH_UNVERIFIED');
  let checks=0;const at=locateCell(state,box,snapshot,()=>{if(++checks>200000)fail('NESTED_PLACEMENT_CHECK_LIMIT');}),rs=state.recordSets.get(box.section),root=at?.root_table,host=state.blocks.find(b=>b.id===root?.parent_id);
  if(!at||!host||host.text!==''||!plain(host.paragraph_properties)||at.page.info.columns?.length!==1||!contains(at.page.body,at.root_frame)||at.page.limitations.some(l=>!['NESTED_TABLE_PAGINATION_UNVERIFIED','INLINE_CONTROL_RENDER_PLANE_DISAGREEMENT'].includes(l.code)))fail('NESTED_PLACEMENT_ROOT_UNVERIFIED');
@@ -64,6 +66,24 @@ export function projectNestedAnchor(state,box,snapshot){
  const refs=at.page.body_runs.filter(r=>r.secIdx===box.section&&r.paraIdx===box.paragraph&&r.parentParaIdx==null&&r.cellIdx==null&&r.charStart===0);if(refs.length!==1||Math.abs(refs[0].y-at.root_frame.y)>2)fail('NESTED_PLACEMENT_PARAGRAPH_ORIGIN_UNVERIFIED');
  const anchor={x:at.page.info.columns[0].x,y:refs[0].y},rect={x:anchor.x+box.properties.horzOffset/75,y:anchor.y+box.properties.vertOffset/75,w:box.properties.width/75,h:box.properties.height/75};
  return {page:at.page.page,anchor,cell,frame,rect,frames,prefix_tolerance:uncertainty,lineage:at.lineage,raw_cell:rawCell,table,host:state.blocks.find(b=>b.id===box.block_id)};
+}
+
+function projectComposedAnchor(state,box,snapshot){
+ const rs=state.recordSets.get(box.section),at=locateCell(state,{...box,cell_path:box.cell_path.slice(0,1)},snapshot,()=>{}),root=at?.root_table,host=state.blocks.find(b=>b.id===root?.parent_id);
+ if(!at||!host||host.text!==''||!plain(host.paragraph_properties)||at.page.info.columns?.length!==1||!contains(at.page.body,at.root_frame)||at.page.limitations.some(l=>!['NESTED_TABLE_PAGINATION_UNVERIFIED','INLINE_CONTROL_RENDER_PLANE_DISAGREEMENT'].includes(l.code)))fail('NESTED_PLACEMENT_ROOT_UNVERIFIED');
+ if(rs.slice(host.record_index+1,host.records_end).some(r=>r.tag===71&&r.level===host.raw_level+1&&r!==rs[root.record_index]&&!['dces','dloc'].includes(Buffer.from(r.payload.subarray(0,4)).toString())))fail('NESTED_PLACEMENT_ROOT_UNVERIFIED');
+ const f=tableFlow(rs[root.record_index]);if(f.widthRelTo!==4||f.heightRelTo!==2||!f.treatAsChar&&(f.vertRelTo!==2||![2,3].includes(f.horzRelTo)||f.vertAlign!==0||f.horzAlign!==0||f.vertOffset!==0||f.horzOffset!==0))fail('NESTED_PLACEMENT_ROOT_UNVERIFIED');
+ const selectedRootCell=root.cells.find(c=>c.cell===box.cell_path[0].cellIndex),layouts=composeCellTables(state,root,snapshot,selectedRootCell);let table=root,origin={x:at.root_frame.x+f.marginLeft/75,y:at.root_frame.y+f.marginTop/75},cell,rawCell,error=0;const lineage=[],frames=[];
+ for(let depth=0;depth<box.cell_path.length;depth++){
+  const path=box.cell_path[depth],layout=layouts.get(table);rawCell=table.cells.find(c=>c.cell===path.cellIndex);const local=layout?.cells.get(path.cellIndex);if(!rawCell||!local)fail('NESTED_PLACEMENT_GRID_UNVERIFIED');
+  cell={x:origin.x+local.x,y:origin.y+local.y,w:local.w,h:local.h};lineage.push({table});frames.push({table_id:table.id,...origin,w:table.properties.tableWidth/75,h:table.properties.tableHeight/75});
+  if(depth+1<box.cell_path.length){const matches=state.tables.filter(t=>t.section===box.section&&t.paragraph===box.paragraph&&equal(t.cell_path,box.cell_path.slice(0,depth+1))&&t.control===box.cell_path[depth+1].controlIndex);if(matches.length!==1)fail('NESTED_PLACEMENT_ROOT_UNVERIFIED');const child=matches[0],position=layout.children.get(child);if(!position)fail('NESTED_PLACEMENT_ROOT_UNVERIFIED');origin={x:origin.x+position.x,y:origin.y+position.y};error+=position.error;table=child;}
+ }
+ const p=cellPads(rs,table,rawCell),frame={x:cell.x+p[0]+error,y:cell.y+p[2],w:cell.w-p[0]-p[1]-2*error,h:cell.h-p[2]-p[3]};
+ if(!contains(at.page.body,cell)||frame.w<=0||frame.h<=0||box.properties.width/75>frame.w||box.properties.height/75>frame.h)fail('NESTED_PLACEMENT_FRAME_TOO_SMALL');
+ const refs=at.page.body_runs.filter(r=>r.secIdx===box.section&&r.paraIdx===box.paragraph&&r.parentParaIdx==null&&r.cellIdx==null&&r.charStart===0);if(refs.length!==1||Math.abs(refs[0].y-at.root_frame.y)>2)fail('NESTED_PLACEMENT_PARAGRAPH_ORIGIN_UNVERIFIED');
+ const anchor={x:at.page.info.columns[0].x,y:refs[0].y},rect={x:anchor.x+box.properties.horzOffset/75,y:anchor.y+box.properties.vertOffset/75,w:box.properties.width/75,h:box.properties.height/75};
+ return {page:at.page.page,anchor,cell,frame,rect,frames,prefix_tolerance:error,lineage,raw_cell:rawCell,table,host:state.blocks.find(b=>b.id===box.block_id),composed_flow:true};
 }
 
 export function nestedTextBand(state,box,projection,estimate,verifiedFloats=null){

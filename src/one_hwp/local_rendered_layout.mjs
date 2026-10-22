@@ -47,8 +47,25 @@ export function captureRenderedLayout(HwpDocument,bytes){
     if(text.includes('\n')){uncertain.add(key);limitations.push({code:'MULTILINE_PARAGRAPH_PAGINATION_UNVERIFIED',page,section:r.secIdx,paragraph:r.paraIdx});}
    }
    pages.push({page,info,body,body_runs,fixed_runs,controls,inline_controls:inlineControls,limitations,uncertain_paragraphs:uncertain,text_runs:runs.length});
-  }return {pages,page_count:count};
+  }return {pages,page_count:count,measureInlineText:naturalTextMeasurer(HwpDocument)};
  }finally{doc.free();}
+}
+// Scratch documents are observations only: no source bytes are exported or
+// published. Left alignment prevents cell squeezing/justification from being
+// mistaken for natural glyph advances in raw inline-flow projection.
+function naturalTextMeasurer(HwpDocument){
+ const cache=new Map();return (text,runs)=>{
+  const key=JSON.stringify([text,runs]);if(cache.has(key))return cache.get(key);
+  const doc=HwpDocument.createEmpty();try{
+   doc.insertText(0,0,0,text);doc.applyParaFormat(0,0,JSON.stringify({alignment:'left'}));
+   for(const run of runs){const p=run.properties;if(p.fontFamilies?.some(name=>name!==p.fontFamily)||['ratios','relativeSizes'].some(k=>p[k]?.some(n=>n!==100))||['spacings','charOffsets'].some(k=>p[k]?.some(n=>n!==0))||p.subscript||p.superscript||p.kerning)fail('NESTED_PLACEMENT_FONT_UNVERIFIED');doc.applyCharFormat(0,0,run.start,run.end,JSON.stringify({fontFamily:p.fontFamily,fontSize:p.fontSize,bold:p.bold,italic:p.italic}));}
+   const count=doc.pageCount();if(count>32)fail('NESTED_PLACEMENT_CHECK_LIMIT');const observed=[];
+   for(let page=0;page<count;page++)observed.push(...JSON.parse(doc.getPageTextLayout(page)).runs.filter(r=>r.text));
+   if(observed.map(r=>r.text).join('').replaceAll('\n','')!==text.replaceAll('\n',''))fail('NESTED_PLACEMENT_INLINE_PREFIX_UNVERIFIED');
+   const widths=[];for(const r of observed){const chars=[...r.text];if(!Array.isArray(r.charX)||r.charX.length!==chars.length+1)fail('NESTED_PLACEMENT_INLINE_PREFIX_UNVERIFIED');for(let i=0;i<chars.length;i++)if(chars[i]!=='\n')widths.push(r.charX[i+1]-r.charX[i]);}
+   cache.set(key,widths);return widths;
+  }finally{doc.free();}
+ };
 }
 export function analyzeRenderedLayout(HwpDocument,bytes){
  const snapshot=captureRenderedLayout(HwpDocument,bytes),issues=[],pages=[],limitations=[];let checks=0;

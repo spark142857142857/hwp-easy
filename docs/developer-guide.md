@@ -4,7 +4,7 @@
 
 [프로젝트 개요](../README.md) · [문서 인덱스](README.md) · [아키텍처](architecture.md)
 
-소스를 변경하거나 배포 패키지를 생성할 때 필요한 환경과 검사 명령입니다. 현재 소스·검증 패키지는 **로컬 HWP Easy 0.2.32**입니다. 같은 버전의 앱별 패키지는 공통 실행기를 포함하며 실제 설치 버전은 [프로젝트 상태](project-status.md)에서 구분합니다. 파일 편집 절차는 [사용 가이드](quick-start.md), 실제 설치·호출 결과는 [프로젝트 상태](project-status.md)에 정리합니다.
+소스를 변경하거나 배포 패키지를 생성할 때 필요한 환경과 검사 명령입니다. 현재 소스·검증 패키지는 **로컬 HWP Easy 0.2.33**입니다. 같은 버전의 앱별 패키지는 공통 실행기를 포함하며 실제 설치 버전은 [프로젝트 상태](project-status.md)에서 구분합니다. 파일 편집 절차는 [사용 가이드](quick-start.md), 실제 설치·호출 결과는 [프로젝트 상태](project-status.md)에 정리합니다.
 
 ## 환경과 구성
 
@@ -89,9 +89,9 @@ python scripts/archive_agent_skills.py
 
 | 배포 대상 | 생성 ZIP |
 | --- | --- |
-| Codex | `outputs/plugin-package/hwp-easy-0.2.32.zip` |
-| Claude Code | `outputs/agent-packages/hwp-easy-claude-code-0.2.32.zip` |
-| Cursor | `outputs/agent-packages/hwp-easy-cursor-0.2.32.zip` |
+| Codex | `outputs/plugin-package/hwp-easy-0.2.33.zip` |
+| Claude Code | `outputs/agent-packages/hwp-easy-claude-code-0.2.33.zip` |
+| Cursor | `outputs/agent-packages/hwp-easy-cursor-0.2.33.zip` |
 
 패키지 생성은 앱 설치나 공개 게시를 수행하지 않습니다. Claude Code·Cursor의 설치 검사와 격리된 폴더에 설치한 실행기의 검증은 다음으로 재현합니다.
 
@@ -116,7 +116,7 @@ node scripts/install_agent_skill.mjs --client cursor --package outputs/agent-pac
 OpenAI 포털의 기존 MCP 등록은 서버 없는 패키지로 변경할 수 없어, 로컬판에는 별도 식별자 `hwp-easy-local`을 사용합니다. 다음 명령은 검증한 ZIP에서 등록 이름·호출 안내·표시 필드만 조정하고 모든 실행 자원의 바이트 일치를 검사합니다. 업로드·설치·심사 제출을 수행하지 않습니다.
 
 ```bash
-python scripts/package_directory_plugin.py outputs/plugin-package/hwp-easy-0.2.32.zip outputs/directory-package
+python scripts/package_directory_plugin.py outputs/plugin-package/hwp-easy-0.2.33.zip outputs/directory-package
 ```
 
 포털 관측과 남은 차단 항목은 [로컬 디렉터리 등록 기록](local-directory-submission.md)에 정리합니다.
@@ -150,7 +150,7 @@ node scripts/check-local-floating-areas.mjs outputs/local-floating-areas
 python scripts/check-local-floating-areas.py outputs/local-floating-areas
 ```
 
-한글이 있는 Windows에서 신뢰한 합성 파일만 네이티브 확인하려면 `scripts/render-local-reflow-native.py`와 Pillow 환경의 `scripts/check-local-floating-areas-native.py`에 같은 출력 폴더를 전달한다. 단/쪽·일반 셀 배치와 복구 이미지를 검사하며, 중첩 셀 지원 범위는 원시 HWP 기준 좌표로 계산하며 현재 WASM 표시 좌표의 차이를 별도 한계로 반환한다. 이 명령은 실제 앱 플러그인을 설치하거나 전체 CI를 실행하지 않는다. [0.2.32 범위](local-release-0.2.32.md)
+한글이 있는 Windows에서 신뢰한 합성 파일만 네이티브 확인하려면 `scripts/render-local-reflow-native.py`와 Pillow 환경의 `scripts/check-local-floating-areas-native.py`에 같은 출력 폴더를 전달한다. 단/쪽·일반 셀 배치와 복구 이미지를 검사하며, 중첩 셀 지원 범위는 원시 HWP 기준 좌표로 계산하며 현재 WASM 표시 좌표의 차이를 별도 한계로 반환한다. 이 명령은 실제 앱 플러그인을 설치하거나 전체 CI를 실행하지 않는다. [0.2.33 범위](local-release-0.2.33.md)
 
 ### 중첩 셀 기준 좌표 회귀
 
@@ -161,7 +161,7 @@ node scripts/check-local-nested-floating.mjs outputs/local-nested-floating
 python scripts/check-local-floating-areas.py outputs/local-nested-floating
 ```
 
-같은 출력 폴더에 `scripts/render-local-reflow-native.py`와 Pillow 환경의 `scripts/check-local-nested-floating-native.py`를 순서대로 실행하면 실제 안쪽 셀 테두리·상자·글 분리와 복구 픽셀을 확인한다. 제품은 COM 없이 공통 Node/WASM 실행기를 유지한다. [0.2.32 검증](local-release-0.2.32.md)
+같은 출력 폴더에 `scripts/render-local-reflow-native.py`와 Pillow 환경의 `scripts/check-local-nested-floating-native.py`를 순서대로 실행하면 실제 안쪽 셀 테두리·상자·글 분리와 복구 픽셀을 확인한다. 제품은 COM 없이 공통 Node/WASM 실행기를 유지한다. [0.2.33 검증](local-release-0.2.33.md)
 
 ### 셀·본문·구역 간 부동 재배치
 

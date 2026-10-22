@@ -1,7 +1,7 @@
 """Native cell borders, image frames, ink clearance and exact restored pages."""
 import json,math,re,sys
 from pathlib import Path
-from PIL import Image,ImageChops
+from PIL import Image,ImageChops,ImageDraw
 root=Path(sys.argv[1]);out=root/'native';cases=json.loads((root/'cases.json').read_text(encoding='utf-8'));rows=json.loads((out/'results.json').read_text(encoding='utf-8'));results={r['case']:r for r in rows}
 def text(s):return re.sub(r'&#(\d+);',lambda m:chr(int(m[1])),s).encode('utf-16-le','surrogatepass').decode('utf-16-le').replace('\r','').replace('\n','').replace('\t','')
 def image(name,state):return Image.open(out/f'{name}-{state}-0.bmp').convert('RGB')
@@ -32,6 +32,10 @@ for c in cases:
  ink=[(xx,yy) for yy in range(ct+3,cb-2) for xx in range(cl+3,cr-2) if not in_old(xx,yy) and dark(a,xx,yy)]
  assert not any(left-1<=xx<=right+1 and top-1<=yy<=bottom+1 for xx,yy in ink),(name,'image intersects native text')
  assert all(dark(b,xx,yy) for xx,yy in ink),(name,'non-target native ink moved')
+ if c['options'].get('inline'):
+  difference=ImageChops.difference(a,b);mask=ImageDraw.Draw(difference)
+  for mask_bounds in (p['before'],p['after']):mask.rectangle((math.floor(mask_bounds['x'])-4,math.floor(mask_bounds['y'])-4,math.ceil(mask_bounds['x']+mask_bounds['w'])+4,math.ceil(mask_bounds['y']+mask_bounds['h'])+4),fill='black')
+  assert difference.getbbox() is None,(name,'non-target native page ink moved')
  checks.append(dict(case=name,group=c['options'].get('group',False),actual_cell=grid,actual_image_frame=bounds,native_ink_clear=True))
 summary=dict(status='PASS',documents=len(rows),pages=sum(r['pages'] for r in rows),native_cell_and_image_checks=checks,native_text_verified=True,restored_pages_pixel_exact=len(cases),layout_verified=False)
 (out/'summary.json').write_text(json.dumps(summary,indent=2)+'\n',encoding='utf-8');print(json.dumps(summary))
