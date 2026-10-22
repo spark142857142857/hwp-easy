@@ -1,5 +1,5 @@
 """Independent native images: leaf ink, ancestor frames, body tail and footers."""
-import json,re,sys
+import base64,json,re,sys
 from pathlib import Path
 from PIL import Image,ImageChops
 root=Path(sys.argv[1]);out=root/'native';cases=json.loads((root/'cases.json').read_text(encoding='utf-8'));results={r['case']:r for r in json.loads((out/'results.json').read_text(encoding='utf-8'))}
@@ -21,7 +21,8 @@ for c in cases:
   a=Image.open(out/f'{name}-before-{page}.bmp').convert('RGB');b=Image.open(out/f'{name}-restored-{page}.bmp').convert('RGB');assert ImageChops.difference(a,b).getbbox() is None;restored+=1
  markers=after['markers'];assert len(markers)==c['fixture']['lines']+2;pages=[m['page'] for m in markers[:-2]];assert pages==sorted(pages);assert min(pages)>=1 and max(pages)<=after['pages'];assert markers[-2]['page']>=max(pages)
  if c['fixture']['lines']>40:assert len(set(pages))>=2,(name,'long answer did not continue')
- tables=c['after']['tables'];root_table=next(t for t in tables if not t.get('cell_path',[]));leaf=max(tables,key=lambda t:len(t.get('cell_path',[])));p=c['after']['page_definitions'][0]['properties'];left=(p['marginLeft']+p['marginGutter'])/75
+ encoded=edit['target_id'][70:] if edit else '';identity=base64.urlsafe_b64decode(encoded+'='*((-len(encoded))%4)).decode() if edit else 's0:';section=int(identity.split(':')[0][1:])
+ tables=[t for t in c['after']['tables'] if t['section']==section];root_table=next(t for t in tables if not t.get('cell_path',[]));leaf=max(tables,key=lambda t:len(t.get('cell_path',[])));p=next(p['properties'] for p in c['after']['page_definitions'] if p['section']==section);left=(p['marginLeft']+p['marginGutter'])/75
  for t in sorted(tables,key=lambda t:len(t.get('cell_path',[]))):
   if t is leaf:break
   cell=t['cells'][0]['properties'];left+=(cell['paddingLeft'] if cell['applyInnerMargin'] else t['properties']['paddingLeft'])/75

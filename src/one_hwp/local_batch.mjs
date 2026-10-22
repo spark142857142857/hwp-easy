@@ -72,7 +72,9 @@ export async function editLocalBatch(HwpDocument,source,initialVersion,operation
     const state=inspectLocalComplex(HwpDocument,bytes,{includeDocumentInfo:false,verifyCharacterModel:false});
     for(const root of state.tables.filter(t=>!t.cell_path.length&&tablePaginationEnabled(state,t))){
       const tree=state.tables.filter(t=>t.section===root.section&&t.record_index>=root.record_index&&t.end<=root.end);
-      if(tree.every(t=>tablePaginationEnabled(state,t)))synchronized.set(rootKey(state,root),signature(state,root));
+      // A later explicit reflow must retain other roots' original baselines:
+      // their earlier edits may still be waiting for final synchronization.
+      const key=rootKey(state,root);if(tree.every(t=>tablePaginationEnabled(state,t))&&!synchronized.has(key))synchronized.set(key,signature(state,root));
     }
   };
   const blockShape=b=>b&&[b.text,b.unit_styles,b.paragraph_properties,b.character_runs];

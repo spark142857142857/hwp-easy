@@ -1,5 +1,5 @@
 """Independent OLE/record proof for automatic cell edits and complex footers."""
-import json,struct,sys,zlib
+import base64,json,struct,sys,zlib
 from pathlib import Path
 import olefile
 root=Path(sys.argv[1] if len(sys.argv)>1 else 'outputs/local-table-sync')
@@ -22,8 +22,9 @@ for c in cases:
  name=c['name'];prior=root/(name+'-before.hwp');assert prior.read_bytes()==(root/(name+'-restored.hwp')).read_bytes()
  pb,b=load(prior);pa,a=load(root/(name+'-after.hwp'));assert set(pb)-{'PrvText','PrvImage'}==set(pa)-{'PrvText','PrvImage'}
  footer=c['fixture']['mode']=='footer';edit=next((op for op in c['operations'] if op['type']=='splice_text'),None)
+ encoded=edit['target_id'][70:] if edit else '';identity=base64.urlsafe_b64decode(encoded+'='*((-len(encoded))%4)).decode() if edit else 's0:';section=identity.split(':')[0][1:];stream='BodyText/Section'+section
  for key in pb:
-  if key not in ('BodyText/Section0','DocInfo','PrvText','PrvImage'):assert pb[key]==pa[key],(name,key)
+  if key not in (stream,'DocInfo','PrvText','PrvImage'):assert pb[key]==pa[key],(name,key)
  if not footer:assert pb['DocInfo']==pa['DocInfo']
  else:
   db,da=records(b['DocInfo']),records(a['DocInfo']);sb=[r[2] for r in db if r[0]==25];sa=[r[2] for r in da if r[0]==25];assert sa[:len(sb)]==sb
@@ -33,7 +34,7 @@ for c in cases:
    assert (tag,level)==(tag2,level2);x,y=bytearray(x),bytearray(y)
    if tag==17:x[52:56]=y[52:56]=bytes(4)
    assert x==y,(name,'non-paragraph definitions')
- rb=[r for r in records(b['BodyText/Section0']) if r[0]!=69];ra=[r for r in records(a['BodyText/Section0']) if r[0]!=69];assert len(rb)==len(ra)
+ rb=[r for r in records(b[stream]) if r[0]!=69];ra=[r for r in records(a[stream]) if r[0]!=69];assert len(rb)==len(ra)
  in_footer=False;changed_text=0;footer_heads=0
  for i,((tag,level,old),(tag2,level2,new)) in enumerate(zip(rb,ra)):
   assert (tag,level)==(tag2,level2);x,y=bytearray(old),bytearray(new)

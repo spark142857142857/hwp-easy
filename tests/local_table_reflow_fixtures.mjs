@@ -8,6 +8,11 @@ import {publishVerifiedPatch} from '../src/one_hwp/local_verified_patch.mjs';
 import {invalidateSectionLayout} from '../src/one_hwp/local_layout_cache.mjs';
 import {editLocalComplex} from '../src/one_hwp/local_complex.mjs';
 import {digest} from '../src/one_hwp/local_file.mjs';
+import {deflateRawSync} from 'node:zlib';
+import {parseRecords} from '../probes/sites-runtime/guard/records.mjs';
+import {readHwp} from '../probes/sites-runtime/guard/container.mjs';
+import {encodeRecords} from '../src/one_hwp/local_complex_records.mjs';
+import {patchLocalPackedStreams} from '../src/one_hwp/local_container_write.mjs';
 export const tableAnswer=lines=>Array.from({length:lines},(_,i)=>`L${String(i).padStart(3,'0')}`).join('\n');
 export function tableReflowFixture({depth=1,lines=85,rows=1,merged=false,verticalMerge=false,footer=false,narrow=false}={}){
  if(verticalMerge===true)rows=Math.max(2,rows);
@@ -25,4 +30,12 @@ export function tableReflowFixture({depth=1,lines=85,rows=1,merged=false,vertica
  if(!merged&&!verticalMerge)for(const t of s.tables){const p=view(rs[t.record_index].payload);p.setUint32(4,p.getUint32(4,true)|(1<<20),true);}
  const current=merged||verticalMerge?rs:invalidateSectionLayout(rs,s.blocks);
  return publishVerifiedPatch(bytes,s,0,current);
+}
+export function multipleRootFixture(){
+ const second=tableReflowFixture({depth:2,lines:8});let first=second;
+ for(const [old,value] of [[tableAnswer(8),tableAnswer(8).replaceAll('L','A')],['TAIL','FIRST FINISH'],['END','FIRST CLOSE']]){
+  const state=inspectLocalComplex(HwpDocument,first,{includeDocumentInfo:false,verifyCharacterModel:false}),b=state.blocks.find(b=>b.text===old),version=digest(first);first=editLocalComplex(HwpDocument,first,version,{type:'replace_text',target_id:`hwp5:${version}:${Buffer.from(b.id).toString('base64url')}`,expected_old:old,new_text:value}).bytes;
+ }
+ const raw=readHwp(first),defs=[...parseRecords(raw.streams.get('DocInfo'))].map(r=>({...r,payload:r.payload.slice()}));view(defs.find(r=>r.tag===16).payload).setUint16(0,2,true);
+ return patchLocalPackedStreams(first,new Map([['DocInfo',deflateRawSync(encodeRecords(defs),{level:9})],['BodyText/Section1',deflateRawSync(readHwp(second).streams.get('BodyText/Section0'),{level:9})]]));
 }
