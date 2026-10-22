@@ -1,3 +1,4 @@
+import {assertPlannedEdit} from '../scripts/local-plan-proof.mjs';
 import test from 'node:test';import assert from 'node:assert/strict';import fs from 'node:fs';import os from 'node:os';import path from 'node:path';
 import {HwpDocument} from '@rhwp/core';import {initializeLocal,runLocal} from '../src/one_hwp/local_runner.mjs';
 import {cellBoxFixture} from './local_placement_fixtures.mjs';import {inspectLocalComplex} from '../src/one_hwp/local_complex.mjs';
@@ -15,7 +16,7 @@ for(const nested of [false,true])test(`cell box long text reports frame/cell/bod
  const plan=await runLocal({action:'plan',...request}),codes=plan.layout_diagnostics.new_issues.map(i=>i.code);assert.ok(codes.includes('CELL_TEXT_BOX_CONTENT_MAY_EXCEED_FRAME_HEIGHT'));assert.ok(codes.includes('CELL_TEXT_BOX_MAY_EXCEED_FLOW_CELL_HEIGHT'));assert.ok(codes.includes('CELL_TEXT_BOX_CONTENT_MAY_OVERLAP_BODY_TEXT'));
  for(const action of ['plan','edit'])await assert.rejects(runLocal({action,...request,layout_policy:'reject_new_risk'}),/NEW_LAYOUT_RISK/);
  assert.deepEqual(fs.readFileSync(w.source),w.bytes);assert.equal((await runLocal({action:'history',source:w.source,expected_sha256:s.source_sha256})).entries.length,0);
- const saved=await runLocal({action:'edit',...request}),after=await read(w.source);assert.equal(saved.saved_path,w.source);assert.equal(saved.output_sha256,plan.output_sha256);assert.equal(after.text_boxes[0].paragraphs[0].text,long);
+ const saved=await runLocal({action:'edit',...request}),after=await read(w.source);assert.equal(saved.saved_path,w.source);assertPlannedEdit(plan,saved,'test_local_cell_text_box_layout');assert.equal(after.text_boxes[0].paragraphs[0].text,long);
  const noOp=await runLocal({action:'edit',source:w.source,expected_sha256:after.source_sha256,operations:[splice(after,long)],layout_policy:'reject_new_risk'});assert.equal(noOp.saved,false);
  await runLocal({action:'restore',source:w.source,expected_sha256:after.source_sha256,backup_id:saved.backup_id});assert.deepEqual(fs.readFileSync(w.source),w.bytes);
 });

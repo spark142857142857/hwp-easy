@@ -2,6 +2,7 @@ import test from 'node:test';import assert from 'node:assert/strict';import fs f
 import {fixture} from './rhwp_fixtures.mjs';import {runLocal} from '../src/one_hwp/local_runner.mjs';import {readCfb} from '../probes/sites-runtime/guard/container.mjs';import {bitmap24,localPreviewText} from '../src/one_hwp/local_preview_cache.mjs';import {digest} from '../src/one_hwp/local_file.mjs';
 import childProcess from 'node:child_process';import {syncBuiltinESMExports} from 'node:module';
 import {patchLocalPackedStreams} from '../src/one_hwp/local_container_write.mjs';
+import {assertPlannedEdit} from '../scripts/local-plan-proof.mjs';
 
 test('empty CFB streams remain valid across a subsequent allocation rewrite',()=>{
  const original=fixture(),empty=patchLocalPackedStreams(original,new Map([['PrvImage',Buffer.alloc(0)],['PrvText',Buffer.alloc(0)]]));
@@ -29,6 +30,14 @@ test('derived BMP has independent Windows bitmap row order, BGR channels and pad
  const b=bitmap24(Uint8Array.from([255,0,0,255,0,255,0,255,0,0,255,255,255,255,255,255]),2,2);
  assert.equal(b.readUInt32LE(2),70);assert.equal(b.readUInt32LE(10),54);assert.equal(b.readUInt16LE(28),24);assert.equal(b.readUInt32LE(30),0);
  assert.deepEqual([...b.subarray(54,62)],[255,0,0,255,255,255,0,0]);assert.deepEqual([...b.subarray(62)],[0,0,255,0,255,0,0,0]);
+});
+test('plan and save retain the same verified edit when only thumbnail availability changes',async t=>{
+ const dir=fs.mkdtempSync(path.join(os.tmpdir(),'hwp-preview-variant-'));t.after(()=>{assert.equal(path.dirname(dir),os.tmpdir());assert.ok(path.basename(dir).startsWith('hwp-preview-variant-'));fs.rmSync(dir,{recursive:true,force:true});});
+ const source=path.join(dir,'synthetic.hwp'),original=fixture();fs.writeFileSync(source,original);const state=await runLocal({action:'read',source}),b=state.blocks.find(x=>x.text==='중간 합성 문단'),request={source,expected_sha256:state.source_sha256,operations:[{type:'replace_text',target_id:b.target_id,expected_old:b.text,new_text:'same verified edit with changing preview availability'}]},spawn=childProcess.spawnSync,candidates=[];let saved;
+ childProcess.spawnSync=(_command,_args,options)=>{candidates.push(Buffer.from(options.input));const image=bitmap24(Uint8Array.from([0,0,0,255]),1,1);return {status:0,stdout:JSON.stringify({ok:true,image:image.toString('base64'),width:1,height:1})};};syncBuiltinESMExports();
+ try{const plan=await runLocal({action:'plan',...request});assert.equal(digest(fs.readFileSync(source)),digest(original));childProcess.spawnSync=(_command,_args,options)=>{candidates.push(Buffer.from(options.input));return {status:null,error:Object.assign(Error('injected timeout'),{code:'ETIMEDOUT'})};};syncBuiltinESMExports();saved=await runLocal({action:'edit',...request});assert.deepEqual(candidates[0],candidates[1]);assert.equal(plan.verified_edit_sha256,digest(candidates[0]));assert.notEqual(plan.output_sha256,saved.output_sha256);assert.equal(assertPlannedEdit(plan,saved,'forced preview availability switch').output_sha256_equal,false);assert.throws(()=>assertPlannedEdit(plan,{...saved,verified_edit_sha256:'0'.repeat(64)},'changed candidate'));
+ }finally{childProcess.spawnSync=spawn;syncBuiltinESMExports();}
+ const after=await runLocal({action:'read',source});assert.ok(after.blocks.some(x=>x.text===request.operations[0].new_text));await runLocal({action:'restore',source,expected_sha256:after.source_sha256,backup_id:saved.backup_id});assert.deepEqual(fs.readFileSync(source),Buffer.from(original));
 });
 test('preview text truncation keeps UTF-16 surrogate pairs intact',()=>{const text=localPreviewText(fixture({table:false,paragraphs:['가'.repeat(4095)+'😀','끝']}));assert.ok(text.length<=4096);assert.equal(text.isWellFormed(),true);assert.equal(text.endsWith('\uD83D'),false);});
 test('two same-file saves after regenerated BMP preserve scripts, options, metadata and exact recovery',async t=>{

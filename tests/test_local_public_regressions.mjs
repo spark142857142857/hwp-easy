@@ -1,3 +1,4 @@
+import {assertPlannedEdit} from '../scripts/local-plan-proof.mjs';
 import test from 'node:test';import assert from 'node:assert/strict';import fs from 'node:fs';import os from 'node:os';import path from 'node:path';
 import {HwpDocument} from '@rhwp/core';
 import {initializeLocal,runLocal} from '../src/one_hwp/local_runner.mjs';
@@ -13,7 +14,7 @@ for(const nested of [false,true])for(const empty of [false,true])test(`plain cel
  const w=workspace(t,cellBoxFixture({nested,empty})),s=await read(w.source),box=s.text_boxes[0],p=box.paragraphs[0];assert.equal(box.cell_path.length,nested?2:1);assert.equal(box.profile,'cell_rectangle_plain_paragraphs');
  const op={type:'splice_text_box',target_id:p.target_id,expected_old:p.text,expected_properties:box.properties,start:0,end:[...p.text].length,new_text:'셀 글상자 😀\n두 번째 줄'},noop=await runLocal({action:'edit',source:w.source,expected_sha256:s.source_sha256,operations:[{...op,new_text:p.text}]});assert.equal(noop.saved,false);
  const plan=await runLocal({action:'plan',source:w.source,expected_sha256:s.source_sha256,operations:[op]});assert.deepEqual(fs.readFileSync(w.source),Buffer.from(w.bytes));
- const saved=await runLocal({action:'edit',source:w.source,expected_sha256:s.source_sha256,operations:[op]});assert.equal(saved.saved_path,w.source);assert.equal(saved.output_sha256,plan.output_sha256);const after=await read(w.source);assert.equal(after.text_boxes[0].paragraphs[0].text,op.new_text);assert.deepEqual(after.text_boxes[0].properties,box.properties);assert.deepEqual(after.blocks.map(b=>b.text),s.blocks.map(b=>b.text));
+ const saved=await runLocal({action:'edit',source:w.source,expected_sha256:s.source_sha256,operations:[op]});assert.equal(saved.saved_path,w.source);assertPlannedEdit(plan,saved,'test_local_public_regressions');const after=await read(w.source);assert.equal(after.text_boxes[0].paragraphs[0].text,op.new_text);assert.deepEqual(after.text_boxes[0].properties,box.properties);assert.deepEqual(after.blocks.map(b=>b.text),s.blocks.map(b=>b.text));
  for(const tag of [71,72,76,77,79])assert.deepEqual(records(fs.readFileSync(w.source)).filter(r=>r.tag===tag).map(r=>r.payload),records(w.bytes).filter(r=>r.tag===tag).map(r=>r.payload));
  await runLocal({action:'restore',source:w.source,expected_sha256:after.source_sha256,backup_id:saved.backup_id});assert.deepEqual(fs.readFileSync(w.source),Buffer.from(w.bytes));
 });

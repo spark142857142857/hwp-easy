@@ -1,3 +1,4 @@
+import {assertPlannedEdit} from './local-plan-proof.mjs';
 /** Portable packaged checks; every HWP and image is synthetic. */
 import fs from 'node:fs';import path from 'node:path';import os from 'node:os';import assert from 'node:assert/strict';import {spawnSync} from 'node:child_process';
 import {HwpDocument,initSync} from '@rhwp/core';import {fixture} from '../tests/rhwp_fixtures.mjs';import {fieldFixture,nestedFixture,groupFixture,checkedExport} from '../tests/local_complex_fixtures.mjs';import {baselineJpeg} from '../tests/local_image_fixtures.mjs';import {digest} from '../src/one_hwp/local_file.mjs';
@@ -9,7 +10,7 @@ const read=()=>call({action:'read',source,max_chars:64000,max_blocks:128});
 function trial(name,bytes,choose){
  fs.writeFileSync(source,bytes);const before=read(),operations=choose(before),request={source,expected_sha256:before.source_sha256,operations};fs.writeFileSync(path.join(out,name+'-before.hwp'),bytes);
  const plan=call({action:'plan',...request});assert.equal(plan.saved,false);assert.deepEqual(fs.readFileSync(source),Buffer.from(bytes));
- const saved=call({action:'edit',...request}),after=read(),result=fs.readFileSync(source);assert.equal(saved.saved_path,source);assert.equal(saved.output_sha256,plan.output_sha256);assert.equal(saved.raw_preservation_verified,true);fs.writeFileSync(path.join(out,name+'-after.hwp'),result);
+ const saved=call({action:'edit',...request}),after=read(),result=fs.readFileSync(source);assert.equal(saved.saved_path,source);assertPlannedEdit(plan,saved,'check-local-complex-editing');assert.equal(saved.raw_preservation_verified,true);fs.writeFileSync(path.join(out,name+'-after.hwp'),result);
  call({action:'restore',source,expected_sha256:after.source_sha256,backup_id:saved.backup_id});assert.deepEqual(fs.readFileSync(source),Buffer.from(bytes));fs.writeFileSync(path.join(out,name+'-restored.hwp'),bytes);
  cases.push({name,before,after,operations,preview_cache:saved.preview_cache});return result;
 }
@@ -30,5 +31,5 @@ try{
   let bytes=groupFixture();if(nesting){const d=new HwpDocument(groupFixture({source:bytes,paragraph:2}));try{assert.equal(JSON.parse(d.groupShapes(JSON.stringify({sectionIdx:0,targets:[{paraIdx:1,controlIdx:0},{paraIdx:2,controlIdx:0}]}))).ok,true);bytes=checkedExport(d);}finally{d.free();}}
   trial('group-leaf-'+nesting,bytes,s=>{const g=s.picture_groups[0],b=s.blocks.find(b=>b.id===g.block_id),{picture_index,...props}=g.pictures[1];return [{type:'replace_group_picture',target_id:g.target_id,expected_old:b.text,picture_index,expected_properties:props,image},{type:'rotate_group_picture',target_id:g.target_id,expected_old:b.text,picture_index,expected_properties:{...props,cropLeft:0,cropTop:0,cropRight:0,cropBottom:0},props:{rotationAngle:90}}].slice(0,nesting?1:2);});
  }
- fs.writeFileSync(path.join(out,'cases.json'),JSON.stringify(cases,null,2)+'\n');const summary={status:'PASS',cases:cases.length,scope:'isolated packaged synthetic complex edits',same_file_save:true,plan_matches_saved_sha256:true,exact_restore:true,runner_sha256:digest(fs.readFileSync(runner)),layout_verified:false};fs.writeFileSync(path.join(out,'summary.json'),JSON.stringify(summary,null,2)+'\n');console.log(JSON.stringify(summary));
+ fs.writeFileSync(path.join(out,'cases.json'),JSON.stringify(cases,null,2)+'\n');const summary={status:'PASS',cases:cases.length,scope:'isolated packaged synthetic complex edits',same_file_save:true,plan_matches_verified_edit_sha256:true,exact_restore:true,runner_sha256:digest(fs.readFileSync(runner)),layout_verified:false};fs.writeFileSync(path.join(out,'summary.json'),JSON.stringify(summary,null,2)+'\n');console.log(JSON.stringify(summary));
 }finally{assert.equal(path.dirname(temp),os.tmpdir());assert.ok(path.basename(temp).startsWith('hwp-complex-editing-'));fs.rmSync(temp,{recursive:true,force:true});}

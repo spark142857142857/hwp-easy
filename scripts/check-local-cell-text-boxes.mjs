@@ -1,3 +1,4 @@
+import {assertPlannedEdit} from './local-plan-proof.mjs';
 /** Isolated package checks for cell text-box risks, strict refusal and recovery. */
 import fs from 'node:fs';import path from 'node:path';import os from 'node:os';import assert from 'node:assert/strict';import {spawnSync} from 'node:child_process';import {createHash} from 'node:crypto';import {initSync} from '@rhwp/core';
 import {cellBoxFixture} from '../tests/local_placement_fixtures.mjs';
@@ -17,7 +18,7 @@ function trial(name,options,makeOperation,expectedCodes,{strict=false,safe=false
  for(const code of expectedCodes)assert.ok(plan.layout_diagnostics.new_issues.some(i=>i.code===code),name+' missing '+code);
  if(inconclusive)assert.equal(plan.layout_diagnostics.cell_text_boxes.status,'inconclusive');
  if(strict){for(const action of ['plan','edit']){const refused=invoke({action,...request,layout_policy:'reject_new_risk'});assert.equal(refused.ok,false);assert.equal(refused.error,'NEW_LAYOUT_RISK');strictRefusals++;}assert.deepEqual(fs.readFileSync(source),original);assert.equal(good({action:'history',source,expected_sha256:before.source_sha256}).entries.length,0);}
- const saved=good({action:'edit',...request,...(safe?{layout_policy:'reject_new_risk'}:{})}),after=read(source),edited=fs.readFileSync(source);assert.equal(saved.saved_path,source);assert.equal(saved.output_sha256,plan.output_sha256);if(safe)assert.deepEqual(saved.layout_diagnostics.new_issues,[]);
+ const saved=good({action:'edit',...request,...(safe?{layout_policy:'reject_new_risk'}:{})}),after=read(source),edited=fs.readFileSync(source);assert.equal(saved.saved_path,source);assertPlannedEdit(plan,saved,'check-local-cell-text-boxes');if(safe)assert.deepEqual(saved.layout_diagnostics.new_issues,[]);
  const rendered=good({action:'layout',source,expected_sha256:after.source_sha256,scope:'rendered'});assert.equal(rendered.layout_verified,false);if(inconclusive)assert.equal(rendered.diagnostics_complete,false);
  fs.writeFileSync(path.join(out,name+'-before.hwp'),original);fs.writeFileSync(path.join(out,name+'-after.hwp'),edited);
  good({action:'restore',source,expected_sha256:after.source_sha256,backup_id:saved.backup_id});assert.deepEqual(fs.readFileSync(source),original);fs.copyFileSync(source,path.join(out,name+'-restored.hwp'));
@@ -33,5 +34,5 @@ try{
   trial('cell-large-'+nested,{nested},s=>transform(s,{height:6000,vertOffset:1200}),['CELL_TEXT_BOX_MAY_EXCEED_FLOW_CELL_HEIGHT',...(!nested?['CELL_TEXT_BOX_MAY_OVERLAP_FLOW_BODY_TEXT']:[])],{strict:true,inconclusive:nested});
  }
  trial('paper-anchor-long',{cellRelative:false},s=>splice(s,long),['CELL_TEXT_BOX_CONTENT_MAY_EXCEED_FRAME_HEIGHT'],{strict:true,inconclusive:true});
- fs.writeFileSync(path.join(out,'cases.json'),JSON.stringify(cases,null,2)+'\n');const summary={status:'PASS',cases:cases.length,strict_refusals_before_save:strictRefusals,same_file_save:true,plan_matches_saved_sha256:true,exact_restore:true,runner_sha256:hash(fs.readFileSync(runner)),layout_verified:false};fs.writeFileSync(path.join(out,'summary.json'),JSON.stringify(summary,null,2)+'\n');console.log(JSON.stringify(summary));
+ fs.writeFileSync(path.join(out,'cases.json'),JSON.stringify(cases,null,2)+'\n');const summary={status:'PASS',cases:cases.length,strict_refusals_before_save:strictRefusals,same_file_save:true,plan_matches_verified_edit_sha256:true,exact_restore:true,runner_sha256:hash(fs.readFileSync(runner)),layout_verified:false};fs.writeFileSync(path.join(out,'summary.json'),JSON.stringify(summary,null,2)+'\n');console.log(JSON.stringify(summary));
 }finally{assert.equal(path.dirname(temp),os.tmpdir());assert.ok(path.basename(temp).startsWith('hwp-cell-box-package-'));fs.rmSync(temp,{recursive:true,force:true});}

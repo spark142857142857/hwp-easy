@@ -181,6 +181,7 @@ export async function runLocal(request) {
   if(request.operations.every(op=>op.type==='replace_text'&&op.expected_old===op.new_text)){
     bytes=snapshot.bytes;verification.output_sha256=snapshot.sha256;
   }
+  verification.verified_edit_sha256=digest(bytes);
   if(!Buffer.from(bytes).equals(Buffer.from(snapshot.bytes))){
     const preview=await refreshLocalPreview(HwpDocument,bytes);bytes=preview.bytes;verification.preview_cache=preview.preview_cache;
   }else verification.preview_cache={status:'unchanged',document_streams_preserved:true};

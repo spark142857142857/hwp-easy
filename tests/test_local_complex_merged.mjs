@@ -1,3 +1,4 @@
+import {assertPlannedEdit} from '../scripts/local-plan-proof.mjs';
 import test from 'node:test';import assert from 'node:assert/strict';import fs from 'node:fs';import os from 'node:os';import path from 'node:path';
 import {initializeLocal,runLocal} from '../src/one_hwp/local_runner.mjs';import {nestedFixture} from './local_complex_fixtures.mjs';import {fixture} from './rhwp_fixtures.mjs';import {progressiveJpeg} from './local_image_fixtures.mjs';import {digest} from '../src/one_hwp/local_file.mjs';
 import {readHwp} from '../probes/sites-runtime/guard/container.mjs';import {parseRecords} from '../probes/sites-runtime/guard/records.mjs';import {publishRawBody,view} from '../src/one_hwp/local_complex_records.mjs';
@@ -10,7 +11,7 @@ for(const axis of ['row','column'])for(const depth of [2,3])test(`merged nested 
  assert.equal(table.axis_editable,true);const values=['','new 😀','new two'];
  const ops=[{type:'insert_table_'+axis,target_id:b.target_id,expected_old:b.text,index:1,texts:values},{type:'format_text',target_id:b.target_id,expected_old:b.text,start:0,end:5,props:{bold:true}}];
  const plan=await runLocal({action:'plan',source,expected_sha256:s.source_sha256,operations:ops});assert.deepEqual(fs.readFileSync(source),Buffer.from(bytes));
- const saved=await runLocal({action:'edit',source,expected_sha256:s.source_sha256,operations:ops}),after=await read(source),now=after.tables.find(x=>x.id===table.id);assert.equal(saved.output_sha256,plan.output_sha256);assert.equal(now.cells[0][axis==='row'?'rowSpan':'colSpan'],3);assert.equal(now.dimensions[axis==='row'?'rowCount':'colCount'],4);
+ const saved=await runLocal({action:'edit',source,expected_sha256:s.source_sha256,operations:ops}),after=await read(source),now=after.tables.find(x=>x.id===table.id);assertPlannedEdit(plan,saved,'test_local_complex_merged');assert.equal(now.cells[0][axis==='row'?'rowSpan':'colSpan'],3);assert.equal(now.dimensions[axis==='row'?'rowCount':'colCount'],4);
  for(const old of s.blocks)assert.ok(after.blocks.some(n=>n.text===old.text));const affected=now.cells.filter(c=>c[axis==='row'?'row':'col']<=1&&1<c[axis==='row'?'row':'col']+c[axis==='row'?'rowSpan':'colSpan']),host=after.blocks.find(x=>x.id===now.cells[0].paragraph_ids[0]);
  await runLocal({action:'edit',source,expected_sha256:after.source_sha256,operations:[{type:'delete_table_'+axis,target_id:host.target_id,expected_old:host.text,index:1,expected_cells:texts(after,affected)}]});const final=await read(source);assert.equal(final.tables.find(x=>x.id===table.id).cells[0][axis==='row'?'rowSpan':'colSpan'],2);
  await runLocal({action:'restore',source,expected_sha256:final.source_sha256,backup_id:saved.backup_id});assert.deepEqual(fs.readFileSync(source),Buffer.from(bytes));

@@ -1,3 +1,4 @@
+import {assertPlannedEdit} from '../scripts/local-plan-proof.mjs';
 import test from 'node:test';import assert from 'node:assert/strict';import fs from 'node:fs';import path from 'node:path';import os from 'node:os';
 import {initializeLocal,runLocal} from '../src/one_hwp/local_runner.mjs';
 import {inlineCellFixture,inlineCellProfiles} from './local_inline_cell_fixtures.mjs';
@@ -9,7 +10,7 @@ function workspace(t,bytes){const dir=fs.mkdtempSync(path.join(os.tmpdir(),'hwp-
 for(const [index,options]of inlineCellProfiles.entries())test(`raw inline flow ${index}: same-file checked save, no-op and byte-exact recovery`,async t=>{
  const w=workspace(t,inlineCellFixture(options)),before=await read(w.source),request={source:w.source,expected_sha256:before.source_sha256,operations:[move(before)],layout_policy:'reject_new_risk'};
  const plan=await runLocal({action:'plan',...request});assert.equal(plan.saved,false);assert.ok(fs.readFileSync(w.source).equals(Buffer.from(w.bytes)));
- const saved=await runLocal({action:'edit',...request}),after=await read(w.source);assert.equal(saved.saved_path,w.source);assert.equal(saved.output_sha256,plan.output_sha256);assert.deepEqual(saved.layout_diagnostics.new_issues,[]);assert.equal(saved.floating_state_preserved,true);
+ const saved=await runLocal({action:'edit',...request}),after=await read(w.source);assert.equal(saved.saved_path,w.source);assertPlannedEdit(plan,saved,'test_local_inline_cell_flow');assert.deepEqual(saved.layout_diagnostics.new_issues,[]);assert.equal(saved.floating_state_preserved,true);
  assert.deepEqual(after.text_boxes[0].cell_path,before.text_boxes[0].cell_path);assert.deepEqual(after.text_boxes[0].flow,before.text_boxes[0].flow);assert.deepEqual(after.blocks.map(b=>b.text),before.blocks.map(b=>b.text));assert.deepEqual(after.tables,before.tables.map(t=>({...t,cells:t.cells.map(c=>({...c,target_id:after.tables.find(a=>a.id===t.id).cells.find(a=>a.cell===c.cell).target_id,subtree_sha256:after.tables.find(a=>a.id===t.id).cells.find(a=>a.cell===c.cell).subtree_sha256}))})));
  assert.equal((await runLocal({action:'edit',source:w.source,expected_sha256:after.source_sha256,operations:[move(after)],layout_policy:'reject_new_risk'})).saved,false);
  await runLocal({action:'restore',source:w.source,expected_sha256:after.source_sha256,backup_id:saved.backup_id});assert.ok(fs.readFileSync(w.source).equals(Buffer.from(w.bytes)));

@@ -12,6 +12,8 @@ Complex blocks expose `text_mapping_verified`; unverified blocks have no edit ta
 
 Complex `format_paragraph` requires a block's `paragraph_format_editable:true` and whole `expected_old` text. Properties are `alignment` (`justify`, `left`, `right`, `center`), `lineSpacing` (integer stored value, 1–720000), `marginLeft`, `marginRight`, `spacingBefore`, `spacingAfter` (integer raw HWP units, 0–720000), and `indent` (raw HWP units, −72000–720000). **Complex margins/spacing use stored HWP units (100 per point)**; do not apply the ordinary model's doubled-margin scaling. The existing line-spacing type is retained, so read the document's properties rather than assuming every stored value is a percentage. Read `paragraph_properties` for the original stored values. Field IDs and group IDs cannot select paragraph formatting.
 
+Plan/edit results include `verified_edit_sha256`: the SHA-256 of the verified candidate before derived preview-cache refresh. Compare this value to confirm the same edit; `output_sha256` identifies the actual delivered bytes after preview refresh. If the bounded renderer succeeds in one request and times out in another, their preview streams and output hashes can differ while the verified edit matches. Keep source/version checks and exact recovery unchanged.
+
 Changed plan/edit results include `preview_cache`. `updated` means a bounded UTF-16 excerpt and first-page BMP were regenerated from the checked candidate; `text_updated_image_unavailable` means the stale image was cleared after bounded rendering failed. The preview cache is derived data and does not certify page layout. No-op edits and exact recovery preserve the prior caches.
 
 ```json

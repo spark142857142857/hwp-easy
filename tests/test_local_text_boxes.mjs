@@ -1,3 +1,4 @@
+import {assertPlannedEdit} from '../scripts/local-plan-proof.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -24,7 +25,7 @@ for(const [name,fixture] of Object.entries(fixtures))for(const empty of [false,t
  const w=workspace(t,fixture({empty,mixed:!empty})),s=await read(w.source),box=s.text_boxes[0];assert.equal(box.geometry_editable,true);
  const props={width:box.properties.width+400,height:6000,horzOffset:box.properties.horzOffset+250,vertOffset:box.properties.vertOffset+1200},operations=[move(s,props)],request={source:w.source,expected_sha256:s.source_sha256,operations,layout_policy:'reject_new_overflow'};
  const plan=await runLocal({action:'plan',...request});assert.equal(plan.saved,false);assert.deepEqual(fs.readFileSync(w.source),w.bytes);
- const saved=await runLocal({action:'edit',...request});assert.equal(saved.saved_path,w.source);assert.equal(saved.output_sha256,plan.output_sha256);assert.equal(saved.text_box_geometry_changed,true);
+ const saved=await runLocal({action:'edit',...request});assert.equal(saved.saved_path,w.source);assertPlannedEdit(plan,saved,'test_local_text_boxes');assert.equal(saved.text_box_geometry_changed,true);
  const after=await read(w.source),now=after.text_boxes[0];assert.deepEqual(now.properties,props);assert.equal(now.geometry_editable,true);assert.deepEqual(now.flow,box.flow);assert.deepEqual(now.paragraphs.map(p=>p.text),box.paragraphs.map(p=>p.text));assert.deepEqual(after.blocks.map(b=>b.text),s.blocks.map(b=>b.text));
  const old=records(w.bytes),changed=records(fs.readFileSync(w.source));for(const tag of [67,68,72,77])assert.deepEqual(changed.filter(r=>r.tag===tag).map(r=>r.payload),old.filter(r=>r.tag===tag).map(r=>r.payload));
  const beforeStreams=readHwp(w.bytes).streams,afterStreams=readHwp(fs.readFileSync(w.source)).streams;for(const [name,bytes] of beforeStreams)if(!['BodyText/Section0','PrvText','PrvImage'].includes(name))assert.ok(Buffer.from(afterStreams.get(name)).equals(Buffer.from(bytes)),`unrelated stream changed: ${name}`);
