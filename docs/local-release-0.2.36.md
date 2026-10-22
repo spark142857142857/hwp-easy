@@ -31,7 +31,9 @@
 
 최종 로컬 증거는 무시된 `outputs/f2-036-20261022/hosts/`, `flow/`, `sync/`의 `cases.json`, `summary.json`, `independent-summary.json`, `native/results.json`, `native/summary.json`과 `regression.log`, `complex-tests.log`다. 초기 `align-probe`·`host-probe`는 최종 수치에 합산하지 않는다. 회귀 87개 중 복합 검사와 중복된 37개도 총수에 중복 합산하지 않는다.
 
-이번 기능 묶음을 한 커밋으로 검증·게시하고, 주요 단계의 수동 Windows/Linux CI를 한 번 실행한다. 전체 14개 작업에 새 호스트 검사와 독립 판독을 포함한다. 검사 커밋과 실제 결과는 [Source checks의 해당 커밋 실행](https://github.com/spark142857142857/hwp-easy/actions/workflows/checks.yml)과 로컬 `outputs/f2-036-20261022/ci-result.json`으로 연결한다. CI 결과만으로 별도 문서 커밋을 추가하지 않는다.
+기능 묶음은 `01a25f7` 한 커밋으로 게시했다. 전체 14개 작업의 [첫 CI](https://github.com/spark142857142857/hwp-easy/actions/runs/39772839616)에서 Windows 표 작업은 소스 50개·기존 패키지 24건·새 패키지 14건과 독립 판독까지 모든 검사 단계를 통과했으나, 마지막 정리 중 기존 8분 제한으로 취소됐다. 이 전체 실행을 성공으로 기록하지 않는다.
+
+공개한 기능 이력은 유지하고 CI 설정 보완을 후속 커밋으로 분리했다. 표 작업 한도를 늘어난 검사량에 맞춰 10분으로 조정하고, 기본 전체 검사와 별도로 `scope: table-flow`를 추가해 Windows/Linux 표 작업 2개만 재실행한다. 엔진·패키지·개별 편집/미리보기 한도는 변경하지 않는다. 기본 전체 실행은 기존 14개 작업과 모든 검사 명령을 유지한다. 부분 성공을 전체 성공으로 표시하지 않으며, 두 실행의 검사 커밋·실제 결과와 동일 실행기 해시는 로컬 `outputs/f2-036-20261022/ci-first-run.json`, `ci-result.json`, `summary.json`으로 연결한다.
 
 ## 검증 패키지
 

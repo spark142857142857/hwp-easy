@@ -62,6 +62,8 @@ GitHub Actions의 [Source checks](../.github/workflows/checks.yml)는 **수동 �
 
 Windows/Linux 복합 검사는 소스·기본 패키지와 부동 개체 패키지의 두 작업으로 나눈다. 전체 14개 작업이며 각 실행 명령은 독립 단계여서 앞선 실패 뒤에 다른 명령이 계속 실행되어 오류를 숨기지 않는다. 편집 후보는 `verified_edit_sha256`으로 계획/저장을 대조하고, 파생 미리보기의 성공/시간 초과에 따라 달라질 수 있는 최종 `output_sha256`과 구분한다.
 
+수동 실행의 기본 `scope: all`은 전체 검사를 실행한다. 표 흐름 CI만 재확인할 때는 `scope: table-flow` 또는 `gh workflow run checks.yml --ref main -f scope=table-flow`로 Windows/Linux 표 작업 2개만 실행한다. 부분 실행의 성공은 전체 14개 작업 성공과 구분해 기록한다. 표 작업은 소스 검사 50개·패키지 38건과 Windows 정리 시간을 포함해 10분을 허용하며 개별 편집·미리보기 제한은 유지한다.
+
 문서만 변경했을 때도 아래 링크 검사는 로컬에서 실행합니다.
 
 ```bash

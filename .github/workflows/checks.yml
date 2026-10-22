@@ -3,12 +3,19 @@ name: Source checks
 on:
   # Run at development milestones and before releases, rather than every commit.
   workflow_dispatch:
+    inputs:
+      scope:
+        description: Verification scope (all suites, or table flow only)
+        type: choice
+        default: all
+        options: [all, table-flow]
 
 permissions:
   contents: read
 
 jobs:
   regression:
+    if: ${{ inputs.scope == 'all' }}
     name: Python ${{ matrix.python }} / ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
     # Includes isolated preview workers for every changed candidate.
@@ -93,6 +100,7 @@ jobs:
         run: python -m pip wheel --no-deps --wheel-dir dist .
 
   agent-clients:
+    if: ${{ inputs.scope == 'all' }}
     name: Claude Code and Cursor skills / ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
     timeout-minutes: 8
@@ -136,6 +144,7 @@ jobs:
         run: python scripts/check-installed-plugin.py outputs/agent-client-check/cursor
 
   local-complex:
+    if: ${{ inputs.scope == 'all' }}
     name: Complex local objects / ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
     # Split packaged floating suites into local-floating; keep request limits.
@@ -202,6 +211,7 @@ jobs:
         run: python scripts/check-local-placement.py
 
   local-floating:
+    if: ${{ inputs.scope == 'all' }}
     name: Floating placement packages / ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
     timeout-minutes: 18
@@ -259,7 +269,8 @@ jobs:
   local-table-flow:
     name: Table growth and pagination / ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 8
+    # 38 packaged cases plus 50 source checks; include Windows cleanup time.
+    timeout-minutes: 10
     strategy:
       fail-fast: false
       matrix:
@@ -302,6 +313,7 @@ jobs:
         run: python scripts/check-local-table-sync.py outputs/local-table-hosts
 
   local-large-text:
+    if: ${{ inputs.scope == 'all' }}
     name: Local large text / ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
     # Both checks finished near the old 12-minute boundary; allow runner cleanup.
@@ -348,6 +360,7 @@ jobs:
         run: python scripts/check-local-text.py outputs/local-find-20261011
 
   worker-runtime:
+    if: ${{ inputs.scope == 'all' }}
     name: Synthetic Worker / ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
     timeout-minutes: ${{ matrix.timeout_minutes }}
