@@ -10,6 +10,7 @@ import {nestedFloatingObject} from './local_nested_object.mjs';
 import {nestedReferenceLayout} from './local_nested_reference.mjs';
 import {projectNestedAnchor} from './local_nested_anchor.mjs';
 import {GuardError} from '../../probes/sites-runtime/guard/records.mjs';
+import {tablePaginationEnabled} from './local_table_reflow.mjs';
 function padding(state,table,cell){const v=view(state.recordSets.get(table.section)[cell.start].payload);return (v.getUint32(4,true)&0x10000)?[24,26,28,30].map(at=>v.getUint16(at,true)):['paddingLeft','paddingRight','paddingTop','paddingBottom'].map(k=>table.properties[k]);}
 export function cellContainer(state,block){
  const parent=state.tables.flatMap(t=>t.cells.map(c=>({table:t,cell:c}))).find(({cell})=>cell.blocks.some(b=>b.id===block.id));
@@ -72,7 +73,7 @@ function tableHeightEstimator(state){
 function cellPageRisks(state,add,tableHeight){
  if(!state.recordSets)return;
  const bodyHeight=section=>{const p=state.recordSets.get(section)?.find(r=>r.tag===73&&r.payload.length>=40);if(!p)return null;const v=view(p.payload);return v.getUint32(4,true)-[16,20,24,28].reduce((n,at)=>n+v.getUint32(at,true),0);};
- for(const t of state.tables){if(!t.cell_path?.length)continue;const height=tableHeight(t),available=bodyHeight(t.section),host=state.blocks.find(b=>b.id===t.parent_id);
+ for(const t of state.tables){if(!t.cell_path?.length||tablePaginationEnabled(state,t))continue;const height=tableHeight(t),available=bodyHeight(t.section),host=state.blocks.find(b=>b.id===t.parent_id);
   if(host&&available>0&&height>available)add('NESTED_TABLE_MAY_EXCEED_PAGE_HEIGHT',host,height,available,'font_estimate',{table_id:t.id,object_identity:layoutObjectIdentity(state,t),advice:'shorten the answer or explicitly restructure the nested table; automatic nested-table page splitting is unverified'});
  }
 }

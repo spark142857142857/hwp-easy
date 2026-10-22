@@ -47,13 +47,13 @@ export function captureRenderedLayout(HwpDocument,bytes){
     if(text.includes('\n')){uncertain.add(key);limitations.push({code:'MULTILINE_PARAGRAPH_PAGINATION_UNVERIFIED',page,section:r.secIdx,paragraph:r.paraIdx});}
    }
    pages.push({page,info,body,body_runs,fixed_runs,controls,inline_controls:inlineControls,limitations,uncertain_paragraphs:uncertain,text_runs:runs.length});
-  }return {pages,page_count:count,measureInlineText:naturalTextMeasurer(HwpDocument)};
+ }return {pages,page_count:count,measureInlineText:createNaturalTextMeasurer(HwpDocument)};
  }finally{doc.free();}
 }
 // Scratch documents are observations only: no source bytes are exported or
 // published. Left alignment prevents cell squeezing/justification from being
 // mistaken for natural glyph advances in raw inline-flow projection.
-function naturalTextMeasurer(HwpDocument){
+export function createNaturalTextMeasurer(HwpDocument){
  const cache=new Map();return (text,runs)=>{
   const key=JSON.stringify([text,runs]);if(cache.has(key))return cache.get(key);
   const doc=HwpDocument.createEmpty();try{

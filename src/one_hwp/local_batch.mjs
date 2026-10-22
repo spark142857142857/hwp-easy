@@ -9,6 +9,7 @@ import {tableFormatEdit} from './local_table_format.mjs';
 import {moveLocalBlock} from './local_move.mjs';
 import {hasLocalComplexContent,editLocalComplex,inspectLocalComplex} from './local_complex.mjs';
 import {reflowLocal} from './local_reflow.mjs';
+import {reflowTableLocal} from './local_table_reflow.mjs';
 import {placementLocal} from './local_placement.mjs';
 import {editTextBox} from './local_text_boxes.mjs';
 import {transformTextBox} from './local_text_box_geometry.mjs';
@@ -27,6 +28,7 @@ function rawTarget(value,version){
 const target=(id,version)=>`hwp5:${version}:${Buffer.from(id).toString('base64url')}`;
 
 export async function applyLocalOperation(HwpDocument,bytes,version,operation){
+  if(operation.type==='reflow_table')return reflowTableLocal(HwpDocument,bytes,version,operation);
   if(['reposition_floating_object','protect_page_bottom'].includes(operation.type))return placementLocal(HwpDocument,bytes,version,operation);
   if(operation.type==='transform_text_box'){
     const state=inspectLocalComplex(HwpDocument,bytes,{includeDocumentInfo:false,verifyCharacterModel:false}),result=transformTextBox(state,bytes,version,operation);

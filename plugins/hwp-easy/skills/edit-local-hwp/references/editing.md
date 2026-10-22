@@ -1,5 +1,7 @@
 # Detailed HWP editing and recovery guidance
 
+For 0.2.34 table growth/page continuation, use the explicit `reflow_table` root context in [requests.md](requests.md). Apply it after the requested text edits, inspect the plan and retain native-layout uncertainty. Later content edits need a fresh reflow. The operation covers the whole selected root tree, including ancestor rows; it does not implicitly restructure other tables.
+
 Use only when explicitly invoked for the current task. The user's instructions take precedence over this workflow.
 
 Use the installed skill entry supplied by the host; never infer its cache path from a version number.

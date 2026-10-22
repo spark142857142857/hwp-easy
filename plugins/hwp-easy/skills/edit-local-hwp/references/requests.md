@@ -348,6 +348,16 @@ Plan/edit requests accept `layout_policy:"report"` (default), `"reject_new_overf
 
 Changed saves and recovery use a process-owned local lock. A lock from this version can be reclaimed when its owner on this host is proven absent; live owners, reused live PIDs, foreign-host locks and unverifiable pre-0.2.26 lock files remain `DOCUMENT_BUSY`. Unknown legacy lock files are never automatically erased. Inspect and report an unverifiable lock instead of retrying with weaker version checks. `abandoned_lock_recovered:true` reports successful recovery of this version's abandoned lock.
 
+To grow row minima and enable reader page continuation for a supported root table and its nested tables, read `table_reflow`. Select its root context and copy the complete `expected_tables` array:
+
+```json
+{"type":"reflow_table","target_id":"<context.target_id>","expected_old":"<context.expected_old>","expected_tables":["<copy all returned descriptors as objects>"]}
+```
+
+This explicitly changes **the entire selected root tree**: top-left paragraph/column anchoring, non-inline Square wrapping, line-level page splitting, growing row minima, cleared size/page-break prevention and mapped line caches. Widths, padding, borders, repeat-header flags, text, styles and other streams are retained. Any cell paragraph target also selects its containing root tree. Put answer/text operations first and `reflow_table` last, copying the original context. Re-read and reflow after later text edits: settings alone do not synchronize a floating descendant's ancestor minimum height. A changed page count is not clipping-free certification.
+
+The 0.2.34 profile requires one column, horizontal top-aligned cells, ordinary paragraph spacing (100–300%), one ordinary body prefix line, one table appended at the end of each host paragraph, depth at most three, verified outer cell boundaries and enough width. Horizontal merges are supported. Vertical merges, centered/bottom-aligned cells, narrow/font-uncertain cells, competing cell controls, arbitrary paragraph drawings and complex footer compensation remain unsupported. Paper-fixed drawings need a protected header/footer reserve. Unverified layouts fail before saving. Limits: 16 tables, 32 rows/16 columns per table, 100,000 total text units, 10,000 per paragraph, height at most 720,000 HWP units/12 body heights. `layout_verified:false` remains.
+
 To shrink an overflowing nested table, use any cell paragraph target of that table and its complete returned dimensions/properties:
 
 ```json
