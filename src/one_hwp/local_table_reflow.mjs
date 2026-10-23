@@ -1,4 +1,5 @@
 /** Explicit whole-root table flow. Never infer clipping freedom from WASM pages. */
+import {contentFitRows} from './local_table_row_heights.mjs';
 import {inspectLocalComplex,hasLocalComplexContent} from './local_complex.mjs';
 import {standardBlockId,trackPositions} from './local_complex_table.mjs';
 import {objectFlow as commonObjectFlow,validObjectHeader} from './local_flow_records.mjs';
@@ -36,8 +37,9 @@ export function tablePaginationEnabled(state,t){
  return !f.treatAsChar&&f.textWrap===0&&[0,1].includes(f.textFlow)&&f.vertRelTo===2&&f.horzRelTo===2&&!f.vertAlign&&!f.horzAlign&&!(v.getUint32(4,true)&(1<<20))&&!prevention(p)&&(flags&3)===2&&(!t.cell_path.length||Boolean(parent&&tablePaginationEnabled(state,parent)));
 }
 function reflowSingle(HwpDocument,source,version,op,blockFlow=false,selectedRoots=[],deferFloating=false){
- if(op.type!=='reflow_table'||!equal(Object.keys(op).sort(),['type','target_id','expected_old','expected_tables',...(Object.hasOwn(op,'floating_page_breaks')?['floating_page_breaks']:[])].sort()))fail('INVALID_OPERATION');
+ if(op.type!=='reflow_table'||!equal(Object.keys(op).sort(),['type','target_id','expected_old','expected_tables',...['floating_page_breaks','row_height_policy'].filter(k=>Object.hasOwn(op,k))].sort()))fail('INVALID_OPERATION');
  if(Object.hasOwn(op,'floating_page_breaks')&&!['preserve','recompute_managed'].includes(op.floating_page_breaks))fail('INVALID_OPERATION');
+ if(Object.hasOwn(op,'row_height_policy')&&!['preserve','content_fit'].includes(op.row_height_policy))fail('INVALID_OPERATION');
  if(typeof op.target_id!=='string'||!op.target_id.startsWith(`hwp5:${version}:`))fail('VERSION_CONFLICT');const encoded=op.target_id.slice(70),id=Buffer.from(encoded,'base64url').toString();if(!id||Buffer.from(id).toString('base64url')!==encoded)fail('INVALID_TARGET');
  const state=inspectLocalComplex(HwpDocument,source,{includeDocumentInfo:false}),b=state.blocks.find(b=>b.id===id||standardBlockId(b)===id);if(!b?.text_mapping_verified||!b.cell_path.length)fail('TABLE_CELL_REQUIRED');if(b.text!==op.expected_old)fail('EXPECTED_OLD_MISMATCH');
  const root=state.tables.find(t=>!t.cell_path.length&&t.section===b.section&&t.record_index<b.record_index&&t.end>b.record_index);if(!root)fail('TABLE_REFLOW_ROOT_UNVERIFIED');
@@ -63,12 +65,12 @@ function reflowSingle(HwpDocument,source,version,op,blockFlow=false,selectedRoot
   if(!anchors.length||anchors.length!==peers.length||controls.length!==peers.length||controls.some((r,i)=>r!==rs[peers[i].record_index])||anchors.some(x=>Buffer.from(rs[host.text_record].payload.subarray(x.unit*2+2,x.unit*2+6)).toString()!==' lbt')||host.tokens.some(x=>x.unit>anchors[0].unit&&x.text)||host.tokens.some(x=>!x.text&&![2,11,13].includes(x.code))||!t.cell_path.length&&peers.length!==1)fail('TABLE_REFLOW_ANCHOR_UNVERIFIED');
   hostPeers.set(host.id,peers);
   // A merged cell constrains the sum of its rows, not each row separately.
-  // Start with recoverable existing tracks, then satisfy shorter spans first.
+  // By default retain recoverable tracks and satisfy shorter spans first.
   // Assigning only the deficit to the final row preserves earlier boundaries
   // and makes a second synchronization byte-for-byte idempotent.
   let oldRows;try{const ys=trackPositions(t,'row');if(ys.every(n=>n!==null))oldRows=ys.slice(1).map((n,i)=>n-ys[i]);}catch(error){if(!(error instanceof GuardError))throw error;}
   if(oldRows?.some(n=>n<=0))fail('TABLE_REFLOW_ROW_GEOMETRY_UNVERIFIED');
-  const rows=oldRows??Array(t.dimensions.rowCount).fill(1),constraints=[];
+  const compact=op.row_height_policy==='content_fit',constraints=[];let rows=oldRows??Array(t.dimensions.rowCount).fill(1);
   for(const c of t.cells){
    const flags=view(rs[c.start].payload).getUint32(4,true),padding=pads(state,t,c),width=c.width-padding[0]-padding[1];if((flags&0x1f)!==0||((flags>>>5)&3)>2||width<=0)fail('TABLE_REFLOW_CELL_PROFILE_UNSUPPORTED');
    let needed=padding[2]+padding[3];
@@ -78,10 +80,11 @@ function reflowSingle(HwpDocument,source,version,op,blockFlow=false,selectedRoot
     for(let at=paragraph.record_index+1;at<paragraph.records_end;at++)if(rs[at].tag===71&&rs[at].level===paragraph.raw_level+1&&Buffer.from(rs[at].payload.subarray(0,4)).toString()===' osg'){const p=patch(at);p.setUint32(4,p.getUint32(4,true)|4,true);}
     for(const ch of child){const f=objectFlow(rs[ch.record_index]);if(ch.properties.tableWidth+f.marginLeft+f.marginRight>width)fail('TABLE_REFLOW_CHILD_WIDTH_UNSUPPORTED');needed+=heights.get(ch.id)+f.marginTop+f.marginBottom;}
    }
-   needed=Math.max(c.height,Math.ceil(needed));if(needed>720000)fail('TABLE_REFLOW_HEIGHT_LIMIT');
+   needed=Math.max(compact?100:c.height,Math.ceil(needed));if(needed>720000)fail('TABLE_REFLOW_HEIGHT_LIMIT');
    constraints.push({row:c.row,span:c.rowSpan,needed});
   }
-  for(const c of constraints.sort((a,b)=>a.span-b.span||a.row-b.row)){
+  if(compact)rows=contentFitRows(t.dimensions.rowCount,constraints);
+  else for(const c of constraints.sort((a,b)=>a.span-b.span||a.row-b.row)){
    const current=rows.slice(c.row,c.row+c.span).reduce((n,h)=>n+h,0);
    rows[c.row+c.span-1]+=Math.max(0,c.needed-current);
   }
@@ -112,20 +115,21 @@ function reflowSingle(HwpDocument,source,version,op,blockFlow=false,selectedRoot
  const changed=[...patches].some(([i,p])=>!equalBytes(rs[i].payload,p));if(!changed)return {bytes:source,content_verified:true,raw_preservation_verified:true,unchanged:true,layout_verified:false};
  const records=invalidateSectionLayout(rs.map((r,i)=>patches.has(i)?{...r,payload:patches.get(i)}:r),state.blocks.filter(b=>b.section===root.section)),bytes=publishVerifiedPatch(source,state,b.section,records,floatingFlow.docInfo),after=inspectLocalComplex(HwpDocument,bytes,{includeDocumentInfo:false,verifyCharacterModel:false});
  if(!equal(state.blocks.map(b=>[b.id,b.text,b.unit_styles]),after.blocks.map(b=>[b.id,b.text,b.unit_styles]))||!equal(state.fields,after.fields)||tables.some(t=>!tablePaginationEnabled(after,after.tables.find(n=>n.id===t.id))))fail('TABLE_REFLOW_PRESERVATION_MISMATCH');
- return {bytes,content_verified:true,raw_preservation_verified:true,raw_preservation_scope:'selected_table_flow_heights_inline_spacing_floating_common_flags_offsets_and_own_host_paragraph_shapes_with_page_isolation; original_definitions_text_character_styles_widths_margins_borders_binary_data_other_controls_and_streams_preserved',flow_changed:true,table_formatting_changed:true,table_reflow:{root_table_id:root.id,tables:changes.reverse(),pagination:'reader_recomputed_line_split',stored_heights:'conservative_growing_minima',cell_alignment:'preserved',nested_host_layout:'anchor_order_vertical_stack_below_prefix',floating_objects:floating,floating_layout:'separate_empty_body_anchor_top_bottom_reserved_fixed_line; reuse_conservative_page_space_or_start_new_page; floating_state_preserved',native_layout_verified:false},layout_verified:false};
+ return {bytes,content_verified:true,raw_preservation_verified:true,raw_preservation_scope:'selected_table_flow_heights_inline_spacing_floating_common_flags_offsets_and_own_host_paragraph_shapes_with_page_isolation; original_definitions_text_character_styles_widths_margins_borders_binary_data_other_controls_and_streams_preserved',flow_changed:true,table_formatting_changed:true,table_reflow:{root_table_id:root.id,tables:changes.reverse(),pagination:'reader_recomputed_line_split',stored_heights:op.row_height_policy==='content_fit'?'explicit_content_fit':'conservative_growing_minima',cell_alignment:'preserved',nested_host_layout:'anchor_order_vertical_stack_below_prefix',floating_objects:floating,floating_layout:'separate_empty_body_anchor_top_bottom_reserved_fixed_line; reuse_conservative_page_space_or_start_new_page; floating_state_preserved',native_layout_verified:false},layout_verified:false};
 }
 /** Normalize interleaved hosts only after validating the complete caller scope.
  * All intermediate bytes remain in memory until the caller's one guarded save. */
 export function reflowTableLocal(HwpDocument,source,version,op){
- if(op.type!=='reflow_table'||!equal(Object.keys(op).sort(),['type','target_id','expected_old','expected_tables',...(Object.hasOwn(op,'floating_page_breaks')?['floating_page_breaks']:[])].sort()))fail('INVALID_OPERATION');
+ if(op.type!=='reflow_table'||!equal(Object.keys(op).sort(),['type','target_id','expected_old','expected_tables',...['floating_page_breaks','row_height_policy'].filter(k=>Object.hasOwn(op,k))].sort()))fail('INVALID_OPERATION');
  if(Object.hasOwn(op,'floating_page_breaks')&&!['preserve','recompute_managed'].includes(op.floating_page_breaks))fail('INVALID_OPERATION');
+ if(Object.hasOwn(op,'row_height_policy')&&!['preserve','content_fit'].includes(op.row_height_policy))fail('INVALID_OPERATION');
  if(typeof op.target_id!=='string'||!op.target_id.startsWith(`hwp5:${version}:`))fail('VERSION_CONFLICT');const encoded=op.target_id.slice(70),id=Buffer.from(encoded,'base64url').toString();if(Buffer.from(id).toString('base64url')!==encoded)fail('INVALID_TARGET');
  const state=inspectLocalComplex(HwpDocument,source,{includeDocumentInfo:false}),b=state.blocks.find(b=>b.id===id||standardBlockId(b)===id);if(!b?.cell_path.length)fail('TABLE_CELL_REQUIRED');if(b.text!==op.expected_old)fail('EXPECTED_OLD_MISMATCH');const root=state.tables.find(t=>!t.cell_path.length&&t.section===b.section&&t.record_index<b.record_index&&t.end>b.record_index);if(!root)fail('TABLE_REFLOW_ROOT_UNVERIFIED');
  const roots=hostRoots(state,root),forest=rootForest(state,roots);if(!equal(op.expected_tables,forest.map(t=>tableFlowDescriptor(state,t))))fail('EXPECTED_TABLE_FLOW_MISMATCH');if(forest.length>16)fail('TABLE_REFLOW_PROFILE_UNSUPPORTED');if(forest.flatMap(t=>t.cells.flatMap(c=>c.blocks)).reduce((n,b)=>n+b.text.length,0)>100000)fail('TABLE_REFLOW_TEXT_LIMIT');
  if(new Set(roots.map(t=>Buffer.from(state.recordSets.get(t.section)[t.record_index].payload.subarray(36,40)).toString('hex'))).size!==roots.length)fail('TABLE_AUTO_SYNC_IDENTITY_UNVERIFIED');
  const prepared=normalizeTableHosts(HwpDocument,source,state,roots);if(!prepared.normalized.length)return reflowSingle(HwpDocument,source,version,op);
  let bytes=prepared.bytes,current=prepared.state;const results=[];
- for(const [rootIndex,rootId] of prepared.root_ids.entries()){const version=digestForHost(bytes),context=tableReflowContexts(current,version).find(c=>c.root_table_id===rootId);if(!context?.target_id)fail('TABLE_HOST_CONTEXT_UNVERIFIED');const result=reflowSingle(HwpDocument,bytes,version,{type:'reflow_table',target_id:context.target_id,expected_old:context.expected_old,expected_tables:context.expected_tables,...(op.floating_page_breaks?{floating_page_breaks:op.floating_page_breaks}:{})},true,prepared.root_ids,rootIndex<prepared.root_ids.length-1);bytes=result.bytes;results.push(result);current=inspectLocalComplex(HwpDocument,bytes,{includeDocumentInfo:false,verifyCharacterModel:false});}
+ for(const [rootIndex,rootId] of prepared.root_ids.entries()){const version=digestForHost(bytes),context=tableReflowContexts(current,version).find(c=>c.root_table_id===rootId);if(!context?.target_id)fail('TABLE_HOST_CONTEXT_UNVERIFIED');const result=reflowSingle(HwpDocument,bytes,version,{type:'reflow_table',target_id:context.target_id,expected_old:context.expected_old,expected_tables:context.expected_tables,...Object.fromEntries(['floating_page_breaks','row_height_policy'].filter(k=>Object.hasOwn(op,k)).map(k=>[k,op[k]]))},true,prepared.root_ids,rootIndex<prepared.root_ids.length-1);bytes=result.bytes;results.push(result);current=inspectLocalComplex(HwpDocument,bytes,{includeDocumentInfo:false,verifyCharacterModel:false});}
  const remap={...prepared.remap};if(!hasLocalComplexContent(current.raw))for(const [old,id]of Object.entries(remap)){const block=current.blocks.find(b=>b.id===id);if(block)remap[old]=standardBlockId(block);}
- return {bytes,content_verified:true,raw_preservation_verified:true,raw_preservation_scope:'explicit_host_paragraph_partition_retaining_text_anchor_units_styles_fields_and_control_order_with_inline_line_spacing_then_verified_table_flow',structure_changed:true,paragraph_count_changed:true,flow_changed:true,table_formatting_changed:true,table_reflow:{root_table_id:prepared.root_ids[0],root_table_ids:prepared.root_ids,tables:results.flatMap(r=>r.table_reflow?.tables??[]),host_normalization:'paragraph_segments_around_table_anchors',floating_objects:results.flatMap(r=>r.table_reflow?.floating_objects??[]),inline_object_layout:'own_paragraph_with_line_spacing_influence',field_ranges_remapped:true,normalized_hosts:prepared.normalized,pagination:'reader_recomputed_line_split',stored_heights:'conservative_growing_minima',native_layout_verified:false},_target_remap:remap,layout_verified:false};
+ return {bytes,content_verified:true,raw_preservation_verified:true,raw_preservation_scope:'explicit_host_paragraph_partition_retaining_text_anchor_units_styles_fields_and_control_order_with_inline_line_spacing_then_verified_table_flow',structure_changed:true,paragraph_count_changed:true,flow_changed:true,table_formatting_changed:true,table_reflow:{root_table_id:prepared.root_ids[0],root_table_ids:prepared.root_ids,tables:results.flatMap(r=>r.table_reflow?.tables??[]),host_normalization:'paragraph_segments_around_table_anchors',floating_objects:results.flatMap(r=>r.table_reflow?.floating_objects??[]),inline_object_layout:'own_paragraph_with_line_spacing_influence',field_ranges_remapped:true,normalized_hosts:prepared.normalized,pagination:'reader_recomputed_line_split',stored_heights:op.row_height_policy==='content_fit'?'explicit_content_fit':'conservative_growing_minima',native_layout_verified:false},_target_remap:remap,layout_verified:false};
 }
