@@ -21,7 +21,7 @@ It uses an engine built on [`@rhwp/core`](https://github.com/edwardkim/rhwp), wi
 - Recovery history, previous-version restoration and retention of the edited version before recovery
 - Updated embedded preview text and first-page thumbnails after saving
 
-Supported edits depend on document structure and target. The [0.2.42 source and verification package](docs/local-release-0.2.42.md) can fit row and nested table heights to content when explicitly requested. Ordinary edits preserve stored minima and explicit page breaks. Supported floating pictures and plain text boxes reuse verified current-page space, with a new-page fallback for insufficient or uncertain flow. Same-file saves, byte-exact recovery and actual Hancom layouts are checked. Codex remains installed at 0.2.25; Claude Code and Cursor remain on 0.2.19. Unverifiable structures produce partial read-only results or refused operations. Partial reads may omit object content. The F2 core profiles have completed [closure regression](docs/f2-closure-0.2.42.md); the frozen [support scope](docs/f2-support-0.2.42.md) defines accepted and refused structures.
+Supported edits depend on document structure and target. The [0.2.42 source and verification package](docs/local-release-0.2.42.md) can fit row and nested table heights to content when explicitly requested. Ordinary edits preserve stored minima and explicit page breaks. Supported floating pictures and plain text boxes reuse verified current-page space, with a new-page fallback for insufficient or uncertain flow. Same-file saves, byte-exact recovery and actual Hancom layouts are checked. Codex is installed at 0.2.42; Claude Code and Cursor remain on 0.2.19. Unverifiable structures produce partial read-only results or refused operations. Partial reads may omit object content. The F2 core profiles have completed [closure regression](docs/f2-closure-0.2.42.md); the frozen [support scope](docs/f2-support-0.2.42.md) defines accepted and refused structures.
 
 SVG previews of the current document and rereading after saving do not guarantee identical fonts, line breaks or page layout in an external HWP application. See [features and limits](docs/supported-features.md) for operation-specific conditions and preview limitations.
 
@@ -51,7 +51,7 @@ Install the complete package for your client, including the runner and engine. T
 | Claude Code | Personal skill package | [Installation and invocation](docs/agent-client-skills.md#설치와-호출) |
 | Cursor | Personal skill package | [Installation and invocation](docs/agent-client-skills.md#설치와-호출) |
 
-The verified Codex installation is **0.2.25**; public packages and the Claude Code/Cursor installations remain **0.2.19**. Download client ZIPs and SHA-256 checksums from the [public release](https://github.com/spark142857142857/hwp-easy/releases/tag/hwp-easy-local-v0.2.19). OpenAI directory publication is a separate process. See [project status](docs/project-status.md) for installations and verified scope.
+The verified Codex installation is **0.2.42**; public packages and the Claude Code/Cursor installations remain **0.2.19**. Download client ZIPs and SHA-256 checksums from the [public release](https://github.com/spark142857142857/hwp-easy/releases/tag/hwp-easy-local-v0.2.19). OpenAI directory publication is a separate process. See [project status](docs/project-status.md) for installations and verified scope.
 
 <a id="install-and-use"></a>
 <a id="how-does-it-work"></a>
@@ -94,7 +94,7 @@ See the [developer guide](docs/developer-guide.md) for setup, source organizatio
 
 ## Project status
 
-A fresh Codex chat explicitly used the installed 0.2.25 skill to edit body text and cell paragraphs, reposition a vector group, and edit a nested-cell text box in three synthetic files. Each was saved in place and restored to its exact original bytes in a separate follow-up turn. All ten Windows/Linux CI jobs for the functional code passed. Public-form, layout and installation evidence is recorded in [0.2.25 verification](docs/local-release-0.2.25.md). Claude Code and Cursor remain on 0.2.19 with updates deferred. Other-user installation and public-release preparation are tracked in [remaining work](docs/remaining-work.md).
+A fresh Codex chat explicitly used the installed 0.2.42 skill to edit body text and cell paragraphs, fit nested table heights to content, and grow a table while preserving floating pictures and text boxes. All three synthetic files were saved in place and restored to their exact original bytes in a separate follow-up turn. All 25 installed files, independent raw records and actual Hancom layouts were checked. See [installation and new-chat verification](docs/local-install-0.2.42.md) and [F2 closure regression](docs/f2-closure-0.2.42.md). Claude Code and Cursor remain on 0.2.19 with updates deferred. Other-user installation and public-release preparation are tracked in [remaining work](docs/remaining-work.md).
 
 Remote **0.1.9** and the Windows COM prototype are retained earlier implementations. Their code, packages and review records are indexed under [archived material](docs/README.md#보관-자료).
 
