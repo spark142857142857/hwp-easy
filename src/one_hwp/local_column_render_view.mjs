@@ -16,10 +16,13 @@ const inside=(r,c,top,bottom)=>r.x>=c.x-.5&&r.x+r.w<=c.x+c.width+.5&&r.y>=top-.5
 export function openColumnRenderView(HwpDocument,bytes,openSingle){
  // Most render requests are single-column. Detect candidates from raw records
  // before constructing/paginating an extra WASM document (notably long text).
- const section=readHwp(bytes).streams.get('BodyText/Section0');if(!section)return null;
- const definition=[...parseRecords(section)].find(r=>r.tag===71&&id(r)==='dloc');if(!definition||definition.payload.length<8||((view(definition.payload).getUint16(4,true)>>>2)&255)<=1)return null;
+ try{
+  const section=readHwp(bytes).streams.get('BodyText/Section0');if(!section)return null;
+  const definition=[...parseRecords(section)].find(r=>r.tag===71&&id(r)==='dloc');if(!definition||definition.payload.length<8||((view(definition.payload).getUint16(4,true)>>>2)&255)<=1)return null;
+ }catch(e){if(!(e instanceof GuardError)||e.code.includes('LIMIT'))throw e;return null;}
  const original=new HwpDocument(bytes),parts=[];let keep=false;
  try{
+  if(original.pageCount()>32)throw new GuardError('RENDERED_LAYOUT_PAGE_LIMIT');
   const info=JSON.parse(original.getPageInfo(0));if(info.columns?.length<=1)return null;
   const state=inspectLocalComplex(HwpDocument,bytes,{includeDocumentInfo:false,verifyCharacterModel:false}),rs=state.recordSets.get(0),columns=rs?.filter(r=>r.tag===71&&id(r)==='dloc'),pages=rs?.filter(r=>r.tag===73);
   if(!state.tables.some(t=>t.cell_path.length))return null;

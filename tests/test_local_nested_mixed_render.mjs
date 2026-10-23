@@ -40,6 +40,11 @@ test('single-column rendering never constructs a column candidate document',asyn
  class NoColumnEngine{constructor(){throw Error('Unexpected column candidate');}}
  assert.equal(openColumnRenderView(NoColumnEngine,bytes,()=>{throw Error('Unexpected single-column decomposition');}),null);
 });
+test('column page limits precede page observations and always free the candidate',async()=>{
+ const {openColumnRenderView}=await import('../src/one_hwp/local_column_render_view.mjs');let freed=false;const bytes=mixedRenderFixture({kind:'columns'});
+ class TooManyPages{pageCount(){return 33;}getPageInfo(){throw Error('Must not observe pages beyond the limit');}free(){freed=true;}}
+ assert.throws(()=>openColumnRenderView(TooManyPages,bytes,()=>{throw Error('Must not split oversized input');}),/RENDERED_LAYOUT_PAGE_LIMIT/);assert.equal(freed,true);
+});
 for(const kind of ['empty-field','rotation','line-spacing','object-margin','extra-object-text','column-weight','column-overflow','column-reverse','column-rule','column-border','page-break'])test(`ambiguous mixed/column view remains explicit: ${kind}`,()=>{
  let bytes=mixedRenderFixture({kind:kind.startsWith('column')||kind==='page-break'?'columns':kind==='empty-field'?'fields':'objects',column:1,unequal:kind==='column-weight',empty:kind==='empty-field'});const state=inspect(bytes),rs=state.recordSets.get(0).map(r=>({...r,payload:r.payload.slice()}));
  if(kind==='rotation'){const o=state.pictures[0];view(rs[o.record_index+1].payload).setInt16(40,15,true);}
