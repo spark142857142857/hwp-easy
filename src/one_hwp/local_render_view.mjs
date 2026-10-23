@@ -15,12 +15,14 @@ export function openLocalRenderView(HwpDocument,bytes){
   if(nested.tables.length){
    const count=document.pageCount(),controls=[];
    for(let page=0;page<Math.min(count,33);page++)controls.push(...JSON.parse(document.getPageControlLayout(page)).controls.filter(c=>c.type==='table').map(c=>({...c,page})));
-   // A split/overflowing tree has ambiguous paragraph origins; retain the raw
-   // view and its uncertainty instead of guessing a per-page projection.
-   const roots=controls.filter(c=>c.stableIndex?.length===3),root=roots[0],info=root&&JSON.parse(document.getPageInfo(root.page));
-   if(count>32||roots.length!==1||controls.length!==nested.tables.length+1||!root||root.x<info.bodyLeft-.5||root.x+root.w>info.bodyRight+.5||root.y<info.marginTop+info.marginHeader-.5||root.y+root.h>info.height-info.marginBottom-info.marginFooter+.5){const original=new HwpDocument(bytes);document.free();document=original;nested.unadapted.push({reason:'nested_render_pagination'});nested.tables=[];nested.remap=r=>r;}
+   // Complete-row fragments were bound to their original rows before opening.
+   // Partial rows, overflow and unknown pagination keep the original view.
+   const roots=controls.filter(c=>c.stableIndex?.length===3);
+   if(count>32||!roots.length||controls.length!==nested.tables.length+roots.length||roots.some(root=>{const info=JSON.parse(document.getPageInfo(root.page));return root.x<info.bodyLeft-.5||root.x+root.w>info.bodyRight+.5||root.y<info.marginTop+info.marginHeader-.5||root.y+root.h>info.height-info.marginBottom-info.marginFooter+.5;})){const original=new HwpDocument(bytes);document.free();document=original;nested.unadapted.push({reason:'nested_render_pagination'});nested.tables=[];nested.remap=r=>r;}
   }
-  return {document,...adaptEmptyFloatingAnchors(document,bytes),nested_tables:nested.tables,unadapted_tables:nested.unadapted,remap:nested.remap};
+  let anchors=adaptEmptyFloatingAnchors(document,bytes);
+  if(nested.tables.length&&!nested.refresh(document)){const original=new HwpDocument(bytes);document.free();document=original;nested.unadapted.push({reason:'nested_anchor_pagination'});nested.tables=[];nested.remap=r=>r;anchors=adaptEmptyFloatingAnchors(document,bytes);}
+  return {document,...anchors,nested_tables:nested.tables,unadapted_tables:nested.unadapted,remap:nested.remap};
  }catch(e){document.free();throw e;}
 }
 

@@ -25,7 +25,7 @@ export function captureRenderedLayout(HwpDocument,bytes){
  const renderView=openLocalRenderView(HwpDocument,bytes),doc=renderView.document;try{
   const count=doc.pageCount();if(count>32)fail('RENDERED_LAYOUT_PAGE_LIMIT');const spacedFooters=footerSpacingSections(bytes),profiles=rawLayoutProfiles(bytes),starts=Array.from({length:count},(_,p)=>JSON.parse(doc.getPositionOfPage(p))),pages=[];let total=0;
   for(let page=0;page<count;page++){
-   const info=JSON.parse(doc.getPageInfo(page)),runs=JSON.parse(doc.getPageTextLayout(page)).runs.map(renderView.remap),controls=JSON.parse(doc.getPageControlLayout(page)).controls.map(renderView.remap);
+   const info=JSON.parse(doc.getPageInfo(page)),runs=JSON.parse(doc.getPageTextLayout(page)).runs.map(r=>renderView.remap(r,page)).filter(r=>!r.render_only_synthetic),controls=JSON.parse(doc.getPageControlLayout(page)).controls.map(r=>renderView.remap(r,page));
    total+=runs.length+controls.length;if(total>20000)fail('RENDERED_LAYOUT_ITEM_LIMIT');if([...runs,...controls].some(r=>!finiteBox(r)))fail('RENDERED_LAYOUT_PROFILE_UNSUPPORTED');
    const body={x:info.bodyLeft,y:info.marginTop+info.marginHeader,w:info.bodyRight-info.bodyLeft,h:info.height-info.marginTop-info.marginHeader-info.marginBottom-info.marginFooter},fixed_runs=[],body_runs=[],limitations=[];let suppressed=0,synthetic=0;
    for(const r of runs){

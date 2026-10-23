@@ -4,7 +4,7 @@
 
 [프로젝트 개요](../README.md) · [문서 인덱스](README.md) · [아키텍처](architecture.md)
 
-소스를 변경하거나 배포 패키지를 생성할 때 필요한 환경과 검사 명령입니다. 현재 소스·검증 패키지는 **로컬 HWP Easy 0.2.44**입니다. 같은 버전의 앱별 패키지는 공통 실행기를 포함하며 실제 설치 버전은 [프로젝트 상태](project-status.md)에서 구분합니다. 파일 편집 절차는 [사용 가이드](quick-start.md), 실제 설치·호출 결과는 [프로젝트 상태](project-status.md)에 정리합니다.
+소스를 변경하거나 배포 패키지를 생성할 때 필요한 환경과 검사 명령입니다. 현재 소스·검증 패키지는 **로컬 HWP Easy 0.2.45**입니다. 같은 버전의 앱별 패키지는 공통 실행기를 포함하며 실제 설치 버전은 [프로젝트 상태](project-status.md)에서 구분합니다. 파일 편집 절차는 [사용 가이드](quick-start.md), 실제 설치·호출 결과는 [프로젝트 상태](project-status.md)에 정리합니다.
 
 ## 환경과 구성
 
@@ -93,9 +93,9 @@ python scripts/archive_agent_skills.py
 
 | 배포 대상 | 생성 ZIP |
 | --- | --- |
-| Codex | `outputs/plugin-package/hwp-easy-0.2.44.zip` |
-| Claude Code | `outputs/agent-packages/hwp-easy-claude-code-0.2.44.zip` |
-| Cursor | `outputs/agent-packages/hwp-easy-cursor-0.2.44.zip` |
+| Codex | `outputs/plugin-package/hwp-easy-0.2.45.zip` |
+| Claude Code | `outputs/agent-packages/hwp-easy-claude-code-0.2.45.zip` |
+| Cursor | `outputs/agent-packages/hwp-easy-cursor-0.2.45.zip` |
 
 패키지 생성은 앱 설치나 공개 게시를 수행하지 않습니다. Claude Code·Cursor의 설치 검사와 격리된 폴더에 설치한 실행기의 검증은 다음으로 재현합니다.
 
@@ -120,7 +120,7 @@ node scripts/install_agent_skill.mjs --client cursor --package outputs/agent-pac
 OpenAI 포털의 기존 MCP 등록은 서버 없는 패키지로 변경할 수 없어, 로컬판에는 별도 식별자 `hwp-easy-local`을 사용합니다. 다음 명령은 검증한 ZIP에서 등록 이름·호출 안내·표시 필드만 조정하고 모든 실행 자원의 바이트 일치를 검사합니다. 업로드·설치·심사 제출을 수행하지 않습니다.
 
 ```bash
-python scripts/package_directory_plugin.py outputs/plugin-package/hwp-easy-0.2.44.zip outputs/directory-package
+python scripts/package_directory_plugin.py outputs/plugin-package/hwp-easy-0.2.45.zip outputs/directory-package
 ```
 
 포털 관측과 남은 차단 항목은 [로컬 디렉터리 등록 기록](local-directory-submission.md)에 정리합니다.
@@ -245,6 +245,8 @@ python scripts/check-local-table-sync.py <새-출력-폴더>
 
 ### 일회용 렌더 뷰 검증
 
-`node --test tests/test_local_render_view.mjs`, `node scripts/check-local-render-view.mjs <새-출력-폴더>`, `python scripts/check-local-render-view.py <새-출력-폴더>`로 보정 범위·실제 충돌 보존·원본/이력 무변경·배포 번들의 같은 파일 저장/복구·썸네일/SVG 일치를 확인한다. 렌더 뷰는 내보내기·저장·편집 대상 선택에 재사용하지 않는다. 신뢰한 합성 출력의 네이티브 QA는 `render-local-table-reflow-native.py` 다음 `check-local-table-floating-native.py`를 사용한다. 기존 전체 CI 18개 작업 중 복잡한 개체 작업에 새 검사만 더한다. [0.2.43 기록](local-release-0.2.43.md)
+`node --test tests/test_local_render_view.mjs`, `node scripts/check-local-render-view.mjs <새-출력-폴더>`, `python scripts/check-local-render-view.py <새-출력-폴더>`로 보정 범위·실제 충돌 보존·원본/이력 무변경·배포 번들의 같은 파일 저장/복구·썸네일/SVG 일치를 확인한다. 렌더 뷰는 내보내기·저장·편집 대상 선택에 재사용하지 않는다. 신뢰한 합성 출력의 네이티브 QA는 `render-local-table-reflow-native.py` 다음 `check-local-table-floating-native.py`를 사용한다. 전체 CI는 18개 OS 작업에 검사를 분산하며 세부 배치는 현재 워크플로를 따른다. [0.2.43 기록](local-release-0.2.43.md)
 
-0.2.44 중첩 원점/정렬은 `node --test tests/test_local_nested_render_view.mjs`, `node scripts/check-local-nested-render.mjs <새-출력-폴더>`, `python scripts/check-local-nested-render.py <새-출력-폴더>`로 검사한다. 신뢰한 합성 결과에 `render-local-table-reflow-native.py`를 실행한 뒤 Pillow 환경에서 `check-local-nested-render-native.py`로 원래 색 표 경계·답변 표시 줄·복구 픽셀을 대조한다. 전체 CI는 같은 18개 작업·시간 제한·수동 주기를 유지하고, 기존 셀 그림 패키지 검사를 여유 있는 기존 클라이언트 패키지 작업으로 옮긴다. `gh workflow run checks.yml -f scope=package-balance`는 검사 재분산으로 바뀐 패키지/표 흐름 작업만 양쪽 OS에서 확인한다(4개 실행). 전체 실행의 검사 명령·18개 행렬·시간 제한과 개별 요청 제한은 유지한다. 실제 Claude Code/Cursor 설치·인증·모델 호출은 수행하지 않는다. [0.2.44 기록](local-release-0.2.44.md)
+0.2.45 F3-B2는 `node --test tests/test_local_nested_forest_render.mjs`, `node scripts/check-local-nested-forest.mjs <새-출력-폴더>`, `python scripts/check-local-nested-forest.py <새-출력-폴더>`로 검사한다. 신뢰한 합성 결과에 `render-local-table-reflow-native.py`, `node scripts/render-local-nested-forest.mjs <결과-폴더>`를 실행한 뒤 Pillow 환경에서 `check-local-nested-forest-native.py`로 원래 색 표/셀 경계·답변 표시 줄·복구 픽셀을 대조한다. 전체 크기 QA PNG와 제품의 작은 썸네일은 용도를 구분한다.
+
+전체 CI는 같은 18개 OS 작업·시간 제한·수동 주기를 유지한다. 기존 F3-A 패키지 검사를 표 흐름 작업으로 옮겨 복잡 개체 작업의 여유를 확보하고, 새 B2 패키지는 여유 있는 기존 패키지 작업에서 검증한다. 실제 Claude Code/Cursor 설치·인증·모델 호출은 수행하지 않는다. [0.2.45 기록](local-release-0.2.45.md)
