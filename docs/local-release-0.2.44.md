@@ -35,9 +35,9 @@
 | 정확한 복구 | 복구 파일 바이트 일치, 복구 **9쪽 픽셀 일치** |
 | 썸네일 | 9건의 실제 패키지 SVG를 래스터화한 BMP와 저장 `PrvImage` 일치 |
 | F3-A 추가 회귀 | 기존 분리 패키지 6건·독립 원시 판독, 한글 18개 파일·22쪽·복구 8쪽 픽셀 대조. 빈 앵커/부동 상태·저장·복구·SVG/썸네일 일치 유지 |
-| GitHub Actions | 이 기능 묶음의 전체 Windows/Linux CI를 수동 실행한다. 검사 커밋과 실제 최종 결과는 [Actions](https://github.com/spark142857142857/hwp-easy/actions) 및 해당 로컬 `ci-result.json`에 기록하며 이전 성공을 새 소스의 결과로 대신하지 않음 |
+| GitHub Actions | 기능 커밋 `b0116b1`의 [전체 실행](https://github.com/spark142857142857/hwp-easy/actions/runs/39944078407)은 **17개 성공·Windows 표 흐름 1개 시간 제한 중단**. 같은 작업의 재실행도 예산 부족으로 중단하고 CI 배치를 보완. 엔진/ZIP 변경 없이 영향받는 4개 OS 작업을 `package-balance`로 검증하며, 실제 후속 커밋/결과는 [Actions](https://github.com/spark142857142857/hwp-easy/actions)와 로컬 `ci-balance-result.json`에 구분 기록. 전체 실행 18개가 한 번에 성공한 것으로 표시하지 않음 |
 
-CI는 같은 18개 작업·시간 제한·수동 실행 주기를 유지한다. 기존 셀 그림 패키지/독립 판독 검사를 부동 작업에서 표 흐름 작업으로 옮겨 시간 제한 여유를 확보하며 검사 범위는 줄이지 않는다. 실제 Claude Code·Cursor의 설치·로그인·모델 호출은 진행하지 않는다. Computer-use는 **0회**다.
+CI는 같은 18개 작업·시간 제한·수동 실행 주기를 유지한다. 셀 그림 패키지/독립 판독 검사를 부동 작업에서 표 흐름 작업으로 옮겼으나 표 흐름의 10분 예산도 부족했다. 최종 배치는 여유 있는 기존 클라이언트 패키지 작업으로 옮기며 검사 범위는 줄이지 않는다. 전체 명령·행렬·시간/요청 제한이 동일함을 로컬 구성 검사로 대조하고, 바뀐 패키지/표 흐름 작업 4개만 양쪽 OS에서 다시 확인한다. 이는 실제 Claude Code/Cursor 앱 실행이 아닌 생성 패키지 검사다. 실제 Claude Code·Cursor의 설치·로그인·모델 호출은 진행하지 않는다. Computer-use는 **0회**다.
 
 ## 동결한 검증 패키지
 
@@ -48,4 +48,4 @@ CI는 같은 18개 작업·시간 제한·수동 실행 주기를 유지한다. 
 | 실행기 SHA-256 | `78c73c6ba7420bb5ba381967392822b66005431ce961adec49924650a2664fae` |
 | WASM SHA-256 | `8000e4ce320b7994dca6bcd58be0c862144c7b805576504e523a420439da658b` · @rhwp/core 0.8.6 유지 |
 
-로컬 근거는 `outputs/f3-b-044-20261023/`의 `package-final/`, `anchor-regression/`, `source-tests-verified.log`, `frozen-package.json`, 실제 한글 이미지/독립 판독 결과다. 과거 0.2.43 ZIP은 그대로 보존한다. 공개·포털 제출·실제 앱 설치는 하지 않는다.
+로컬 근거는 `outputs/f3-b-044-20261023/`의 `package-final/`, `anchor-regression/`, `source-tests-verified.log`, `frozen-package.json`, 실제 한글 이미지/독립 판독, `ci-result-first-attempt.json`·`ci-balance-result.json` 결과다. 과거 0.2.43 ZIP은 그대로 보존한다. 공개·포털 제출·실제 앱 설치는 하지 않는다.

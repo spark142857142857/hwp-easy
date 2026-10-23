@@ -8,7 +8,7 @@ on:
         description: Verification scope (all or a focused table feature)
         type: choice
         default: all
-        options: [all, table-flow, table-text, table-metrics, table-controls, table-floating, table-compact]
+        options: [all, table-flow, table-text, table-metrics, table-controls, table-floating, table-compact, package-balance]
 
 permissions:
   contents: read
@@ -100,7 +100,7 @@ jobs:
         run: python -m pip wheel --no-deps --wheel-dir dist .
 
   agent-clients:
-    if: ${{ inputs.scope == 'all' }}
+    if: ${{ inputs.scope == 'all' || inputs.scope == 'package-balance' }}
     name: Claude Code and Cursor skills / ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
     timeout-minutes: 8
@@ -142,6 +142,13 @@ jobs:
         run: python scripts/check-installed-plugin.py outputs/agent-client-check/claude-code
       - name: Python check installed plugin
         run: python scripts/check-installed-plugin.py outputs/agent-client-check/cursor
+      # Reuse the short package job; preserve all checks and time budgets.
+      - name: Node cell images
+        if: ${{ inputs.scope == 'all' || inputs.scope == 'package-balance' }}
+        run: node scripts/check-local-cell-images.mjs
+      - name: Python floating areas
+        if: ${{ inputs.scope == 'all' || inputs.scope == 'package-balance' }}
+        run: python scripts/check-local-floating-areas.py outputs/local-cell-images
 
   local-complex:
     if: ${{ inputs.scope == 'all' }}
@@ -293,7 +300,7 @@ jobs:
         run: node --test --test-concurrency=2 tests/test_local_table_reflow.mjs tests/test_local_table_hosts.mjs tests/test_local_table_text_flow.mjs tests/test_local_table_text_metrics.mjs tests/test_local_table_controls.mjs tests/test_local_table_floating.mjs tests/test_local_table_compact.mjs
 
   local-table-flow:
-    if: ${{ inputs.scope == 'all' || inputs.scope == 'table-flow' }}
+    if: ${{ inputs.scope == 'all' || inputs.scope == 'table-flow' || inputs.scope == 'package-balance' }}
     name: Table growth and pagination / ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
     # 38 packaged cases plus source checks; include Windows cleanup time.
@@ -326,14 +333,6 @@ jobs:
         run: node --test tests/test_local_table_reflow.mjs tests/test_local_table_hosts.mjs
       - name: Node package local plugin
         run: node scripts/package_local_plugin.mjs
-      # Move this existing coverage from the near-limit floating job; keep
-      # the same job count, request bounds and manual verification cadence.
-      - name: Node cell images
-        if: ${{ inputs.scope == 'all' }}
-        run: node scripts/check-local-cell-images.mjs
-      - name: Python floating areas
-        if: ${{ inputs.scope == 'all' }}
-        run: python scripts/check-local-floating-areas.py outputs/local-cell-images
       - name: Node check local table reflow
         run: node scripts/check-local-table-reflow.mjs
       - name: Python check local table reflow
