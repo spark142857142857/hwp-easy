@@ -33,7 +33,11 @@
 | 독립 판독 | 원래 문단/제어·글자 서식·필드/개체·비대상 스트림·DocInfo와 부동 플래그 보존. 렌더용 문단/공백/정의·단 설정이 저장되지 않음 |
 | 실제 한글·배포 SVG | **39개 파일·39쪽**, 원래 색 표/셀 경계 **204곳**, 글상자 **10곳**, 그림 **10곳**, 필드 원점 **15곳**, 답변 **156줄**과 SVG 답변 줄 수 확인. 전체 크기 배포 SVG·원본 이미지로 대조 |
 | 복구·썸네일 | 원본 바이트와 **복구 13쪽 픽셀 일치**. 명시적 패키지 SVG로 만든 BMP와 저장 `PrvImage` 일치. 전체 크기 QA PNG와 제품 썸네일을 구분 |
-| CI | 기능 커밋 `b920478`의 [전체 실행](https://github.com/spark142857142857/hwp-easy/actions/runs/39961239503)에서 기존 32쪽 상한 모의 회귀가 실패하여 사전 후보 검사의 오류 순서와 엔진 해제를 보완했다. 전체를 반복하지 않고 수정 커밋의 `render-view` 범위로 복잡 개체·부동 패키지의 Windows/Linux **4개 실행**을 확인한다. 실제 커밋·결과는 [Source checks](https://github.com/spark142857142857/hwp-easy/actions/workflows/checks.yml), 로컬 `ci-result.json`·`ci-guard-result.json`에 기록. 첫 전체 실행의 Windows 부동 배치도 새 코퍼스 진입까지 16분 31초가 걸려 18분 상한으로 중단됨. Windows 상한을 22분으로 보완하고 `table-floating` 두 OS 실행으로 별도 확인한다. 로컬 `ci-budget-result.json`에 기록하며 첫 전체 실행을 모두 성공으로 표시하지 않음 |
+| CI | 수정 후 [렌더 4개 OS 실행](https://github.com/spark142857142857/hwp-easy/actions/runs/39962923049)과 [부동 2개 OS 실행](https://github.com/spark142857142857/hwp-easy/actions/runs/39964191687) 통과. 첫 전체 실행은 15통과·2실패·1시간 초과이며, 단일 전체 성공으로 표시하지 않음 |
+
+기능 커밋 `b920478`의 첫 전체 실행에서 32쪽 상한 모의 회귀가 실패했다. `35706b4`는 선택적 후보 판독 실패를 기존 로더로 넘기고 다단 후보의 쪽 관측 전에 상한을 검사한다. 해당 렌더 범위의 두 OS 회귀·패키지 4개 실행을 통과했다. `efb97cf`의 부동 범위 두 OS도 최종 실행기·새 13건·독립 판독·표 소스 회귀를 통과했다. 기존 성공과 후속 결과를 합쳐 18개 OS 검사 묶음을 확인하며 실제 코드/설정 커밋과 결과를 구분한다.
+
+렌더 범위의 첫 Windows 실행에서는 썸네일 갱신 상태가 `text_updated_image_unavailable`여서 소스 검사 1건이 실패했다. 원인은 확정하지 않았으며 병렬 부하/콜드 스타트 지연을 의심한다. **동일 소스의 해당 Windows 작업만 한 번 재실행하여 347개 기존 회귀·27개 새 회귀와 모든 후속 패키지 검사를 통과**했다. 제품의 5초 작업자 한도와 실패 시 오래된 이미지 제거 정책은 유지한다. 첫 실패 로그/시도도 보관하며 재발 시 부하 격리·진단 로그를 추가 관측한다.
 
 전체 **18개 OS 작업·수동 주기·개별 요청 제한**을 유지한다. Windows 부동 배치만 실측에 따라 18→22분으로 조정하며 Linux 부동 배치 18분과 다른 작업 상한은 유지한다. `render-view`는 기존 두 작업의 4개 OS 실행만 선택하며 새 작업을 추가하지 않는다. 새 13건의 패키지 검사는 실측 여유가 있는 부동 배치 작업에 넣고 새 소스 검사는 글/호스트 작업에서 수행한다. 기존 검사 명령은 모두 유지한다. CI의 Claude Code/Cursor 작업은 격리된 생성 번들 검사이며 실제 앱 갱신·로그인·모델 호출을 수행하지 않는다.
 
@@ -46,4 +50,4 @@
 | 실행기 SHA-256 | `becca1e294da1447a40bdd5feaeb14d34041ca3986aea752aa05676c5e539ffc` |
 | WASM SHA-256 | `8000e4ce320b7994dca6bcd58be0c862144c7b805576504e523a420439da658b` · @rhwp/core 0.8.6 유지 |
 
-근거는 `outputs/f3-b2-mixed-046-20261023/`의 `package-guard/`, `source-tests-guard.log`, `archive-guard.json`과 `unchanged-clients-ci-audit.json`에 보관한다. 실제 설치 트리와 이전 0.2.45 ZIP의 불변을 확인했으며 computer-use는 **0회**다. 네이티브 검사는 신뢰한 합성 문서에만 사용한 외부 QA이며 제품의 한글 설치 의존성을 추가하지 않는다.
+근거는 `outputs/f3-b2-mixed-046-20261023/`의 `package-guard/`, `source-tests-guard.log`, `archive-guard.json`, `final-clients-ci-audit.json`, `ci-verification.json`과 각 CI 결과에 보관한다. 실제 설치 트리와 이전 0.2.45 ZIP의 불변을 확인했으며 computer-use는 **0회**다. 네이티브 검사는 신뢰한 합성 문서에만 사용한 외부 QA이며 제품의 한글 설치 의존성을 추가하지 않는다.
