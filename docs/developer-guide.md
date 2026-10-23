@@ -4,7 +4,7 @@
 
 [프로젝트 개요](../README.md) · [문서 인덱스](README.md) · [아키텍처](architecture.md)
 
-소스를 변경하거나 배포 패키지를 생성할 때 필요한 환경과 검사 명령입니다. 현재 소스·검증 패키지는 **로컬 HWP Easy 0.2.42**입니다. 같은 버전의 앱별 패키지는 공통 실행기를 포함하며 실제 설치 버전은 [프로젝트 상태](project-status.md)에서 구분합니다. 파일 편집 절차는 [사용 가이드](quick-start.md), 실제 설치·호출 결과는 [프로젝트 상태](project-status.md)에 정리합니다.
+소스를 변경하거나 배포 패키지를 생성할 때 필요한 환경과 검사 명령입니다. 현재 소스·검증 패키지는 **로컬 HWP Easy 0.2.43**입니다. 같은 버전의 앱별 패키지는 공통 실행기를 포함하며 실제 설치 버전은 [프로젝트 상태](project-status.md)에서 구분합니다. 파일 편집 절차는 [사용 가이드](quick-start.md), 실제 설치·호출 결과는 [프로젝트 상태](project-status.md)에 정리합니다.
 
 ## 환경과 구성
 
@@ -93,9 +93,9 @@ python scripts/archive_agent_skills.py
 
 | 배포 대상 | 생성 ZIP |
 | --- | --- |
-| Codex | `outputs/plugin-package/hwp-easy-0.2.42.zip` |
-| Claude Code | `outputs/agent-packages/hwp-easy-claude-code-0.2.42.zip` |
-| Cursor | `outputs/agent-packages/hwp-easy-cursor-0.2.42.zip` |
+| Codex | `outputs/plugin-package/hwp-easy-0.2.43.zip` |
+| Claude Code | `outputs/agent-packages/hwp-easy-claude-code-0.2.43.zip` |
+| Cursor | `outputs/agent-packages/hwp-easy-cursor-0.2.43.zip` |
 
 패키지 생성은 앱 설치나 공개 게시를 수행하지 않습니다. Claude Code·Cursor의 설치 검사와 격리된 폴더에 설치한 실행기의 검증은 다음으로 재현합니다.
 
@@ -120,7 +120,7 @@ node scripts/install_agent_skill.mjs --client cursor --package outputs/agent-pac
 OpenAI 포털의 기존 MCP 등록은 서버 없는 패키지로 변경할 수 없어, 로컬판에는 별도 식별자 `hwp-easy-local`을 사용합니다. 다음 명령은 검증한 ZIP에서 등록 이름·호출 안내·표시 필드만 조정하고 모든 실행 자원의 바이트 일치를 검사합니다. 업로드·설치·심사 제출을 수행하지 않습니다.
 
 ```bash
-python scripts/package_directory_plugin.py outputs/plugin-package/hwp-easy-0.2.42.zip outputs/directory-package
+python scripts/package_directory_plugin.py outputs/plugin-package/hwp-easy-0.2.43.zip outputs/directory-package
 ```
 
 포털 관측과 남은 차단 항목은 [로컬 디렉터리 등록 기록](local-directory-submission.md)에 정리합니다.
@@ -242,3 +242,7 @@ python scripts/check-local-table-sync.py <새-출력-폴더>
 ```
 
 신뢰한 공개 복사본의 선택적 Windows QA는 `render-local-table-reflow-native.py`, Pillow 환경의 `check-local-table-metrics-native.py`를 사용한다. 공개 원본의 꼬리 본문을 가짜 시험 표식으로 바꾸지 않고 `tail_labels:[]`와 실제 셀 프레임·원래 글 픽셀/커서 줄을 대조한다. 전체 `all` CI는 검사 파일/표 패키지 횟수를 보존하며 부동 사례는 기존 부동 작업, 높이 축소는 문자 지표 작업에 나눠 18개 실행과 시간 제한을 유지한다. [마감 결과/재현](f2-closure-0.2.42.md) · [지원 범위](f2-support-0.2.42.md)
+
+### 일회용 렌더 뷰 검증
+
+`node --test tests/test_local_render_view.mjs`, `node scripts/check-local-render-view.mjs <새-출력-폴더>`, `python scripts/check-local-render-view.py <새-출력-폴더>`로 보정 범위·실제 충돌 보존·원본/이력 무변경·배포 번들의 같은 파일 저장/복구·썸네일/SVG 일치를 확인한다. 렌더 뷰는 내보내기·저장·편집 대상 선택에 재사용하지 않는다. 신뢰한 합성 출력의 네이티브 QA는 `render-local-table-reflow-native.py` 다음 `check-local-table-floating-native.py`를 사용한다. 기존 전체 CI 18개 작업 중 복잡한 개체 작업에 새 검사만 더한다. [0.2.43 기록](local-release-0.2.43.md)

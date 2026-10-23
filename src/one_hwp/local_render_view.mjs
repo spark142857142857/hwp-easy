@@ -1,0 +1,69 @@
+/** Disposable render-only adaptation for WASM's collapsed empty float anchors.
+ * Never pass this document to editing, export, target selection or saving.
+ */
+import {readHwp} from '../../probes/sites-runtime/guard/container.mjs';
+import {parseRecords} from '../../probes/sites-runtime/guard/records.mjs';
+import {fail,view} from './local_complex_records.mjs';
+import {validObjectHeader,objectFlow} from './local_flow_records.mjs';
+import {createEngineApi} from './rhwp_api.mjs';
+
+export function adaptEmptyFloatingAnchors(document,bytes){
+ const raw=readHwp(bytes),shapes=[...parseRecords(raw.streams.get('DocInfo'))].filter(r=>r.tag===25),anchors=[],unadapted=[],pictures=[];
+ for(const [name,stream] of raw.streams){
+  if(!/^BodyText\/Section\d+$/.test(name))continue;const section=Number(name.slice(16)),rs=[...parseRecords(stream)],heads=rs.map((r,i)=>[r,i]).filter(([r])=>r.tag===66&&r.level===0),pages=rs.filter(r=>r.tag===73),columns=rs.filter(r=>r.tag===71&&Buffer.from(r.payload.subarray(0,4)).toString()==='dloc');
+  for(const [[head,at],paragraph] of heads.map((v,i)=>[v,i])){
+   const end=heads[paragraph+1]?.[1]??rs.length,direct=rs.slice(at+1,end).filter(r=>r.level===1),texts=direct.filter(r=>r.tag===67),objects=direct.filter(r=>r.tag===71&&Buffer.from(r.payload.subarray(0,4)).toString()===' osg'),shape=shapes[head.payload.length>=10?view(head.payload).getUint16(8,true):-1]?.payload;
+   if(texts.length!==1||objects.length!==1||!shape||![46,54,58].includes(shape.length))continue;
+   const text=texts[0].payload,p=view(shape),flags=p.getUint32(0,true),modern=shape.length>=54&&p.getInt32(50,true)>0,spacing=modern?p.getInt32(50,true):p.getInt32(24,true),type=modern?p.getUint32(46,true)&31:flags&3;
+   // Exactly one extended drawing anchor and its terminator, no actual text,
+   // fields or extra controls. A visible/mixed host is never normalized.
+   if(text.length!==18||view(text).getUint16(0,true)!==11||view(text).getUint16(14,true)!==11||view(text).getUint16(16,true)!==13||Buffer.from(text.subarray(2,6)).toString()!==' osg'||type!==1||spacing<=0)continue;
+   const identity={section,paragraph};const reject=reason=>unadapted.push({...identity,reason});
+   if(head.payload.length<22||(view(head.payload).getUint32(0,true)&0x7fffffff)!==9||head.payload[11]||direct.filter(r=>r.tag===71).length!==1||!validObjectHeader(objects[0].payload)){reject('anchor_structure');continue;}
+   if(pages.length!==1||pages[0].payload.length!==40||columns.length!==1||columns[0].payload.length<8||((view(columns[0].payload).getUint16(4,true)>>>2)&255)!==1){reject('page_profile');continue;}
+   const page=view(pages[0].payload),o=view(objects[0].payload),flow=objectFlow(objects[0]),height=page.getUint32(4,true)-[16,20,24,28].reduce((n,i)=>n+page.getUint32(i,true),0),width=page.getUint32(0,true)-[8,12,32].reduce((n,i)=>n+page.getUint32(i,true),0),reserve=spacing/2;
+   const mask=1|4|(3<<3)|(7<<5)|(3<<8)|(7<<10)|8192|16384|(7<<21)|(3<<24),canonical=(2<<3)|(2<<8)|8192|(3<<21)|(1<<24);
+   if(page.getUint32(36,true)!==0||page.getUint32(0,true)>page.getUint32(4,true)||(o.getUint32(4,true)&mask)!==canonical||flow.widthRelTo!==4||flow.heightRelTo!==2||['marginLeft','marginRight','marginTop','marginBottom'].some(k=>flow[k])||o.getInt32(8,true)!==0||o.getInt32(12,true)<flow.marginLeft||o.getInt32(12,true)+o.getUint32(16,true)+flow.marginRight>width||reserve<o.getUint32(20,true)+flow.marginTop+flow.marginBottom+2000||reserve>height-3600){reject('floating_profile');continue;}
+   if((flags&((1<<17)|(1<<18)|(1<<22)))||[4,8,12,16,20].some(i=>p.getInt32(i,true)!==0)||modern&&((flags&3)!==1||p.getInt32(24,true)!==spacing)){reject('paragraph_profile');continue;}
+   const child=rs[rs.indexOf(objects[0])+1];
+   if(child?.tag!==76||!['cip$','cer$'].includes(Buffer.from(child.payload.subarray(0,4)).toString())||child.payload.length<42||view(child.payload).getInt16(40,true)!==0){reject('drawing_profile');continue;}
+   if(document.getParagraphCount(section)!==heads.length||document.getTextRange(section,paragraph,0,document.getParagraphLength(section,paragraph))!==''){reject('engine_identity');continue;}
+   const anchor={...identity,reserved_height:reserve};anchors.push(anchor);
+   if(Buffer.from(child.payload.subarray(0,4)).toString()==='cip$')pictures.push({anchor,width:o.getUint32(16,true)/75,height:o.getUint32(20,true)/75});
+  }
+ }
+ if(anchors.length+unadapted.length>128)fail('RENDER_VIEW_ANCHOR_LIMIT');
+ // An ordinary space has no visible ink. It makes the existing fixed line
+ // height effective in this private WASM instance; source bytes stay untouched.
+ for(const a of anchors)document.insertText(a.section,a.paragraph,0,' ');
+ // The pinned renderer can also position a picture after a text box at the
+ // preceding anchor's mid-line. On this exact paragraph-relative profile its
+ // own invisible line is the unambiguous reference. Correct only this private
+ // picture offset; do not infer an absolute/native page origin from the line.
+ const observe=()=>{
+  const count=document.pageCount();if(count>32)fail('RENDERED_LAYOUT_PAGE_LIMIT');const runs=[],controls=[];let total=0;
+  for(let page=0;page<count;page++){
+   const r=JSON.parse(document.getPageTextLayout(page)).runs,c=JSON.parse(document.getPageControlLayout(page)).controls;total+=r.length+c.length;if(total>20000)fail('RENDERED_LAYOUT_ITEM_LIMIT');
+   runs.push(...r.map(v=>({...v,page})));controls.push(...c.map(v=>({...v,page})));
+  }return {runs,controls};
+ };
+ if(pictures.length){
+  const observed=observe(),adjusted=[];
+  for(const {anchor:a,width,height} of pictures){
+   const lines=observed.runs.filter(r=>r.secIdx===a.section&&r.paraIdx===a.paragraph&&r.parentParaIdx==null&&r.cellIdx==null&&r.text===' '&&r.charStart===0),objects=observed.controls.filter(c=>c.type==='image'&&JSON.stringify(c.stableIndex)===JSON.stringify([a.section,a.paragraph,0]));
+   if(lines.length!==1||objects.length!==1||lines[0].page!==objects[0].page||Math.abs(objects[0].w-width)>.5||Math.abs(objects[0].h-height)>.5){unadapted.push({section:a.section,paragraph:a.paragraph,reason:'picture_render_identity'});continue;}
+   const delta=lines[0].y-objects[0].y;if(!Number.isFinite(delta)||Math.abs(delta)>a.reserved_height/75){unadapted.push({section:a.section,paragraph:a.paragraph,reason:'picture_render_origin'});continue;}
+   if(Math.abs(delta)>.5){const offset=Math.round(delta*75),result=JSON.parse(document.setPictureProperties(a.section,a.paragraph,0,JSON.stringify({vertOffset:offset})));if(result.ok!==true)fail('RENDER_VIEW_ANCHOR_ORIGIN_UNVERIFIED');a.picture_origin_correction=offset;adjusted.push(a);}
+  }
+  if(adjusted.length){const checked=observe();for(const a of adjusted){const line=checked.runs.find(r=>r.secIdx===a.section&&r.paraIdx===a.paragraph&&r.parentParaIdx==null&&r.cellIdx==null&&r.text===' '&&r.charStart===0),object=checked.controls.find(c=>c.type==='image'&&JSON.stringify(c.stableIndex)===JSON.stringify([a.section,a.paragraph,0]));if(!line||!object||line.page!==object.page||Math.abs(line.y-object.y)>.5)fail('RENDER_VIEW_ANCHOR_ORIGIN_UNVERIFIED');}}
+ }
+ return {anchors,unadapted};
+}
+
+export function renderLocalPreview(HwpDocument,bytes,page){
+ const api=createEngineApi(HwpDocument),document=api.openDocument(bytes);
+ try{
+  const view=adaptEmptyFloatingAnchors(document,bytes),preview=api.previewDocument(document,page);
+  return {...preview,render_adaptations:view.anchors,render_unadapted_anchors:view.unadapted,render_source:'disposable_view_of_current_bytes',...(view.anchors.length?{warnings:[...preview.warnings,'Empty floating-anchor fixed line heights are materialized only in the disposable render view.']}:{})};
+ }finally{document.free();}
+}

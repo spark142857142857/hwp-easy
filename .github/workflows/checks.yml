@@ -178,9 +178,13 @@ jobs:
       - name: Install independent OLE reader
         run: python -m pip install olefile==0.47
       - name: Node Complex source regressions
-        run: node --test --test-concurrency=2 tests/test_local_complex.mjs tests/test_local_complex_format.mjs tests/test_local_partial_read.mjs tests/test_local_complex_mapping.mjs tests/test_local_complex_picture.mjs tests/test_local_complex_table.mjs tests/test_local_complex_merged.mjs tests/test_local_complex_field.mjs tests/test_local_complex_group.mjs tests/test_local_freedom.mjs tests/test_local_reflow.mjs tests/test_local_placement.mjs tests/test_local_public_regressions.mjs tests/test_local_review_fixes.mjs tests/test_local_text_boxes.mjs tests/test_local_cell_text_box_layout.mjs tests/test_local_floating_areas.mjs tests/test_local_nested_floating.mjs tests/test_local_inline_cell_flow.mjs tests/test_local_cell_images.mjs tests/test_local_floating_transfer.mjs tests/test_local_preview.mjs
+        run: node --test --test-concurrency=2 tests/test_local_complex.mjs tests/test_local_complex_format.mjs tests/test_local_partial_read.mjs tests/test_local_complex_mapping.mjs tests/test_local_complex_picture.mjs tests/test_local_complex_table.mjs tests/test_local_complex_merged.mjs tests/test_local_complex_field.mjs tests/test_local_complex_group.mjs tests/test_local_freedom.mjs tests/test_local_reflow.mjs tests/test_local_placement.mjs tests/test_local_public_regressions.mjs tests/test_local_review_fixes.mjs tests/test_local_text_boxes.mjs tests/test_local_cell_text_box_layout.mjs tests/test_local_floating_areas.mjs tests/test_local_nested_floating.mjs tests/test_local_inline_cell_flow.mjs tests/test_local_cell_images.mjs tests/test_local_floating_transfer.mjs tests/test_local_preview.mjs tests/test_local_render_view.mjs
       - name: Node package local plugin
         run: node scripts/package_local_plugin.mjs
+      - name: Node disposable render view
+        run: node scripts/check-local-render-view.mjs
+      - name: Python disposable render view
+        run: python scripts/check-local-render-view.py
       - name: Node complex
         run: node scripts/check-local-complex.mjs
       - name: Python complex

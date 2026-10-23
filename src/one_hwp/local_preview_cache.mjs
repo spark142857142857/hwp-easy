@@ -7,6 +7,7 @@ import {Resvg,initWasm} from '@resvg/resvg-wasm';
 import {readHwp} from '../../probes/sites-runtime/guard/container.mjs';
 import {GuardError,parseRecords} from '../../probes/sites-runtime/guard/records.mjs';
 import {patchLocalPackedStreams} from './local_container_write.mjs';
+import {renderLocalPreview} from './local_render_view.mjs';
 
 let initialized;
 const fail=code=>{throw new GuardError(code);};
@@ -58,8 +59,7 @@ export function localPreviewText(bytes){
 }
 export async function renderPreviewWorker(bytes){
  initSync({module:resource('rhwp_bg.wasm','../../node_modules/@rhwp/core/rhwp_bg.wasm')});
- const doc=new HwpDocument(bytes);let svg;try{svg=doc.renderPageSvg(0);}finally{doc.free();}
- const rendered=await rasterizeLocalSvg(svg);return {ok:true,image:Buffer.from(rendered.bytes).toString('base64'),width:rendered.width,height:rendered.height};
+ const preview=renderLocalPreview(HwpDocument,bytes,0),rendered=await rasterizeLocalSvg(preview.svg);return {ok:true,image:Buffer.from(rendered.bytes).toString('base64'),width:rendered.width,height:rendered.height,render_adaptations:preview.render_adaptations,render_unadapted_anchors:preview.render_unadapted_anchors};
 }
 export async function refreshLocalPreview(_HwpDocument,bytes){
  const text=localPreviewText(bytes);
@@ -67,10 +67,10 @@ export async function refreshLocalPreview(_HwpDocument,bytes){
  // derived image work; a timeout cannot hang an otherwise verified file edit.
  const child=spawnSync(process.execPath,['--max-old-space-size=256',fileURLToPath(import.meta.url),'--preview-worker'],{input:Buffer.from(bytes),encoding:'utf8',timeout:5000,maxBuffer:512*1024,windowsHide:true});
  let rendered;
- if(child.status===0&&!child.error){try{const value=JSON.parse(child.stdout);if(value.ok===true)rendered={bytes:Buffer.from(value.image,'base64'),width:value.width,height:value.height};}catch{}}
+ if(child.status===0&&!child.error){try{const value=JSON.parse(child.stdout);if(value.ok===true)rendered={bytes:Buffer.from(value.image,'base64'),width:value.width,height:value.height,render_adaptations:value.render_adaptations,render_unadapted_anchors:value.render_unadapted_anchors};}catch{}}
  const changes=new Map([['PrvText',Buffer.from(text,'utf16le')],['PrvImage',rendered?.bytes??Buffer.alloc(0)]]);
  const result=patchLocalPackedStreams(bytes,changes);
- return {bytes:result,preview_cache:{status:rendered?'updated':'text_updated_image_unavailable',text_excerpt:true,text_units:text.length,image_format:rendered?'BMP':null,image_width:rendered?.width??null,image_height:rendered?.height??null,...(!rendered?{image_failure:child.error?.code==='ETIMEDOUT'?'RENDER_TIMEOUT':'RENDER_FAILED',stale_image_cleared:true}:{}),page:0,renderer:'rhwp SVG + resvg WASM',fallback_font:'NanumGothic',font_substitution_possible:true,layout_verified:false,document_streams_preserved:true}};
+ return {bytes:result,preview_cache:{status:rendered?'updated':'text_updated_image_unavailable',text_excerpt:true,text_units:text.length,image_format:rendered?'BMP':null,image_width:rendered?.width??null,image_height:rendered?.height??null,render_adaptations:rendered?.render_adaptations??[],render_unadapted_anchors:rendered?.render_unadapted_anchors??[],...(!rendered?{image_failure:child.error?.code==='ETIMEDOUT'?'RENDER_TIMEOUT':'RENDER_FAILED',stale_image_cleared:true}:{}),page:0,renderer:'rhwp SVG + resvg WASM',fallback_font:'NanumGothic',font_substitution_possible:true,layout_verified:false,document_streams_preserved:true}};
 }
 if(process.argv[1]&&/[\\/]local_preview_cache\.mjs$/.test(process.argv[1])&&fileURLToPath(import.meta.url)===process.argv[1]&&process.argv[2]==='--preview-worker'){
  console.error=()=>{};

@@ -19,6 +19,7 @@ import {createLocalDocumentClass} from './local_container_write.mjs';
 import {analyzeLocalLayout,newLayoutIssues} from './local_layout.mjs';
 import {standardBlockId} from './local_complex_table.mjs';
 import {analyzeRenderedLayout} from './local_rendered_layout.mjs';
+import {renderLocalPreview} from './local_render_view.mjs';
 import {sectionPages} from './local_page_state.mjs';
 import {publicTextBoxes} from './local_text_boxes.mjs';
 import {tableReflowContexts,tablePaginationEnabled} from './local_table_reflow.mjs';
@@ -148,7 +149,7 @@ export async function runLocal(request) {
     }catch(error){if(!(error instanceof GuardError))throw error;}
     return {...result,table_reflow,pictures,picture_profile_supported,source:snapshot.source,persistence:'local_file',saved:false};
   }
-  if(request.action==='preview')return {...document.preview({expected_sha256:version,page:request.page??0}),preview_source:'current_document_render',embedded_preview_cache:'not_used',source:snapshot.source,saved:false};
+  if(request.action==='preview')return {...renderLocalPreview(HwpDocument,snapshot.bytes,request.page??0),source_sha256:version,preview_source:'current_document_render',embedded_preview_cache:'not_used',source:snapshot.source,saved:false};
   if(request.action==='restore') {
     const recovery=restoreLocal(snapshot,request.backup_id);
     await engine.open(recovery.bytes);
