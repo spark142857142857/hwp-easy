@@ -6,6 +6,23 @@ import {parseRecords} from '../../probes/sites-runtime/guard/records.mjs';
 import {fail,view} from './local_complex_records.mjs';
 import {validObjectHeader,objectFlow} from './local_flow_records.mjs';
 import {createEngineApi} from './rhwp_api.mjs';
+import {prepareNestedRenderInput} from './local_nested_render_view.mjs';
+
+export function openLocalRenderView(HwpDocument,bytes){
+ const nested=prepareNestedRenderInput(HwpDocument,bytes);let document=new HwpDocument(nested.bytes);
+ try{
+  if(document.pageCount()>32)fail('RENDERED_LAYOUT_PAGE_LIMIT');
+  if(nested.tables.length){
+   const count=document.pageCount(),controls=[];
+   for(let page=0;page<Math.min(count,33);page++)controls.push(...JSON.parse(document.getPageControlLayout(page)).controls.filter(c=>c.type==='table').map(c=>({...c,page})));
+   // A split/overflowing tree has ambiguous paragraph origins; retain the raw
+   // view and its uncertainty instead of guessing a per-page projection.
+   const roots=controls.filter(c=>c.stableIndex?.length===3),root=roots[0],info=root&&JSON.parse(document.getPageInfo(root.page));
+   if(count>32||roots.length!==1||controls.length!==nested.tables.length+1||!root||root.x<info.bodyLeft-.5||root.x+root.w>info.bodyRight+.5||root.y<info.marginTop+info.marginHeader-.5||root.y+root.h>info.height-info.marginBottom-info.marginFooter+.5){const original=new HwpDocument(bytes);document.free();document=original;nested.unadapted.push({reason:'nested_render_pagination'});nested.tables=[];nested.remap=r=>r;}
+  }
+  return {document,...adaptEmptyFloatingAnchors(document,bytes),nested_tables:nested.tables,unadapted_tables:nested.unadapted,remap:nested.remap};
+ }catch(e){document.free();throw e;}
+}
 
 export function adaptEmptyFloatingAnchors(document,bytes){
  const raw=readHwp(bytes),shapes=[...parseRecords(raw.streams.get('DocInfo'))].filter(r=>r.tag===25),anchors=[],unadapted=[],pictures=[];
@@ -61,9 +78,9 @@ export function adaptEmptyFloatingAnchors(document,bytes){
 }
 
 export function renderLocalPreview(HwpDocument,bytes,page){
- const api=createEngineApi(HwpDocument),document=api.openDocument(bytes);
+ const api=createEngineApi(HwpDocument),view=openLocalRenderView(HwpDocument,bytes),document=view.document;
  try{
-  const view=adaptEmptyFloatingAnchors(document,bytes),preview=api.previewDocument(document,page);
-  return {...preview,render_adaptations:view.anchors,render_unadapted_anchors:view.unadapted,render_source:'disposable_view_of_current_bytes',...(view.anchors.length?{warnings:[...preview.warnings,'Empty floating-anchor fixed line heights are materialized only in the disposable render view.']}:{})};
+  const preview=api.previewDocument(document,page);
+  return {...preview,render_adaptations:view.anchors,render_unadapted_anchors:view.unadapted,render_nested_tables:view.nested_tables,render_unadapted_tables:view.unadapted_tables,render_source:'disposable_view_of_current_bytes',warnings:[...preview.warnings,...(view.anchors.length?['Empty floating-anchor fixed line heights are materialized only in the disposable render view.']:[]),...(view.nested_tables.length?['Canonical nested-table origins and ancestor alignment are adapted only in the disposable render view; font wrapping and native pagination remain unverified.']:[])]};
  }finally{document.free();}
 }

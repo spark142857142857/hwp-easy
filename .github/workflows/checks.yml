@@ -178,13 +178,17 @@ jobs:
       - name: Install independent OLE reader
         run: python -m pip install olefile==0.47
       - name: Node Complex source regressions
-        run: node --test --test-concurrency=2 tests/test_local_complex.mjs tests/test_local_complex_format.mjs tests/test_local_partial_read.mjs tests/test_local_complex_mapping.mjs tests/test_local_complex_picture.mjs tests/test_local_complex_table.mjs tests/test_local_complex_merged.mjs tests/test_local_complex_field.mjs tests/test_local_complex_group.mjs tests/test_local_freedom.mjs tests/test_local_reflow.mjs tests/test_local_placement.mjs tests/test_local_public_regressions.mjs tests/test_local_review_fixes.mjs tests/test_local_text_boxes.mjs tests/test_local_cell_text_box_layout.mjs tests/test_local_floating_areas.mjs tests/test_local_nested_floating.mjs tests/test_local_inline_cell_flow.mjs tests/test_local_cell_images.mjs tests/test_local_floating_transfer.mjs tests/test_local_preview.mjs tests/test_local_render_view.mjs
+        run: node --test --test-concurrency=2 tests/test_local_complex.mjs tests/test_local_complex_format.mjs tests/test_local_partial_read.mjs tests/test_local_complex_mapping.mjs tests/test_local_complex_picture.mjs tests/test_local_complex_table.mjs tests/test_local_complex_merged.mjs tests/test_local_complex_field.mjs tests/test_local_complex_group.mjs tests/test_local_freedom.mjs tests/test_local_reflow.mjs tests/test_local_placement.mjs tests/test_local_public_regressions.mjs tests/test_local_review_fixes.mjs tests/test_local_text_boxes.mjs tests/test_local_cell_text_box_layout.mjs tests/test_local_floating_areas.mjs tests/test_local_nested_floating.mjs tests/test_local_inline_cell_flow.mjs tests/test_local_cell_images.mjs tests/test_local_floating_transfer.mjs tests/test_local_preview.mjs tests/test_local_render_view.mjs tests/test_local_nested_render_view.mjs
       - name: Node package local plugin
         run: node scripts/package_local_plugin.mjs
       - name: Node disposable render view
         run: node scripts/check-local-render-view.mjs
       - name: Python disposable render view
         run: python scripts/check-local-render-view.py
+      - name: Node nested render origins and alignment
+        run: node scripts/check-local-nested-render.mjs
+      - name: Python nested render preservation
+        run: python scripts/check-local-nested-render.py
       - name: Node complex
         run: node scripts/check-local-complex.mjs
       - name: Python complex
@@ -257,12 +261,6 @@ jobs:
       - name: Python floating areas
         if: ${{ inputs.scope == 'all' }}
         run: python scripts/check-local-floating-areas.py outputs/local-nested-floating
-      - name: Node cell images
-        if: ${{ inputs.scope == 'all' }}
-        run: node scripts/check-local-cell-images.mjs
-      - name: Python floating areas
-        if: ${{ inputs.scope == 'all' }}
-        run: python scripts/check-local-floating-areas.py outputs/local-cell-images
       - name: Node floating transfer
         if: ${{ inputs.scope == 'all' }}
         run: node scripts/check-local-floating-transfer.mjs
@@ -328,6 +326,14 @@ jobs:
         run: node --test tests/test_local_table_reflow.mjs tests/test_local_table_hosts.mjs
       - name: Node package local plugin
         run: node scripts/package_local_plugin.mjs
+      # Move this existing coverage from the near-limit floating job; keep
+      # the same job count, request bounds and manual verification cadence.
+      - name: Node cell images
+        if: ${{ inputs.scope == 'all' }}
+        run: node scripts/check-local-cell-images.mjs
+      - name: Python floating areas
+        if: ${{ inputs.scope == 'all' }}
+        run: python scripts/check-local-floating-areas.py outputs/local-cell-images
       - name: Node check local table reflow
         run: node scripts/check-local-table-reflow.mjs
       - name: Python check local table reflow
