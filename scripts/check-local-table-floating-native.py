@@ -50,15 +50,17 @@ for c in cases:
      if (page,bounds) not in pictures:pictures.append((page,bounds));page_images.append(bounds)
   for a in page_frames:
    for b in page_images:assert a[3]<=b[1] or b[3]<=a[1] or a[2]<=b[0] or b[2]<=a[0],(name,'picture/box overlap')
-  ys=[]
+  ys=[];body_ys=[]
   for y in range(marked.height):
    for x in range(marked.width):
     key=palette.get(marked.getpixel((x,y)))
     if key is None:continue
     assert max(original.getpixel((x,y)))<240,(name,'QA changed original glyph position');locations[key].append((page,y))
     if key=='ANSWER':assert y in table_rows;ys.append(y)
+    if key=='BODY':assert y not in table_rows;body_ys.append(y)
     if key=='BOX':assert any(a[0]<x<a[2] and a[1]<y<a[3] for a in page_frames),(name,'hidden box text')
     if key in ['TAIL','END']:assert y not in table_rows and all(not (a[0]-2<=x<a[2]+2 and a[1]-2<=y<a[3]+2) for a in page_frames+page_images),(name,'hidden following body')
+  if f.get('body_labels'):assert len(bands(set(body_ys),8))==sum(v['page']==page+1 for v in after['body_positions']),(name,'hidden preceding body')
   visible+=len(bands(set(ys),8));assert len(bands(set(ys),8))==sum(m['page']==page+1 for m in after['markers'][:-2])
   if f.get('footer'):
    prior=Image.open(out/f'{name}-before-0.bmp').convert('RGB');region=(0,round(body_bottom)+8,original.width,original.height);assert ImageChops.difference(prior.crop(region),original.crop(region)).getbbox() is None,(name,'footer changed')
@@ -67,6 +69,8 @@ for c in cases:
  ordered=[(page,bounds[1],bounds[3]) for kind,(page,bounds) in sequence]
  for a,b in zip(ordered,ordered[1:]):assert a[0]<b[0] or a[0]==b[0] and a[2]<b[1]
  last=max((page,bounds[3]) for page,bounds in frames+pictures);assert last<min(locations['TAIL']);assert max(locations['TAIL'])<min(locations['END']);assert max(locations['ANSWER'])<min((page,bounds[1]) for page,bounds in frames+pictures)
+ if f.get('samePage'):assert after['pages']==1 and all(p==0 for p,bounds in frames+pictures),(name,'unnecessary page break')
+ if f.get('migrate'):assert before['pages']>after['pages']==1,(name,'managed break did not reduce pages')
  checks.append(dict(case=name,pages=after['pages'],visible_answer_lines=visible,picture_bounds=pictures,text_box_frames=frames,following_body_visible=True,footer_preserved=bool(f.get('footer'))))
 summary=dict(status='PASS',documents=len(results),pages=sum(r['pages'] for r in results.values()),restored_pages_pixel_exact=restored,native_text_exact=True,input_sha256_verified=True,checks=checks,layout_verified=False)
 (out/'summary.json').write_text(json.dumps(summary,indent=2)+'\n',encoding='utf-8');print(json.dumps(summary))

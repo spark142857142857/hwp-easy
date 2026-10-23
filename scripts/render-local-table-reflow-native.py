@@ -21,7 +21,10 @@ with HancomBackend(visible=False) as backend:
        if not ch.isspace() and not unicodedata.category(ch).startswith('M'):
         assert app.SetPos(pos[0],pos[1],start+offset);indicator=app.KeyIndicator();assert indicator[0];answer_positions.append(dict(page=indicator[3],line=indicator[5]))
        offset+=len(ch.encode('utf-16le'))//2
-   native_fields=[];field_lines=[]
+   native_fields=[];field_lines=[];body_positions=[]
+   if state=='after':
+    for label in c['fixture'].get('body_labels',[]):
+     app.HAction.Run('MoveDocBegin');ps=app.HParameterSet.HFindReplace;app.HAction.GetDefault('RepeatFind',ps.HSet);ps.FindString=label;ps.IgnoreMessage=1;assert app.HAction.Execute('RepeatFind',ps.HSet);indicator=app.KeyIndicator();body_positions.append(dict(text=label,page=indicator[3],line=indicator[5]))
    if c['fixture'].get('host_controls'):
     model=c['after' if state=='after' else 'before']
     for field in model['fields']:
@@ -49,5 +52,5 @@ with HancomBackend(visible=False) as backend:
     app.HAction.Run('MoveDocEnd')
     assert app.PageCount==pages,(c['name'],'color-only QA changed pagination')
     for page in range(pages):assert app.CreatePageImage(str(out/(source.stem+'-marked-'+str(page)+'.bmp')),page,96,24,'bmp')
-   app.Clear(1);assert source.read_bytes()==prior;results.append(dict(case=source.stem,opened=True,pages=pages,text=text,markers=markers,answer_positions=answer_positions,native_fields=native_fields,field_lines=field_lines,input_sha256=hashlib.sha256(prior).hexdigest(),source_unchanged=True))
+   app.Clear(1);assert source.read_bytes()==prior;results.append(dict(case=source.stem,opened=True,pages=pages,text=text,markers=markers,answer_positions=answer_positions,native_fields=native_fields,field_lines=field_lines,body_positions=body_positions,input_sha256=hashlib.sha256(prior).hexdigest(),source_unchanged=True))
 (out/'results.json').write_text(json.dumps(results,indent=2,ensure_ascii=False)+'\n',encoding='utf-8');print(json.dumps(dict(documents=len(results),pages=sum(r['pages'] for r in results),all_opened=True,all_markers_located=True)))

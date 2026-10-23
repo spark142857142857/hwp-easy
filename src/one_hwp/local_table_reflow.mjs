@@ -9,7 +9,7 @@ import {createNaturalTextMeasurer} from './local_rendered_layout.mjs';
 import {tableParagraphHeight as paragraphHeight} from './local_table_text_metrics.mjs';
 import {tableHostParagraphHeight,inlineTableHostObject} from './local_table_host_controls.mjs';
 import {GuardError} from '../../probes/sites-runtime/guard/records.mjs';
-import {flowTableFloating} from './local_table_floating.mjs';
+import {flowTableFloating,bodyFloatingObjects} from './local_table_floating.mjs';
 import {hostRoots,rootForest,normalizeTableHosts} from './local_table_hosts.mjs';
 import {digest as digestForHost} from './local_file.mjs';
 
@@ -35,8 +35,9 @@ export function tablePaginationEnabled(state,t){
  if(!p||!tableHeader(p))return false;const f=objectFlow(rs[t.record_index]),v=view(p),flags=view(rs[t.table_record].payload).getUint32(0,true);
  return !f.treatAsChar&&f.textWrap===0&&[0,1].includes(f.textFlow)&&f.vertRelTo===2&&f.horzRelTo===2&&!f.vertAlign&&!f.horzAlign&&!(v.getUint32(4,true)&(1<<20))&&!prevention(p)&&(flags&3)===2&&(!t.cell_path.length||Boolean(parent&&tablePaginationEnabled(state,parent)));
 }
-function reflowSingle(HwpDocument,source,version,op,blockFlow=false,selectedRoots=[]){
- if(op.type!=='reflow_table'||!equal(Object.keys(op).sort(),['type','target_id','expected_old','expected_tables'].sort()))fail('INVALID_OPERATION');
+function reflowSingle(HwpDocument,source,version,op,blockFlow=false,selectedRoots=[],deferFloating=false){
+ if(op.type!=='reflow_table'||!equal(Object.keys(op).sort(),['type','target_id','expected_old','expected_tables',...(Object.hasOwn(op,'floating_page_breaks')?['floating_page_breaks']:[])].sort()))fail('INVALID_OPERATION');
+ if(Object.hasOwn(op,'floating_page_breaks')&&!['preserve','recompute_managed'].includes(op.floating_page_breaks))fail('INVALID_OPERATION');
  if(typeof op.target_id!=='string'||!op.target_id.startsWith(`hwp5:${version}:`))fail('VERSION_CONFLICT');const encoded=op.target_id.slice(70),id=Buffer.from(encoded,'base64url').toString();if(!id||Buffer.from(id).toString('base64url')!==encoded)fail('INVALID_TARGET');
  const state=inspectLocalComplex(HwpDocument,source,{includeDocumentInfo:false}),b=state.blocks.find(b=>b.id===id||standardBlockId(b)===id);if(!b?.text_mapping_verified||!b.cell_path.length)fail('TABLE_CELL_REQUIRED');if(b.text!==op.expected_old)fail('EXPECTED_OLD_MISMATCH');
  const root=state.tables.find(t=>!t.cell_path.length&&t.section===b.section&&t.record_index<b.record_index&&t.end>b.record_index);if(!root)fail('TABLE_REFLOW_ROOT_UNVERIFIED');
@@ -54,7 +55,7 @@ function reflowSingle(HwpDocument,source,version,op,blockFlow=false,selectedRoot
  const rootHost=hosts.get(root.id);if(!rootHost?.unit_styles||!Array.isArray(rootHost.character_runs)||rootHost.text.includes('\n')||rootHost.text.length>120||measure(rootHost.text,rootHost.character_runs).reduce((n,w)=>n+w*75,0)>bodyWidth*.9)fail('TABLE_REFLOW_ROOT_PREFIX_UNVERIFIED');
  for(const other of state.tables.filter(t=>t.section===root.section&&!t.cell_path.length&&t!==root))if(!objectFlow(rs[other.record_index]).treatAsChar&&!selectedRoots.includes(other.id)&&!tablePaginationEnabled(state,other))fail('TABLE_REFLOW_OTHER_FLOATING_TABLE_UNSUPPORTED');
  const patch=i=>{if(!patches.has(i))patches.set(i,rs[i].payload.slice());return view(patches.get(i));};
- const floatingFlow=flowTableFloating(state,b.section,bodyWidth,bodyHeight,patch),floating=floatingFlow.objects,floatingIndices=new Set(floating.map(o=>o.record_index));
+ const floatingCandidates=bodyFloatingObjects(state,b.section);
  for(const t of [...tables].reverse()){
   const xs=trackPositions(t,'col');if(xs.at(-1)!==t.properties.tableWidth||t.cells.some(c=>xs[c.col]===null||xs[c.col+c.colSpan]===null||xs[c.col+c.colSpan]-xs[c.col]!==c.width))fail('TABLE_REFLOW_COLUMN_GEOMETRY_UNVERIFIED');
   const host=hosts.get(t.id),h=rs[t.record_index].payload;if(!host?.text_mapping_verified||!tableHeader(h))fail('TABLE_REFLOW_ANCHOR_UNVERIFIED');const old=objectFlow(rs[t.record_index]);if(old.widthRelTo!==4||old.heightRelTo!==2)fail('TABLE_REFLOW_PROFILE_UNSUPPORTED');
@@ -87,7 +88,7 @@ function reflowSingle(HwpDocument,source,version,op,blockFlow=false,selectedRoot
   const height=rows.reduce((a,n)=>a+n,0);if(height>720000||height/bodyHeight>12)fail('TABLE_REFLOW_HEIGHT_LIMIT');heights.set(t.id,height);
   for(const c of t.cells)patch(c.start).setUint32(20,rows.slice(c.row,c.row+c.rowSpan).reduce((n,h)=>n+h,0),true);
   const p=patch(t.record_index),mask=1|4|(3<<3)|(7<<5)|(3<<8)|(7<<10)|(1<<13)|(1<<14)|(1<<20)|(7<<21)|(3<<24);
-  p.setUint32(4,((p.getUint32(4,true)&~mask)|(2<<3)|(2<<8)|8192|((blockFlow||floating.length||old.textFlow===1?1:0)<<24))>>>0,true);p.setInt32(12,0,true);p.setUint32(20,height,true);if(validObjectHeader(h))p.setUint32(40,0,true);
+  p.setUint32(4,((p.getUint32(4,true)&~mask)|(2<<3)|(2<<8)|8192|((blockFlow||floatingCandidates.length||old.textFlow===1?1:0)<<24))>>>0,true);p.setInt32(12,0,true);p.setUint32(20,height,true);if(validObjectHeader(h))p.setUint32(40,0,true);
   const data=patch(t.table_record);data.setUint32(0,(data.getUint32(0,true)&~3)|2,true);
   changes.push({table_id:t.id,stored_height_before:t.properties.tableHeight,stored_height_after:height,rows});
  }
@@ -99,6 +100,8 @@ function reflowSingle(HwpDocument,source,version,op,blockFlow=false,selectedRoot
   if(cell)for(const peer of hostPeers.get(host.id)){if(peer===t)break;const f=objectFlow(rs[peer.record_index]);offset+=heights.get(peer.id)+f.marginTop+f.marginBottom;}
   patch(t.record_index).setInt32(8,offset,true);changes.find(c=>c.table_id===t.id).vertOffset=offset;
  }
+ const flowHeights=new Map(state.tables.filter(t=>!t.cell_path.length&&t.section===b.section&&(heights.has(t.id)||tablePaginationEnabled(state,t))).map(t=>[t.id,heights.get(t.id)??t.properties.tableHeight]));
+ const floatingFlow=deferFloating?{objects:[],docInfo:state.raw.streams.get('DocInfo')}:flowTableFloating(state,b.section,bodyWidth,bodyHeight,patch,flowHeights,measure,paragraphHeight,op.floating_page_breaks==='recompute_managed'),floating=floatingFlow.objects,floatingIndices=new Set((deferFloating?floatingCandidates:floating).map(o=>o.record_index));
  // Verified inline objects occupy separate paragraphs. Independent floating
  // groups/opaque drawings still require a protected fixed region.
  for(const object of [...state.text_boxes,...state.pictures,...state.groups,...state.opaque_drawings]){
@@ -109,19 +112,20 @@ function reflowSingle(HwpDocument,source,version,op,blockFlow=false,selectedRoot
  const changed=[...patches].some(([i,p])=>!equalBytes(rs[i].payload,p));if(!changed)return {bytes:source,content_verified:true,raw_preservation_verified:true,unchanged:true,layout_verified:false};
  const records=invalidateSectionLayout(rs.map((r,i)=>patches.has(i)?{...r,payload:patches.get(i)}:r),state.blocks.filter(b=>b.section===root.section)),bytes=publishVerifiedPatch(source,state,b.section,records,floatingFlow.docInfo),after=inspectLocalComplex(HwpDocument,bytes,{includeDocumentInfo:false,verifyCharacterModel:false});
  if(!equal(state.blocks.map(b=>[b.id,b.text,b.unit_styles]),after.blocks.map(b=>[b.id,b.text,b.unit_styles]))||!equal(state.fields,after.fields)||tables.some(t=>!tablePaginationEnabled(after,after.tables.find(n=>n.id===t.id))))fail('TABLE_REFLOW_PRESERVATION_MISMATCH');
- return {bytes,content_verified:true,raw_preservation_verified:true,raw_preservation_scope:'selected_table_flow_heights_inline_spacing_floating_common_flags_offsets_and_own_host_paragraph_shapes_with_page_isolation; original_definitions_text_character_styles_widths_margins_borders_binary_data_other_controls_and_streams_preserved',flow_changed:true,table_formatting_changed:true,table_reflow:{root_table_id:root.id,tables:changes.reverse(),pagination:'reader_recomputed_line_split',stored_heights:'conservative_growing_minima',cell_alignment:'preserved',nested_host_layout:'anchor_order_vertical_stack_below_prefix',floating_objects:floating,floating_layout:'separate_empty_body_anchor_top_bottom_reserved_fixed_line; consecutive_groups_start_new_page; floating_state_preserved',native_layout_verified:false},layout_verified:false};
+ return {bytes,content_verified:true,raw_preservation_verified:true,raw_preservation_scope:'selected_table_flow_heights_inline_spacing_floating_common_flags_offsets_and_own_host_paragraph_shapes_with_page_isolation; original_definitions_text_character_styles_widths_margins_borders_binary_data_other_controls_and_streams_preserved',flow_changed:true,table_formatting_changed:true,table_reflow:{root_table_id:root.id,tables:changes.reverse(),pagination:'reader_recomputed_line_split',stored_heights:'conservative_growing_minima',cell_alignment:'preserved',nested_host_layout:'anchor_order_vertical_stack_below_prefix',floating_objects:floating,floating_layout:'separate_empty_body_anchor_top_bottom_reserved_fixed_line; reuse_conservative_page_space_or_start_new_page; floating_state_preserved',native_layout_verified:false},layout_verified:false};
 }
 /** Normalize interleaved hosts only after validating the complete caller scope.
  * All intermediate bytes remain in memory until the caller's one guarded save. */
 export function reflowTableLocal(HwpDocument,source,version,op){
- if(op.type!=='reflow_table'||!equal(Object.keys(op).sort(),['type','target_id','expected_old','expected_tables'].sort()))fail('INVALID_OPERATION');
+ if(op.type!=='reflow_table'||!equal(Object.keys(op).sort(),['type','target_id','expected_old','expected_tables',...(Object.hasOwn(op,'floating_page_breaks')?['floating_page_breaks']:[])].sort()))fail('INVALID_OPERATION');
+ if(Object.hasOwn(op,'floating_page_breaks')&&!['preserve','recompute_managed'].includes(op.floating_page_breaks))fail('INVALID_OPERATION');
  if(typeof op.target_id!=='string'||!op.target_id.startsWith(`hwp5:${version}:`))fail('VERSION_CONFLICT');const encoded=op.target_id.slice(70),id=Buffer.from(encoded,'base64url').toString();if(Buffer.from(id).toString('base64url')!==encoded)fail('INVALID_TARGET');
  const state=inspectLocalComplex(HwpDocument,source,{includeDocumentInfo:false}),b=state.blocks.find(b=>b.id===id||standardBlockId(b)===id);if(!b?.cell_path.length)fail('TABLE_CELL_REQUIRED');if(b.text!==op.expected_old)fail('EXPECTED_OLD_MISMATCH');const root=state.tables.find(t=>!t.cell_path.length&&t.section===b.section&&t.record_index<b.record_index&&t.end>b.record_index);if(!root)fail('TABLE_REFLOW_ROOT_UNVERIFIED');
  const roots=hostRoots(state,root),forest=rootForest(state,roots);if(!equal(op.expected_tables,forest.map(t=>tableFlowDescriptor(state,t))))fail('EXPECTED_TABLE_FLOW_MISMATCH');if(forest.length>16)fail('TABLE_REFLOW_PROFILE_UNSUPPORTED');if(forest.flatMap(t=>t.cells.flatMap(c=>c.blocks)).reduce((n,b)=>n+b.text.length,0)>100000)fail('TABLE_REFLOW_TEXT_LIMIT');
  if(new Set(roots.map(t=>Buffer.from(state.recordSets.get(t.section)[t.record_index].payload.subarray(36,40)).toString('hex'))).size!==roots.length)fail('TABLE_AUTO_SYNC_IDENTITY_UNVERIFIED');
  const prepared=normalizeTableHosts(HwpDocument,source,state,roots);if(!prepared.normalized.length)return reflowSingle(HwpDocument,source,version,op);
  let bytes=prepared.bytes,current=prepared.state;const results=[];
- for(const rootId of prepared.root_ids){const version=digestForHost(bytes),context=tableReflowContexts(current,version).find(c=>c.root_table_id===rootId);if(!context?.target_id)fail('TABLE_HOST_CONTEXT_UNVERIFIED');const result=reflowSingle(HwpDocument,bytes,version,{type:'reflow_table',target_id:context.target_id,expected_old:context.expected_old,expected_tables:context.expected_tables},true,prepared.root_ids);bytes=result.bytes;results.push(result);current=inspectLocalComplex(HwpDocument,bytes,{includeDocumentInfo:false,verifyCharacterModel:false});}
+ for(const [rootIndex,rootId] of prepared.root_ids.entries()){const version=digestForHost(bytes),context=tableReflowContexts(current,version).find(c=>c.root_table_id===rootId);if(!context?.target_id)fail('TABLE_HOST_CONTEXT_UNVERIFIED');const result=reflowSingle(HwpDocument,bytes,version,{type:'reflow_table',target_id:context.target_id,expected_old:context.expected_old,expected_tables:context.expected_tables,...(op.floating_page_breaks?{floating_page_breaks:op.floating_page_breaks}:{})},true,prepared.root_ids,rootIndex<prepared.root_ids.length-1);bytes=result.bytes;results.push(result);current=inspectLocalComplex(HwpDocument,bytes,{includeDocumentInfo:false,verifyCharacterModel:false});}
  const remap={...prepared.remap};if(!hasLocalComplexContent(current.raw))for(const [old,id]of Object.entries(remap)){const block=current.blocks.find(b=>b.id===id);if(block)remap[old]=standardBlockId(block);}
  return {bytes,content_verified:true,raw_preservation_verified:true,raw_preservation_scope:'explicit_host_paragraph_partition_retaining_text_anchor_units_styles_fields_and_control_order_with_inline_line_spacing_then_verified_table_flow',structure_changed:true,paragraph_count_changed:true,flow_changed:true,table_formatting_changed:true,table_reflow:{root_table_id:prepared.root_ids[0],root_table_ids:prepared.root_ids,tables:results.flatMap(r=>r.table_reflow?.tables??[]),host_normalization:'paragraph_segments_around_table_anchors',floating_objects:results.flatMap(r=>r.table_reflow?.floating_objects??[]),inline_object_layout:'own_paragraph_with_line_spacing_influence',field_ranges_remapped:true,normalized_hosts:prepared.normalized,pagination:'reader_recomputed_line_split',stored_heights:'conservative_growing_minima',native_layout_verified:false},_target_remap:remap,layout_verified:false};
 }

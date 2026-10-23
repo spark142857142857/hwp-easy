@@ -58,6 +58,7 @@ for case in cases:
   old_header[16:18]=new_header[16:18]=bytes(2)
   if old_header[:4]!=new_header[:4]:
    assert edit is not None;delta=(len(edit['new_text'].encode('utf-16le'))-len(edit['expected_old'].encode('utf-16le')))//2;assert u32(new_header,0)==u32(old_header,0)+delta;old_header[:4]=new_header[:4];changed_counts+=1
+   if '\n' in edit['new_text'] and '\n' not in edit['expected_old']:struct.pack_into('<I',old_header,4,u32(old_header,4)|(1<<10))
   assert old_header==new_header,(name,'unrequested paragraph header bytes')
  assert changed_counts==(1 if edit else 0)
  old,opaque=logical(xb);new,newopaque=logical(xa);assert opaque==newopaque
