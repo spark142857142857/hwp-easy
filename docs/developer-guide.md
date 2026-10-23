@@ -249,4 +249,4 @@ python scripts/check-local-table-sync.py <새-출력-폴더>
 
 0.2.45 F3-B2는 `node --test tests/test_local_nested_forest_render.mjs`, `node scripts/check-local-nested-forest.mjs <새-출력-폴더>`, `python scripts/check-local-nested-forest.py <새-출력-폴더>`로 검사한다. 신뢰한 합성 결과에 `render-local-table-reflow-native.py`, `node scripts/render-local-nested-forest.mjs <결과-폴더>`를 실행한 뒤 Pillow 환경에서 `check-local-nested-forest-native.py`로 원래 색 표/셀 경계·답변 표시 줄·복구 픽셀을 대조한다. 전체 크기 QA PNG와 제품의 작은 썸네일은 용도를 구분한다.
 
-전체 CI는 같은 18개 OS 작업·시간 제한·수동 주기를 유지한다. 기존 F3-A 패키지 검사를 표 흐름 작업으로 옮겨 복잡 개체 작업의 여유를 확보하고, 새 B2 패키지는 여유 있는 기존 패키지 작업에서 검증한다. 실제 Claude Code/Cursor 설치·인증·모델 호출은 수행하지 않는다. [0.2.45 기록](local-release-0.2.45.md)
+전체 CI는 같은 18개 OS 작업·수동 주기·개별 요청 제한을 유지한다. Windows 표 흐름만 실측 근거로 16분 상한을 사용하며 Linux 표 흐름은 10분이다. 예산 변경은 `gh workflow run checks.yml -f scope=table-flow`로 해당 두 OS 작업만 확인한다. 기존 F3-A 패키지 검사를 표 흐름 작업으로 옮겨 복잡 개체 작업의 여유를 확보하고, 새 B2 패키지는 여유 있는 기존 패키지 작업에서 검증한다. 실제 Claude Code/Cursor 설치·인증·모델 호출은 수행하지 않는다. [0.2.45 기록](local-release-0.2.45.md)

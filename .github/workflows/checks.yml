@@ -303,12 +303,17 @@ jobs:
     if: ${{ inputs.scope == 'all' || inputs.scope == 'table-flow' || inputs.scope == 'package-balance' }}
     name: Table growth and pagination / ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
-    # 38 packaged cases plus source checks; include Windows cleanup time.
-    timeout-minutes: 10
+    # Measured Windows source/package work exceeds ten minutes before the
+    # disposable-view cases. Keep Linux bounded at ten; allow Windows to finish.
+    timeout-minutes: ${{ matrix.timeout_minutes }}
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, windows-latest]
+        include:
+          - os: ubuntu-latest
+            timeout_minutes: 10
+          - os: windows-latest
+            timeout_minutes: 16
     steps:
       - name: Check out source
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
