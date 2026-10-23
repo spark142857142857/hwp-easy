@@ -211,7 +211,7 @@ jobs:
         run: python scripts/check-local-placement.py
 
   local-floating:
-    if: ${{ inputs.scope == 'all' }}
+    if: ${{ inputs.scope == 'all' || inputs.scope == 'table-floating' }}
     name: Floating placement packages / ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
     timeout-minutes: 18
@@ -242,29 +242,53 @@ jobs:
       - name: Node package local plugin
         run: node scripts/package_local_plugin.mjs
       - name: Node floating areas
+        if: ${{ inputs.scope == 'all' }}
         run: node scripts/check-local-floating-areas.mjs
       - name: Python floating areas
+        if: ${{ inputs.scope == 'all' }}
         run: python scripts/check-local-floating-areas.py
       - name: Node nested floating
+        if: ${{ inputs.scope == 'all' }}
         run: node scripts/check-local-nested-floating.mjs
       - name: Python floating areas
+        if: ${{ inputs.scope == 'all' }}
         run: python scripts/check-local-floating-areas.py outputs/local-nested-floating
       - name: Node cell images
+        if: ${{ inputs.scope == 'all' }}
         run: node scripts/check-local-cell-images.mjs
       - name: Python floating areas
+        if: ${{ inputs.scope == 'all' }}
         run: python scripts/check-local-floating-areas.py outputs/local-cell-images
       - name: Node floating transfer
+        if: ${{ inputs.scope == 'all' }}
         run: node scripts/check-local-floating-transfer.mjs
       - name: Python floating areas
+        if: ${{ inputs.scope == 'all' }}
         run: python scripts/check-local-floating-areas.py outputs/local-floating-transfer
       - name: Node cell text boxes
+        if: ${{ inputs.scope == 'all' }}
         run: node scripts/check-local-cell-text-boxes.mjs
       - name: Python placement
+        if: ${{ inputs.scope == 'all' }}
         run: python scripts/check-local-placement.py outputs/local-cell-text-boxes
       - name: Node review fixes
+        if: ${{ inputs.scope == 'all' }}
         run: node scripts/check-local-review-fixes.mjs
       - name: Python review fixes
+        if: ${{ inputs.scope == 'all' }}
         run: python scripts/check-local-review-fixes.py outputs/local-review-fixes
+
+      - name: Verify floating table-flow source regressions
+        if: ${{ inputs.scope == 'all' }}
+        run: node --test tests/test_local_table_floating.mjs
+      - name: Verify independent floating table flow through package
+        run: node scripts/check-local-table-floating.mjs
+      - name: Independently verify floating table flow and recovery
+        run: python scripts/check-local-table-floating.py
+
+      - name: Verify all table source regressions during floating checks
+        if: ${{ inputs.scope == 'table-floating' }}
+        run: node --test --test-concurrency=2 tests/test_local_table_reflow.mjs tests/test_local_table_hosts.mjs tests/test_local_table_text_flow.mjs tests/test_local_table_text_metrics.mjs tests/test_local_table_controls.mjs tests/test_local_table_floating.mjs tests/test_local_table_compact.mjs
 
   local-table-flow:
     if: ${{ inputs.scope == 'all' || inputs.scope == 'table-flow' }}
@@ -314,7 +338,7 @@ jobs:
         run: python scripts/check-local-table-sync.py outputs/local-table-hosts
 
   local-table-text:
-    if: ${{ inputs.scope == 'all' || inputs.scope == 'table-text' || inputs.scope == 'table-controls' || inputs.scope == 'table-floating' || inputs.scope == 'table-compact' }}
+    if: ${{ inputs.scope == 'all' || inputs.scope == 'table-text' || inputs.scope == 'table-controls' || inputs.scope == 'table-compact' }}
     name: Table text and host controls / ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
     timeout-minutes: 8
@@ -346,11 +370,11 @@ jobs:
         if: ${{ inputs.scope == 'table-text' }}
         run: node --test --test-concurrency=2 tests/test_local_table_reflow.mjs tests/test_local_table_hosts.mjs tests/test_local_table_text_flow.mjs
       - name: Verify all table source regressions during host control checks
-        if: ${{ inputs.scope == 'table-controls' || inputs.scope == 'table-floating' || inputs.scope == 'table-compact' }}
+        if: ${{ inputs.scope == 'table-controls' || inputs.scope == 'table-compact' }}
         run: node --test --test-concurrency=2 tests/test_local_table_reflow.mjs tests/test_local_table_hosts.mjs tests/test_local_table_text_flow.mjs tests/test_local_table_text_metrics.mjs tests/test_local_table_controls.mjs tests/test_local_table_floating.mjs tests/test_local_table_compact.mjs
       - name: Verify new text and host control regressions during full checks
         if: ${{ inputs.scope == 'all' }}
-        run: node --test --test-concurrency=2 tests/test_local_table_text_flow.mjs tests/test_local_table_controls.mjs tests/test_local_table_floating.mjs tests/test_local_table_compact.mjs
+        run: node --test --test-concurrency=2 tests/test_local_table_text_flow.mjs tests/test_local_table_controls.mjs
       - name: Build isolated local plugin
         run: node scripts/package_local_plugin.mjs
       - name: Verify interleaved text and multiple body roots through package
@@ -367,18 +391,12 @@ jobs:
         if: ${{ inputs.scope == 'all' || inputs.scope == 'table-controls' }}
         run: python scripts/check-local-table-text-flow.py outputs/local-table-controls
 
-      - name: Verify independent floating frame flow through package
-        if: ${{ inputs.scope == 'all' || inputs.scope == 'table-floating' }}
-        run: node scripts/check-local-table-floating.mjs
-      - name: Independently verify floating flags, reservations and recovery
-        if: ${{ inputs.scope == 'all' || inputs.scope == 'table-floating' }}
-        run: python scripts/check-local-table-floating.py
 
       - name: Verify explicit content-fit rows through package
-        if: ${{ inputs.scope == 'all' || inputs.scope == 'table-compact' }}
+        if: ${{ inputs.scope == 'table-compact' }}
         run: node scripts/check-local-table-compact.mjs
       - name: Independently verify compact rows, non-target bytes and recovery
-        if: ${{ inputs.scope == 'all' || inputs.scope == 'table-compact' }}
+        if: ${{ inputs.scope == 'table-compact' }}
         run: python scripts/check-local-table-compact.py
       - name: Verify compact rows with floating space through package
         if: ${{ inputs.scope == 'table-compact' }}
@@ -421,13 +439,20 @@ jobs:
         run: node --test --test-concurrency=2 tests/test_local_table_reflow.mjs tests/test_local_table_hosts.mjs tests/test_local_table_text_flow.mjs tests/test_local_table_text_metrics.mjs
       - name: Verify styled text regressions during full checks
         if: ${{ inputs.scope == 'all' }}
-        run: node --test tests/test_local_table_text_metrics.mjs
+        run: node --test --test-concurrency=2 tests/test_local_table_text_metrics.mjs tests/test_local_table_compact.mjs
       - name: Build isolated local plugin
         run: node scripts/package_local_plugin.mjs
       - name: Verify narrow and mixed-size Unicode text through package
         run: node scripts/check-local-table-metrics.mjs
       - name: Independently verify logical order, UTF-16 styles and recovery
         run: python scripts/check-local-table-text-flow.py outputs/local-table-metrics
+
+      - name: Verify content-fit rows during full checks
+        if: ${{ inputs.scope == 'all' }}
+        run: node scripts/check-local-table-compact.mjs
+      - name: Independently verify compact rows and recovery
+        if: ${{ inputs.scope == 'all' }}
+        run: python scripts/check-local-table-compact.py
 
   local-large-text:
     if: ${{ inputs.scope == 'all' }}

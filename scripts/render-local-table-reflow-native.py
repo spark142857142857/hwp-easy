@@ -11,7 +11,7 @@ with HancomBackend(visible=False) as backend:
   for state in ['before','after','restored']:
    source=root/(c['name']+'-'+state+'.hwp');prior=source.read_bytes();assert app.Open(str(source),'HWP','lock:true;forceopen:true');app.HAction.Run('MoveDocEnd');pages=app.PageCount;text=app.GetTextFile('TEXT','');markers=[];answer_positions=[]
    if state=='after':
-    for label in ['L'+str(i).zfill(3) for i in range(c['fixture']['lines'])]+['TAIL','END']:
+    for label in ['L'+str(i).zfill(3) for i in range(c['fixture']['lines'])]+c['fixture'].get('tail_labels',['TAIL','END']):
      app.HAction.Run('MoveDocBegin');ps=app.HParameterSet.HFindReplace;app.HAction.GetDefault('RepeatFind',ps.HSet);ps.FindString=label;ps.IgnoreMessage=1
      assert app.HAction.Execute('RepeatFind',ps.HSet),(c['name'],label);indicator=app.KeyIndicator();assert indicator[0];markers.append(dict(text=label,page=indicator[3],line=indicator[5]))
     if c['fixture'].get('metrics_ink'):

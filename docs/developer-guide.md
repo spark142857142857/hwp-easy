@@ -231,3 +231,14 @@ python scripts/check-local-table-floating.py outputs/local-table-compact-floatin
 ```
 
 한글이 있는 Windows의 신뢰한 합성 파일만 `render-local-table-reflow-native.py`로 렌더링한 뒤, 각각 `check-local-table-compact-native.py`와 `check-local-table-floating-native.py`로 확인한다. 쪽 수 감소뿐 아니라 실제 글·셀/상자 틀·그림·후속 본문·고정 꼬리말과 원본 복구 픽셀을 대조한다. 관련 수동 CI `scope:table-compact`는 기존 Windows/Linux 두 작업을 재사용하며 전체 18개 실행은 별도다. 일반 편집은 저장된 최소 높이를 보존하고, 명시적 `content_fit`만 높이를 재계산한다. [0.2.42 기록](local-release-0.2.42.md)
+
+### F2 마감 회귀
+
+8개 표 패키지 검사(기본 흐름·동기화·호스트·글·문자 지표·필드/개체·부동·축소)의 합계는 110건이다. 공개 고정 카탈로그의 복합 12건과 배치 보완 3건을 더 검사하고, 다음으로 실제 공개 중첩 표의 장문/축소와 안전한 흐름 거부 경계를 확인한다.
+
+```powershell
+node scripts/check-local-f2-public.mjs <공개-복합-결과> <새-출력-폴더>
+python scripts/check-local-table-sync.py <새-출력-폴더>
+```
+
+신뢰한 공개 복사본의 선택적 Windows QA는 `render-local-table-reflow-native.py`, Pillow 환경의 `check-local-table-metrics-native.py`를 사용한다. 공개 원본의 꼬리 본문을 가짜 시험 표식으로 바꾸지 않고 `tail_labels:[]`와 실제 셀 프레임·원래 글 픽셀/커서 줄을 대조한다. 전체 `all` CI는 검사 파일/표 패키지 횟수를 보존하며 부동 사례는 기존 부동 작업, 높이 축소는 문자 지표 작업에 나눠 18개 실행과 시간 제한을 유지한다. [마감 결과/재현](f2-closure-0.2.42.md) · [지원 범위](f2-support-0.2.42.md)

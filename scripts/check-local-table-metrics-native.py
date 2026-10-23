@@ -44,7 +44,8 @@ for c in cases:
   if points:
    assert min(x for x,y in points)>left+1 and max(x for x,y in points)<right-1,(name,page,'ink touches side frame')
    ink_bounds.append(dict(page=page+1,left=min(x for x,y in points),right=max(x for x,y in points),top=min(y for x,y in points),bottom=max(y for x,y in points)))
- assert visible==len(positions);assert after['markers'][-2]['page']>=positions[-1][0];assert after['markers'][-1]['page']>=after['markers'][-2]['page'];assert visible>=f['lines']
+ assert visible==len(positions);assert visible>=f['lines']
+ if f.get('tail_labels',['TAIL','END']):assert after['markers'][-2]['page']>=positions[-1][0];assert after['markers'][-1]['page']>=after['markers'][-2]['page']
  checks.append(dict(case=name,pages=after['pages'],logical_lines=f['lines'],visible_physical_lines=visible,actual_cell_frame=True,native_caret_lines_match_original_ink=True,ink_bounds=ink_bounds))
 summary=dict(status='PASS',documents=len(results),pages=sum(r['pages'] for r in results.values()),restored_pages_pixel_exact=restored,native_text_exact=True,original_pixels_without_color_edits=True,checks=checks,layout_verified=False)
 (out/'summary.json').write_text(json.dumps(summary,indent=2)+'\n',encoding='utf-8');print(json.dumps(summary))
