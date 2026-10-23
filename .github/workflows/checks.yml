@@ -5,10 +5,10 @@ on:
   workflow_dispatch:
     inputs:
       scope:
-        description: Verification scope (all, table flow, hosts, or text metrics)
+        description: Verification scope (all or a focused table feature)
         type: choice
         default: all
-        options: [all, table-flow, table-text, table-metrics, table-controls]
+        options: [all, table-flow, table-text, table-metrics, table-controls, table-floating]
 
 permissions:
   contents: read
@@ -314,7 +314,7 @@ jobs:
         run: python scripts/check-local-table-sync.py outputs/local-table-hosts
 
   local-table-text:
-    if: ${{ inputs.scope == 'all' || inputs.scope == 'table-text' || inputs.scope == 'table-controls' }}
+    if: ${{ inputs.scope == 'all' || inputs.scope == 'table-text' || inputs.scope == 'table-controls' || inputs.scope == 'table-floating' }}
     name: Table text and host controls / ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
     timeout-minutes: 8
@@ -346,18 +346,18 @@ jobs:
         if: ${{ inputs.scope == 'table-text' }}
         run: node --test --test-concurrency=2 tests/test_local_table_reflow.mjs tests/test_local_table_hosts.mjs tests/test_local_table_text_flow.mjs
       - name: Verify all table source regressions during host control checks
-        if: ${{ inputs.scope == 'table-controls' }}
-        run: node --test --test-concurrency=2 tests/test_local_table_reflow.mjs tests/test_local_table_hosts.mjs tests/test_local_table_text_flow.mjs tests/test_local_table_text_metrics.mjs tests/test_local_table_controls.mjs
+        if: ${{ inputs.scope == 'table-controls' || inputs.scope == 'table-floating' }}
+        run: node --test --test-concurrency=2 tests/test_local_table_reflow.mjs tests/test_local_table_hosts.mjs tests/test_local_table_text_flow.mjs tests/test_local_table_text_metrics.mjs tests/test_local_table_controls.mjs tests/test_local_table_floating.mjs
       - name: Verify new text and host control regressions during full checks
         if: ${{ inputs.scope == 'all' }}
-        run: node --test --test-concurrency=2 tests/test_local_table_text_flow.mjs tests/test_local_table_controls.mjs
+        run: node --test --test-concurrency=2 tests/test_local_table_text_flow.mjs tests/test_local_table_controls.mjs tests/test_local_table_floating.mjs
       - name: Build isolated local plugin
         run: node scripts/package_local_plugin.mjs
       - name: Verify interleaved text and multiple body roots through package
-        if: ${{ inputs.scope != 'table-controls' }}
+        if: ${{ inputs.scope != 'table-controls' && inputs.scope != 'table-floating' }}
         run: node scripts/check-local-table-text-flow.mjs
       - name: Independently verify logical order, UTF-16 styles and recovery
-        if: ${{ inputs.scope != 'table-controls' }}
+        if: ${{ inputs.scope != 'table-controls' && inputs.scope != 'table-floating' }}
         run: python scripts/check-local-table-text-flow.py
 
       - name: Verify fields and inline host objects through package
@@ -366,6 +366,13 @@ jobs:
       - name: Independently verify field ranges, inline objects and recovery
         if: ${{ inputs.scope == 'all' || inputs.scope == 'table-controls' }}
         run: python scripts/check-local-table-text-flow.py outputs/local-table-controls
+
+      - name: Verify independent floating frame flow through package
+        if: ${{ inputs.scope == 'all' || inputs.scope == 'table-floating' }}
+        run: node scripts/check-local-table-floating.mjs
+      - name: Independently verify floating flags, reservations and recovery
+        if: ${{ inputs.scope == 'all' || inputs.scope == 'table-floating' }}
+        run: python scripts/check-local-table-floating.py
 
   local-table-metrics:
     if: ${{ inputs.scope == 'all' || inputs.scope == 'table-metrics' }}

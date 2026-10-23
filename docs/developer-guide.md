@@ -4,7 +4,7 @@
 
 [프로젝트 개요](../README.md) · [문서 인덱스](README.md) · [아키텍처](architecture.md)
 
-소스를 변경하거나 배포 패키지를 생성할 때 필요한 환경과 검사 명령입니다. 현재 소스·검증 패키지는 **로컬 HWP Easy 0.2.39**입니다. 같은 버전의 앱별 패키지는 공통 실행기를 포함하며 실제 설치 버전은 [프로젝트 상태](project-status.md)에서 구분합니다. 파일 편집 절차는 [사용 가이드](quick-start.md), 실제 설치·호출 결과는 [프로젝트 상태](project-status.md)에 정리합니다.
+소스를 변경하거나 배포 패키지를 생성할 때 필요한 환경과 검사 명령입니다. 현재 소스·검증 패키지는 **로컬 HWP Easy 0.2.40**입니다. 같은 버전의 앱별 패키지는 공통 실행기를 포함하며 실제 설치 버전은 [프로젝트 상태](project-status.md)에서 구분합니다. 파일 편집 절차는 [사용 가이드](quick-start.md), 실제 설치·호출 결과는 [프로젝트 상태](project-status.md)에 정리합니다.
 
 ## 환경과 구성
 
@@ -93,9 +93,9 @@ python scripts/archive_agent_skills.py
 
 | 배포 대상 | 생성 ZIP |
 | --- | --- |
-| Codex | `outputs/plugin-package/hwp-easy-0.2.39.zip` |
-| Claude Code | `outputs/agent-packages/hwp-easy-claude-code-0.2.39.zip` |
-| Cursor | `outputs/agent-packages/hwp-easy-cursor-0.2.39.zip` |
+| Codex | `outputs/plugin-package/hwp-easy-0.2.40.zip` |
+| Claude Code | `outputs/agent-packages/hwp-easy-claude-code-0.2.40.zip` |
+| Cursor | `outputs/agent-packages/hwp-easy-cursor-0.2.40.zip` |
 
 패키지 생성은 앱 설치나 공개 게시를 수행하지 않습니다. Claude Code·Cursor의 설치 검사와 격리된 폴더에 설치한 실행기의 검증은 다음으로 재현합니다.
 
@@ -120,7 +120,7 @@ node scripts/install_agent_skill.mjs --client cursor --package outputs/agent-pac
 OpenAI 포털의 기존 MCP 등록은 서버 없는 패키지로 변경할 수 없어, 로컬판에는 별도 식별자 `hwp-easy-local`을 사용합니다. 다음 명령은 검증한 ZIP에서 등록 이름·호출 안내·표시 필드만 조정하고 모든 실행 자원의 바이트 일치를 검사합니다. 업로드·설치·심사 제출을 수행하지 않습니다.
 
 ```bash
-python scripts/package_directory_plugin.py outputs/plugin-package/hwp-easy-0.2.39.zip outputs/directory-package
+python scripts/package_directory_plugin.py outputs/plugin-package/hwp-easy-0.2.40.zip outputs/directory-package
 ```
 
 포털 관측과 남은 차단 항목은 [로컬 디렉터리 등록 기록](local-directory-submission.md)에 정리합니다.
@@ -207,3 +207,14 @@ python scripts/check-local-table-reflow.py
 0.2.38 문자 지표 검사는 `node scripts/check-local-table-metrics.mjs`와 `python scripts/check-local-table-text-flow.py outputs/local-table-metrics`를 사용한다. 실제 한글에서는 `scripts/render-local-table-reflow-native.py outputs/local-table-metrics`와 Pillow 환경의 `scripts/check-local-table-metrics-native.py outputs/local-table-metrics`로 원래 색의 페이지와 각 문자 위치의 실제 줄·셀 프레임을 대조한다. 좁은 셀은 검사용 색 변경도 한글의 재조판을 유발할 수 있어 색 표시를 사용하지 않는다. [지원 경계와 검증](local-release-0.2.38.md)
 
 0.2.39 호스트 필드/개체 검사는 `node scripts/check-local-table-controls.mjs`와 `python scripts/check-local-table-text-flow.py outputs/local-table-controls`를 사용한다. 실제 한글은 `scripts/render-local-table-reflow-native.py outputs/local-table-controls`와 Pillow 환경의 `scripts/check-local-table-text-flow-native.py outputs/local-table-controls`로 필드 값·표시 줄·실제 그림/글상자 프레임·글/표 순서를 대조한다. 새 필드/인라인 개체 검사를 기존 글/본문 호스트 CI 작업에 넣어 전체 기본 작업 수는 18개를 유지한다. [검증 범위](local-release-0.2.39.md)
+
+### 독립 부동 개체와 표 흐름 회귀
+
+```powershell
+node --test tests/test_local_table_floating.mjs
+node scripts/package_local_plugin.mjs
+node scripts/check-local-table-floating.mjs outputs/local-table-floating
+python scripts/check-local-table-floating.py outputs/local-table-floating
+```
+
+한글이 있는 Windows에서 신뢰한 합성 파일만 `scripts/render-local-table-reflow-native.py`로 렌더링한 뒤 Pillow 환경의 `scripts/check-local-table-floating-native.py`로 검사한다. 원래 그림 픽셀·상자/표 프레임·모든 답변 줄·후속 글과 꼬리말, 입력 해시·복구 픽셀을 대조한다. 관련 수동 CI는 `scope:table-floating`으로 기존 작업의 Windows/Linux 두 실행만 사용한다. 전체 `all`의 18개 실행은 유지한다. [0.2.40 범위](local-release-0.2.40.md)
