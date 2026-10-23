@@ -35,7 +35,7 @@ for c in cases:
    checks.append(dict(state=state,page=page,frames=len(frames),native_and_shipped_svg_borders_match=True))
  ink=[];line_bands=0
  for page in range(after['pages']):
-  original=Image.open(native/f'{name}-after-{page}.bmp').convert('RGB');marked=Image.open(native/f'{name}-after-marked-{page}.bmp').convert('RGB');op=original.load();mp=marked.load();ys=[y for y in range(original.height) for x in range(original.width) if mp[x,y][0]>190 and mp[x,y][2]>190 and mp[x,y][1]<65 and max(op[x,y])<220];line_bands+=len(bands(ys));ink.append(dict(page=page,answer_lines=len(bands(ys))))
+  original=Image.open(native/f'{name}-after-{page}.bmp').convert('RGB');marked=Image.open(native/f'{name}-after-marked-{page}.bmp').convert('RGB');op=original.load();mp=marked.load();ys=[y for y in range(original.height) for x in range(original.width) if mp[x,y][0]>190 and mp[x,y][2]>190 and mp[x,y][1]<65 and max(op[x,y])<220 and mp[x,y]!=op[x,y]];line_bands+=len(bands(ys));ink.append(dict(page=page,answer_lines=len(bands(ys))))
  assert line_bands==c['fixture']['lines'],(name,line_bands)
  proof.append(dict(case=name,frames=checks,visible_answer_lines=line_bands,ink=ink,exact_restore_pixels=True))
 summary=dict(status='PASS',cases=len(cases),documents=len(results),pages=sum(r['pages'] for r in results.values()),native_and_preview_frames=frame_count,visible_answer_lines=sum(p['visible_answer_lines'] for p in proof),exact_restore_pixel_pages=restore_pages,original_color_images_used=True,layout_verified=False)

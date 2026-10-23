@@ -7,9 +7,13 @@ import {fail,view} from './local_complex_records.mjs';
 import {validObjectHeader,objectFlow} from './local_flow_records.mjs';
 import {createEngineApi} from './rhwp_api.mjs';
 import {prepareNestedRenderInput} from './local_nested_render_view.mjs';
+import {openColumnRenderView} from './local_column_render_view.mjs';
 
-export function openLocalRenderView(HwpDocument,bytes){
+export function openLocalRenderView(HwpDocument,bytes,allowColumns=true){
+ const columns=allowColumns?openColumnRenderView(HwpDocument,bytes,b=>openLocalRenderView(HwpDocument,b,false)):null;
+ if(columns?.document)return columns;
  const nested=prepareNestedRenderInput(HwpDocument,bytes);let document=new HwpDocument(nested.bytes);
+ if(columns?.unsupported_column_profile)nested.unadapted.push({reason:columns.unsupported_column_profile});
  try{
   if(document.pageCount()>32)fail('RENDERED_LAYOUT_PAGE_LIMIT');
   if(nested.tables.length){

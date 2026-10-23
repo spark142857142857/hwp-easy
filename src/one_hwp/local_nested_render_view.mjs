@@ -12,6 +12,8 @@ import {validObjectHeader} from './local_flow_records.mjs';
 import {trackPositions} from './local_complex_table.mjs';
 import {bindRenderTables,renderTableKey} from './local_render_table_identity.mjs';
 import {patchLocalPackedStreams} from './local_container_write.mjs';
+import {tableHostFields,inlineTableHostObject} from './local_table_host_controls.mjs';
+import {bindRenderObjects,renderRunKey} from './local_render_object_identity.mjs';
 const id=r=>Buffer.from(r.payload.subarray(0,4)).toString();
 const key=b=>JSON.stringify([b.section,b.paragraph,b.cell_path]);
 const plain=p=>p&&['left','justify'].includes(p.alignment)&&p.lineSpacingType===0&&p.lineSpacing>=100&&p.lineSpacing<=300&&!p.keepWithNext&&!p.keepLines&&!p.pageBreakBefore&&!p.fontLineHeight&&['marginLeft','marginRight','indent','spacingBefore','spacingAfter'].every(k=>!p[k]);
@@ -35,15 +37,18 @@ function prepare(HwpDocument,bytes){
  const original=new HwpDocument(bytes);let originalBindings;try{originalBindings=bindRenderTables(original,state);if(!originalBindings)return unadapted('nested_render_identity');}finally{original.free();}
  const replacements=new Map(),changes=new Map(),owners=new Map(),headers=new Map(),tables=[],definitions=[...parseRecords(raw.streams.get('DocInfo'))].map(r=>({...r,payload:r.payload.slice()})),shapes=definitions.filter(r=>r.tag===25),map=definitions.find(r=>r.tag===17),extra=[];
  if(!map||map.payload.length<56||shapes.length>1024)return unadapted('nested_definition_profile');
+ const objects=new Map();
  for(const t of ts){
   let xs,ys;try{xs=trackPositions(t,'col');ys=trackPositions(t,'row');}catch{return unadapted('nested_grid_profile');}
   if(xs.some(n=>n==null)||ys.some(n=>n==null)||ys.at(-1)!==t.properties.tableHeight)return unadapted('nested_grid_profile');
-  for(const c of t.cells){const h=rs[c.start],v=view(h.payload),flags=v.getUint32(4,true);if((flags&31)||((flags>>>5)&3)>2||c.blocks.some(b=>!plain(b.paragraph_properties)||b.tokens.some(t=>!t.text&&![10,11,13].includes(t.code))||rs.slice(b.record_index+1,b.records_end).some(r=>r.tag===71&&r.level===b.raw_level+1&&id(r)!==' lbt')))return unadapted('nested_cell_profile');
+  for(const c of t.cells){const h=rs[c.start],v=view(h.payload),flags=v.getUint32(4,true);if((flags&31)||((flags>>>5)&3)>2||c.blocks.some(b=>!plain(b.paragraph_properties)||b.tokens.some(t=>!t.text&&![3,4,10,11,13].includes(t.code))))return unadapted('nested_cell_profile');
+   for(const b of c.blocks){const fields=tableHostFields(state,b);if(fields.some(f=>!f.value))return unadapted('nested_empty_field_guide');for(let at=b.record_index+1;at<b.records_end;at++){const r=rs[at];if(r.tag!==71||r.level!==b.raw_level+1||[' lbt','klc%'].includes(id(r)))continue;if(id(r)!==' osg')return unadapted('nested_cell_profile');const o=inlineTableHostObject(state,b,at);if(objects.has(b)||b.text||b.tokens.some(t=>![11,13].includes(t.code))||!o.object.flow.affectLineSpacing||b.paragraph_properties.lineSpacing!==160||['marginLeft','marginRight','marginTop','marginBottom'].some(k=>o.object.flow[k])||o.width>c.width-t.properties.paddingLeft-t.properties.paddingRight)return unadapted('nested_object_flow');objects.set(b,{...o,cell:c});}}
    // The pinned renderer otherwise substitutes a one-pixel padding in nested
    // tables, despite the table's stored default. Make that default explicit.
    const payload=h.payload.slice(),p=view(payload);if(!(flags&0x10000))for(const [i,k]of ['paddingLeft','paddingRight','paddingTop','paddingBottom'].entries())p.setUint16(24+2*i,t.properties[k],true);p.setUint32(4,flags|0x10000,true);changes.set(h,{...h,payload});
   }
  }
+ if(objects.size>32)return unadapted('nested_object_limit');
  const hosts=new Map();
  for(const t of ts.filter(t=>t.cell_path.length)){
   const host=state.blocks.find(b=>b.id===t.parent_id),parent=ts.find(p=>p.cells.some(c=>c.blocks.includes(host))),cell=parent?.cells.find(c=>c.blocks.includes(host));
@@ -65,10 +70,22 @@ function prepare(HwpDocument,bytes){
    const sizes=new Set(b.unit_styles.map(i=>fonts[i]?.payload.length>=46?view(fonts[i].payload).getUint32(42,true):NaN)),size=[...sizes][0],children=hosts.get(b)?.peers;
    if(sizes.size!==1||!Number.isFinite(size)||b.text.includes('\n')||b.text.length*size>c.width*.85)return unadapted('nested_multiline_host');
    if(children){height+=view(rs[children[0].record_index].payload).getInt32(8,true)+children.reduce((n,t)=>n+t.properties.tableHeight,0);lastGap=0;}
+   else if(objects.has(b)){height+=objects.get(b).height*b.paragraph_properties.lineSpacing/100;lastGap=objects.get(b).height*(b.paragraph_properties.lineSpacing/100-1);}
    else{height+=size*b.paragraph_properties.lineSpacing/100;lastGap=size*(b.paragraph_properties.lineSpacing/100-1);}
   }
   const p=view(changes.get(rs[c.start]).payload),align=(view(rs[c.start].payload).getUint32(4,true)>>>5)&3,room=c.height-p.getUint16(28,true)-p.getUint16(30,true)-height+lastGap,shift=Math.max(0,Math.round(room*(align===1?.5:align===2?1:0)));
   if(p.getUint16(28,true)+shift>65535)return unadapted('nested_alignment_profile');p.setUint16(28,p.getUint16(28,true)+shift,true);
+ }
+ // Inline drawings have their own verified line-height contribution in native
+ // HWP. The pinned renderer places them correctly but advances only its empty
+ // line descent. Reserve the missing advance after that paragraph, privately.
+ for(const [b,o]of objects){
+  const sizes=new Set(b.unit_styles.map(i=>fonts[i]?.payload.length>=46?view(fonts[i].payload).getUint32(42,true):NaN)),size=[...sizes][0],height=o.height*b.paragraph_properties.lineSpacing/100-size*.4,shape=shapes[b.paragraph_properties.paraShapeId];
+  if(sizes.size!==1||!Number.isFinite(size)||size!==1000||height<=0||height>65535||!shape||![46,54,58].includes(shape.payload.length))return unadapted('nested_object_line_profile');
+  const fixed=shape.payload.slice(),q=view(fixed),spacing=Math.round(height*2);q.setUint32(0,(q.getUint32(0,true)&~3)|1,true);q.setInt32(24,spacing,true);if(fixed.length>=54){q.setUint32(46,(q.getUint32(46,true)&~31)|1,true);q.setInt32(50,spacing,true);}
+  const h={...rs[b.record_index],payload:rs[b.record_index].payload.slice()},p=view(h.payload);p.setUint32(0,2,true);p.setUint32(4,0,true);p.setUint16(8,shapes.length+extra.length,true);p.setUint16(12,1,true);p.setUint16(14,0,true);p.setUint16(16,0,true);
+  const styles=Buffer.alloc(8);styles.writeUInt32LE(b.unit_styles[0],4);extra.push({tag:25,level:shape.level,payload:fixed});headers.set(h,{block:b,from:0,synthetic:true});
+  replacements.set(rs[b.record_index],[{...rs[b.record_index],originHeader:rs[b.record_index]},...rs.slice(b.record_index+1,b.records_end),h,{tag:67,level:h.level+1,payload:Buffer.from(' \r','utf16le')},{tag:68,level:h.level+1,payload:styles}]);owners.set(rs[o.cell.start],(owners.get(rs[o.cell.start])??0)+1);
  }
  for(const [host,{cell,peers}]of hosts){
   peers.sort((a,b)=>a.record_index-b.record_index);const controls=rs.slice(host.record_index+1,host.records_end).filter(r=>r.tag===71&&r.level===host.raw_level+1),anchors=host.tokens.filter(t=>t.code===11),offset=view(rs[peers[0].record_index].payload).getInt32(8,true);
@@ -102,8 +119,20 @@ function prepare(HwpDocument,bytes){
  for(const b of after.blocks){const old=origins.get(b.record_index);if(!old?.block)return unadapted('nested_identity_profile');paths.set(key(b),old);}
  const joined=new Map();for(const b of after.blocks){const old=paths.get(key(b)).block;joined.set(old,(joined.get(old)??'')+(paths.get(key(b)).synthetic?'':b.text));}
  if(state.blocks.some(b=>joined.get(b)!==b.text))return unadapted('nested_text_profile');
- let controls=new Map();
- const refresh=document=>{const bindings=bindRenderTables(document,after);if(!bindings)return false;const next=new Map();for(const [k,t]of bindings){const oldControl=out[t.record_index],sourceControl=[...changes].find(([,r])=>r===oldControl)?.[0]??oldControl,old=ts.find(t=>rs[t.record_index]===sourceControl),identity=old&&originalBindings.byTable.get(old);if(!identity)return false;next.set(k,{...identity,table_id:old.id,parentParaIdx:old.cell_path.length?old.paragraph:undefined,cellPath:old.cell_path.length?old.cell_path:undefined,cellIdentities:bindings.fragments.get(k).map(c=>c.cell)});}controls=next;return true;};
+ let controls=new Map(),objectControls=new Map(),objectRuns=new Map();
+ const privateObjects=new Map(),objectSources=new Map();
+ for(const [b,value]of objects){const o=[...after.pictures,...after.text_boxes].find(o=>out[o.record_index]===rs[value.object.record_index]),block=after.blocks.find(b=>b.id===o?.block_id);if(!o||!block)return unadapted('nested_object_identity');privateObjects.set(block,{...value,object:o});objectSources.set(o,{...value,block:b});}
+ const refresh=document=>{
+  const bindings=bindRenderTables(document,after);if(!bindings)return false;const next=new Map();
+  for(const [k,t]of bindings){const oldControl=out[t.record_index],sourceControl=[...changes].find(([,r])=>r===oldControl)?.[0]??oldControl,old=ts.find(t=>rs[t.record_index]===sourceControl),identity=old&&originalBindings.byTable.get(old);if(!identity)return false;next.set(k,{...identity,table_id:old.id,parentParaIdx:old.cell_path.length?old.paragraph:undefined,cellPath:old.cell_path.length?old.cell_path:undefined,cellIdentities:bindings.fragments.get(k).map(c=>c.cell)});}
+  const bound=bindRenderObjects(document,after,privateObjects);if(!bound)return false;
+  objectControls=new Map([...bound.controls].map(([k,v])=>[k,objectSources.get(v.object)]));objectRuns=new Map([...bound.runs].map(([k,v])=>[k,objectSources.get(v.object)]));controls=next;return true;
+ };
  const privateDocument=new HwpDocument(privateBytes);try{if(!refresh(privateDocument))return unadapted('nested_render_identity');}finally{privateDocument.free();}
- return {bytes:privateBytes,tables,unadapted:[],refresh,remap:(r,page=0)=>{if(r.type==='table'){const original=controls.get(renderTableKey(r,page));if(!original)return r;const {cellIdentities,...identity}=original;return {...r,...identity,cells:r.cells.map((c,i)=>({...c,cellIdx:cellIdentities[i]}))};}if(!r.cellPath)return r;const entry=paths.get(JSON.stringify([r.secIdx,r.parentParaIdx,r.cellPath]));if(!entry)return r;if(entry.synthetic)return {...r,render_only_synthetic:true};const b=entry.block,first=b.cell_path[0];return {...r,cellPath:b.cell_path,paraIdx:b.cell_paragraph,parentParaIdx:b.paragraph,controlIdx:first.controlIndex,cellIdx:first.cellIndex,cellParaIdx:first.cellParaIndex,charStart:(r.charStart??0)+entry.from};}};
+ return {bytes:privateBytes,tables,unadapted:[],refresh,remap:(r,page=0)=>{
+  if(r.type==='table'){const original=controls.get(renderTableKey(r,page));if(!original)return r;const {cellIdentities,...identity}=original;return {...r,...identity,cells:r.cells.map((c,i)=>({...c,cellIdx:cellIdentities[i]}))};}
+  const object=r.type?objectControls.get(renderTableKey(r,page)):objectRuns.get(renderRunKey(r,page));
+  if(object){const b=object.block,o=object.object,first=b.cell_path[0];return {...r,cellPath:b.cell_path,parentParaIdx:b.paragraph,paraIdx:r.type?b.paragraph:0,controlIdx:r.type?o.control_index:first.controlIndex,cellIdx:first.cellIndex,cellParaIdx:first.cellParaIndex,...(r.type?{stableIndex:[b.section,b.paragraph,...b.cell_path.flatMap(p=>[p.controlIndex,p.cellIndex,p.cellParaIndex]),o.control_index],outerTableControlIdx:first.controlIndex}:{text_box_id:o.id,text_box_paragraph:0})};}
+  if(!r.cellPath)return r;const entry=paths.get(JSON.stringify([r.secIdx,r.parentParaIdx,r.cellPath]));if(!entry)return r;if(entry.synthetic)return {...r,render_only_synthetic:true};const b=entry.block,first=b.cell_path[0];return {...r,cellPath:b.cell_path,paraIdx:b.cell_paragraph,parentParaIdx:b.paragraph,controlIdx:first.controlIndex,cellIdx:first.cellIndex,cellParaIdx:first.cellParaIndex,charStart:(r.charStart??0)+entry.from};
+ }};
 }

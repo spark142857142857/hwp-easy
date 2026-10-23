@@ -295,6 +295,13 @@ jobs:
       - name: Independently verify floating table flow and recovery
         run: python scripts/check-local-table-floating.py
 
+      # This job has measured headroom; the text/control job is close to its
+      # eight-minute budget. Keep existing tests, job count and limits intact.
+      - name: Verify mixed host and column render save/recovery through package
+        run: node scripts/check-local-nested-forest.mjs outputs/local-nested-mixed mixed
+      - name: Independently verify mixed/column source preservation
+        run: python scripts/check-local-nested-forest.py outputs/local-nested-mixed
+
       - name: Verify all table source regressions during floating checks
         if: ${{ inputs.scope == 'table-floating' }}
         run: node --test --test-concurrency=2 tests/test_local_table_reflow.mjs tests/test_local_table_hosts.mjs tests/test_local_table_text_flow.mjs tests/test_local_table_text_metrics.mjs tests/test_local_table_controls.mjs tests/test_local_table_floating.mjs tests/test_local_table_compact.mjs
@@ -393,6 +400,9 @@ jobs:
       - name: Verify new text and host control regressions during full checks
         if: ${{ inputs.scope == 'all' }}
         run: node --test --test-concurrency=2 tests/test_local_table_text_flow.mjs tests/test_local_table_controls.mjs
+      - name: Verify mixed host and explicit column render identities
+        if: ${{ inputs.scope == 'all' || inputs.scope == 'table-controls' || inputs.scope == 'table-text' }}
+        run: node --test tests/test_local_nested_mixed_render.mjs
       - name: Build isolated local plugin
         run: node scripts/package_local_plugin.mjs
       - name: Verify interleaved text and multiple body roots through package
