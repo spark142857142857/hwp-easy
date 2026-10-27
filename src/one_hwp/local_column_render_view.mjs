@@ -72,6 +72,8 @@ export function openColumnRenderView(HwpDocument,bytes,openSingle){
    };
    render.column=column;render.frame=frame;render.runs=JSON.parse(render.document.getPageTextLayout(0)).runs.map(r=>render.remap(r,0)).filter(r=>!r.render_only_synthetic).map(remap);render.controls=JSON.parse(render.document.getPageControlLayout(0)).controls.map(r=>remap(render.remap(r,0)));
    if([...render.runs,...render.controls].some(r=>!r||!inside(r,frame,top,bottom)))return reject('column_content_overflow');
+   const mapCell=c=>{const b=local.blocks.find(b=>b.id===c.block_id),source=b&&localBlocks.get(pathKey(b));if(!source)throw new GuardError('COLUMN_CELL_WRAP_IDENTITY');return {...c,block_id:source.id,section:source.section,paragraph:source.paragraph,cell_path:source.cell_path,column};};
+   render.sourceCellWraps=render.cell_wraps.map(mapCell);render.sourceUnadaptedCells=render.unadapted_cells.map(mapCell);
    render.sourceTables=render.nested_tables.map(t=>({...t,table_id:localTables.get(t.table_id).id,cell_path:localTables.get(t.table_id).cell_path,column}));
   }
   const runs=parts.flatMap(p=>p.runs),controls=parts.flatMap(p=>p.controls);if(runs.length+controls.length>20000)return reject('column_item_limit');
@@ -80,7 +82,7 @@ export function openColumnRenderView(HwpDocument,bytes,openSingle){
    renderPageSvg:page=>{if(page!==0)throw new Error('Invalid page');const pieces=parts.map((part,i)=>{const svg=part.document.renderPageSvg(0),match=/^<svg\b[^>]*>([\s\S]*)<\/svg>\s*$/.exec(svg);if(!match)throw new Error('Unexpected render SVG');const prefix=`column-${i}-`,inner=match[1].replace(/\bid="([^"]+)"/g,(_,id)=>`id="${prefix}${id}"`).replace(/url\(#([^\)]+)\)/g,(_,id)=>`url(#${prefix}${id})`).replace(/((?:xlink:)?href=")#([^"]+)"/g,(_,a,id)=>`${a}#${prefix}${id}"`);return `<svg x="${part.frame.x-.25}" y="${top-.25}" width="${part.frame.width+.5}" height="${bottom-top+.5}" viewBox="${part.frame.x-.25} ${top-.25} ${part.frame.width+.5} ${bottom-top+.5}" overflow="hidden">${inner}</svg>`;});return `<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="${p.getUint32(0,true)/75}" height="${p.getUint32(4,true)/75}" viewBox="0 0 ${p.getUint32(0,true)/75} ${p.getUint32(4,true)/75}"><rect width="100%" height="100%" fill="#fff"/>${pieces.join('')}</svg>`;},
    free:()=>{for(const part of parts)part.document.free();original.free();}
   };
-  keep=true;return {document,anchors:[],unadapted:[],nested_tables:parts.flatMap(p=>p.sourceTables),unadapted_tables:[],remap:r=>r};
+  keep=true;return {document,anchors:[],unadapted:[],nested_tables:parts.flatMap(p=>p.sourceTables),unadapted_tables:[],cell_wraps:parts.flatMap(p=>p.sourceCellWraps),unadapted_cells:parts.flatMap(p=>p.sourceUnadaptedCells),remap:r=>r};
  }catch(e){if(!(e instanceof GuardError)||e.code.includes('LIMIT'))throw e;return {unsupported_column_profile:'column_identity_unverified'};}
  finally{if(!keep){for(const part of parts)part.document.free();original.free();}}
 }

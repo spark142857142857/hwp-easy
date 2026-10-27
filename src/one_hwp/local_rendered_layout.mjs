@@ -44,6 +44,7 @@ export function captureRenderedLayout(HwpDocument,bytes){
    const mismatched=[...inlineControls].filter(c=>c.plane!==0);if(mismatched.length)limitations.push({code:'INLINE_CONTROL_RENDER_PLANE_DISAGREEMENT',page,controls:mismatched.length});
    if(spacedFooters.has(info.sectionIndex)&&fixed_runs.length)limitations.push({code:'FIXED_FOOTER_SPACING_NOT_MODELED',page,section:info.sectionIndex});
    for(const [items,code] of [[renderView.anchors,'EMPTY_FLOATING_ANCHOR_RENDER_ADAPTED'],[renderView.unadapted,'EMPTY_FLOATING_ANCHOR_RENDER_UNVERIFIED']]){const selected=items.filter(a=>a.section===info.sectionIndex);if(selected.length)limitations.push({code,page,section:info.sectionIndex,anchors:selected});}
+   if(renderView.cell_wraps.length)limitations.push({code:'CELL_WRAP_RENDER_ADAPTED',page,cells:renderView.cell_wraps});
    if(renderView.nested_tables.length)limitations.push({code:'NESTED_TABLE_RENDER_ADAPTED',page,tables:renderView.nested_tables});
    const uncertain=new Set();for(const r of body_runs){
     if(!rootRun(r)||contains(body,r))continue;const key=`${r.secIdx}:${r.paraIdx}`;if(uncertain.has(key))continue;
@@ -51,7 +52,7 @@ export function captureRenderedLayout(HwpDocument,bytes){
     if(text.includes('\n')){uncertain.add(key);limitations.push({code:'MULTILINE_PARAGRAPH_PAGINATION_UNVERIFIED',page,section:r.secIdx,paragraph:r.paraIdx});}
    }
    pages.push({page,info,body,body_runs,fixed_runs,controls,inline_controls:inlineControls,limitations,uncertain_paragraphs:uncertain,text_runs:runs.length-synthetic});
- }return {pages,page_count:count,render_adaptations:renderView.anchors,render_unadapted_anchors:renderView.unadapted,render_nested_tables:renderView.nested_tables,render_unadapted_tables:renderView.unadapted_tables,measureInlineText:createNaturalTextMeasurer(HwpDocument)};
+ }return {pages,page_count:count,render_adaptations:renderView.anchors,render_unadapted_anchors:renderView.unadapted,render_nested_tables:renderView.nested_tables,render_unadapted_tables:renderView.unadapted_tables,render_cell_wraps:renderView.cell_wraps,render_unadapted_cells:renderView.unadapted_cells,measureInlineText:createNaturalTextMeasurer(HwpDocument)};
  }finally{doc.free();}
 }
 // Scratch documents are observations only: no source bytes are exported or
@@ -77,6 +78,7 @@ export function analyzeRenderedLayout(HwpDocument,bytes){
  // must not invalidate the independent raw-grid proof used by F1 placement.
  // Adapted views still carry a per-page limitation and are refused by F1.
  if(snapshot.render_unadapted_tables.length)limitations.push({code:'NESTED_TABLE_RENDER_UNVERIFIED',tables:snapshot.render_unadapted_tables});
+ if(snapshot.render_unadapted_cells.length)limitations.push({code:'CELL_WRAP_RENDER_UNVERIFIED',cells:snapshot.render_unadapted_cells});
  const tick=()=>{if(++checks>200000)fail('RENDERED_LAYOUT_CHECK_LIMIT');};
  for(const p of snapshot.pages){const {page,body,body_runs:runs,controls,fixed_runs}=p;limitations.push(...p.limitations);
   const floats=controls.filter(c=>['group','image','picture','shape'].includes(c.type)&&c.plane!==0&&!p.inline_controls.has(c));
@@ -92,5 +94,5 @@ export function analyzeRenderedLayout(HwpDocument,bytes){
   const clippedCells=runs.filter(r=>!rootRun(r)&&!contains(body,r));if(clippedCells.length)limitations.push({code:'CELL_TEXT_OUTSIDE_BODY_PAGINATION_UNVERIFIED',page,runs:clippedCells.length});
   pages.push({page,section:p.info.sectionIndex,body,text_runs:p.text_runs,floating_objects:floats.length,fixed_regions:fixed_runs.map(r=>({kind:'header_footer_text',x:r.x,y:r.y,width:r.w,height:r.h}))});
  }
- return {status:issues.length?'issues_detected':limitations.length?'inconclusive':'no_checked_rendered_overlap',checks,issues,pages,page_count:snapshot.page_count,render_adaptations:snapshot.render_adaptations,render_unadapted_anchors:snapshot.render_unadapted_anchors,render_nested_tables:snapshot.render_nested_tables,render_unadapted_tables:snapshot.render_unadapted_tables,engine_limitations:limitations,diagnostics_complete:limitations.length===0,layout_verified:false,scope:'current disposable WASM render view with bounded nested-table origins and empty floating-anchor line heights, separate fixed text and pagination uncertainty; up to 32 pages and 20000 items',not_checked:['native Hancom layout','font substitution','opaque drawing outlines','intentional overlap versus accidental overlap'],font_substitution_possible:true};
+ return {status:issues.length?'issues_detected':limitations.length?'inconclusive':'no_checked_rendered_overlap',checks,issues,pages,page_count:snapshot.page_count,render_adaptations:snapshot.render_adaptations,render_unadapted_anchors:snapshot.render_unadapted_anchors,render_nested_tables:snapshot.render_nested_tables,render_unadapted_tables:snapshot.render_unadapted_tables,render_cell_wraps:snapshot.render_cell_wraps,render_unadapted_cells:snapshot.render_unadapted_cells,engine_limitations:limitations,diagnostics_complete:limitations.length===0,layout_verified:false,scope:'current disposable WASM render view with bounded nested-table origins and empty floating-anchor line heights, separate fixed text and pagination uncertainty; up to 32 pages and 20000 items',not_checked:['native Hancom layout','font substitution','opaque drawing outlines','intentional overlap versus accidental overlap'],font_substitution_possible:true};
 }

@@ -14,6 +14,7 @@ import {bindRenderTables,renderTableKey} from './local_render_table_identity.mjs
 import {patchLocalPackedStreams} from './local_container_write.mjs';
 import {tableHostFields,inlineTableHostObject} from './local_table_host_controls.mjs';
 import {bindRenderObjects,renderRunKey} from './local_render_object_identity.mjs';
+import {adaptLeafCellWraps,projectCellRenderText} from './local_cell_render_wrap.mjs';
 const id=r=>Buffer.from(r.payload.subarray(0,4)).toString();
 const key=b=>JSON.stringify([b.section,b.paragraph,b.cell_path]);
 const plain=p=>p&&['left','justify'].includes(p.alignment)&&p.lineSpacingType===0&&p.lineSpacing>=100&&p.lineSpacing<=300&&!p.keepWithNext&&!p.keepLines&&!p.pageBreakBefore&&!p.fontLineHeight&&['marginLeft','marginRight','indent','spacingBefore','spacingAfter'].every(k=>!p[k]);
@@ -34,7 +35,7 @@ function prepare(HwpDocument,bytes){
  const rs=state.recordSets.get(0),pages=rs.filter(r=>r.tag===73),cols=rs.filter(r=>r.tag===71&&id(r)==='dloc');
  if(state.recordSets.size!==1||pages.length!==1||pages[0].payload.length!==40||view(pages[0].payload).getUint32(36,true)!==0||cols.length!==1||cols[0].payload.length<8||((view(cols[0].payload).getUint16(4,true)>>>2)&255)!==1)return unadapted('nested_page_profile');
  if(ts.some(t=>!canonical(rs,t)||!t.layout_editable||t.properties.cellSpacing||t.dimensions.rowCount>32||t.dimensions.colCount>16))return unadapted('nested_table_profile');
- const original=new HwpDocument(bytes);let originalBindings;try{originalBindings=bindRenderTables(original,state);if(!originalBindings)return unadapted('nested_render_identity');}finally{original.free();}
+ const original=new HwpDocument(bytes);try{const originalBindings=bindRenderTables(original,state);if(!originalBindings)return unadapted('nested_render_identity');
  const replacements=new Map(),changes=new Map(),owners=new Map(),headers=new Map(),tables=[],definitions=[...parseRecords(raw.streams.get('DocInfo'))].map(r=>({...r,payload:r.payload.slice()})),shapes=definitions.filter(r=>r.tag===25),map=definitions.find(r=>r.tag===17),extra=[];
  if(!map||map.payload.length<56||shapes.length>1024)return unadapted('nested_definition_profile');
  const objects=new Map();
@@ -49,6 +50,7 @@ function prepare(HwpDocument,bytes){
   }
  }
  if(objects.size>32)return unadapted('nested_object_limit');
+ const removed=new Set(),cellWraps=adaptLeafCellWraps(original,state,originalBindings,{rs,changes,headers,shapes,extra,removed});
  const hosts=new Map();
  for(const t of ts.filter(t=>t.cell_path.length)){
   const host=state.blocks.find(b=>b.id===t.parent_id),parent=ts.find(p=>p.cells.some(c=>c.blocks.includes(host))),cell=parent?.cells.find(c=>c.blocks.includes(host));
@@ -110,14 +112,14 @@ function prepare(HwpDocument,bytes){
    replacements.set(rs[host.record_index],replacement);owners.set(rs[cell.start],(owners.get(rs[cell.start])??0)+part.delta);
   }
  }
- const expand=records=>{const result=[];for(let i=0;i<records.length;i++){const r=records[i];if(replacements.has(r)){result.push(...expand(replacements.get(r)));while(i+1<records.length&&records[i+1].level>r.level)i++;}else result.push(changes.get(r)??r);}return result;},out=expand(rs);
+ const expand=records=>{const result=[];for(let i=0;i<records.length;i++){const r=records[i];if(removed.has(r))continue;if(replacements.has(r)){result.push(...expand(replacements.get(r)));while(i+1<records.length&&records[i+1].level>r.level)i++;}else result.push(changes.get(r)??r);}return result;},out=expand(rs);
  for(const [old,delta]of owners){const h=changes.get(old),p=view(h.payload);p.setUint16(0,p.getUint16(0,true)+delta,true);}
  const originalHeaders=new Map(state.blocks.map(b=>[rs[b.record_index],b])),origins=new Map();
  for(const [i,r]of out.entries())if(r.tag===66)origins.set(i,headers.get(r)??{block:originalHeaders.get(r.originHeader??r),from:0});
  if(extra.length){view(map.payload).setUint32(52,shapes.length+extra.length,true);definitions.splice(definitions.indexOf(shapes.at(-1))+1,0,...extra);}
  const pack=value=>(view(raw.streams.get('FileHeader')).getUint32(36,true)&1)?deflateRawSync(encodeRecords(value),{level:9}):encodeRecords(value),privateBytes=patchLocalPackedStreams(bytes,new Map([['BodyText/Section0',pack(out)],['DocInfo',pack(definitions)]])),after=inspectLocalComplex(HwpDocument,privateBytes,{includeDocumentInfo:false,verifyCharacterModel:false}),paths=new Map();
  for(const b of after.blocks){const old=origins.get(b.record_index);if(!old?.block)return unadapted('nested_identity_profile');paths.set(key(b),old);}
- const joined=new Map();for(const b of after.blocks){const old=paths.get(key(b)).block;joined.set(old,(joined.get(old)??'')+(paths.get(key(b)).synthetic?'':b.text));}
+ const joined=new Map();for(const b of after.blocks){const entry=paths.get(key(b)),old=entry.block,projected=entry.projection?projectCellRenderText(b.text,entry.projection):b.text;if(projected===null)return unadapted('cell_wrap_projection_identity');if(entry.projection&&(!equal(b.unit_styles,entry.projection.offsets.map((offset,i)=>old.unit_styles[entry.projection.synthetic.has(i)?Math.max(0,offset-1):offset]))))return unadapted('cell_wrap_style_identity');joined.set(old,(joined.get(old)??'')+(entry.synthetic?'':projected));}
  if(state.blocks.some(b=>joined.get(b)!==b.text))return unadapted('nested_text_profile');
  let controls=new Map(),objectControls=new Map(),objectRuns=new Map();
  const privateObjects=new Map(),objectSources=new Map();
@@ -125,14 +127,22 @@ function prepare(HwpDocument,bytes){
  const refresh=document=>{
   const bindings=bindRenderTables(document,after);if(!bindings)return false;const next=new Map();
   for(const [k,t]of bindings){const oldControl=out[t.record_index],sourceControl=[...changes].find(([,r])=>r===oldControl)?.[0]??oldControl,old=ts.find(t=>rs[t.record_index]===sourceControl),identity=old&&originalBindings.byTable.get(old);if(!identity)return false;next.set(k,{...identity,table_id:old.id,parentParaIdx:old.cell_path.length?old.paragraph:undefined,cellPath:old.cell_path.length?old.cell_path:undefined,cellIdentities:bindings.fragments.get(k).map(c=>c.cell)});}
+  if(cellWraps.adapted.length){
+   const runs=[];for(let page=0;page<document.pageCount();page++)runs.push(...JSON.parse(document.getPageTextLayout(page)).runs);
+   for(const b of after.blocks){const entry=paths.get(key(b));if(!entry.projection)continue;
+    const selected=runs.filter(r=>r.secIdx===b.section&&r.parentParaIdx===b.paragraph&&equal(r.cellPath,b.cell_path)&&r.text),expected=entry.projection.text.split('\n').filter(Boolean);
+    if(!equal(selected.map(r=>r.text),expected)||selected.some(r=>!Number.isSafeInteger(r.charStart)||r.charStart<0||entry.projection.text.slice(r.charStart,r.charStart+r.text.length)!==r.text))return false;
+   }
+  }
   const bound=bindRenderObjects(document,after,privateObjects);if(!bound)return false;
   objectControls=new Map([...bound.controls].map(([k,v])=>[k,objectSources.get(v.object)]));objectRuns=new Map([...bound.runs].map(([k,v])=>[k,objectSources.get(v.object)]));controls=next;return true;
  };
  const privateDocument=new HwpDocument(privateBytes);try{if(!refresh(privateDocument))return unadapted('nested_render_identity');}finally{privateDocument.free();}
- return {bytes:privateBytes,tables,unadapted:[],refresh,remap:(r,page=0)=>{
+ return {bytes:privateBytes,tables,unadapted:[],cell_wraps:cellWraps.adapted,unadapted_cells:cellWraps.unadapted,refresh,remap:(r,page=0)=>{
   if(r.type==='table'){const original=controls.get(renderTableKey(r,page));if(!original)return r;const {cellIdentities,...identity}=original;return {...r,...identity,cells:r.cells.map((c,i)=>({...c,cellIdx:cellIdentities[i]}))};}
   const object=r.type?objectControls.get(renderTableKey(r,page)):objectRuns.get(renderRunKey(r,page));
   if(object){const b=object.block,o=object.object,first=b.cell_path[0];return {...r,cellPath:b.cell_path,parentParaIdx:b.paragraph,paraIdx:r.type?b.paragraph:0,controlIdx:r.type?o.control_index:first.controlIndex,cellIdx:first.cellIndex,cellParaIdx:first.cellParaIndex,...(r.type?{stableIndex:[b.section,b.paragraph,...b.cell_path.flatMap(p=>[p.controlIndex,p.cellIndex,p.cellParaIndex]),o.control_index],outerTableControlIdx:first.controlIndex}:{text_box_id:o.id,text_box_paragraph:0})};}
-  if(!r.cellPath)return r;const entry=paths.get(JSON.stringify([r.secIdx,r.parentParaIdx,r.cellPath]));if(!entry)return r;if(entry.synthetic)return {...r,render_only_synthetic:true};const b=entry.block,first=b.cell_path[0];return {...r,cellPath:b.cell_path,paraIdx:b.cell_paragraph,parentParaIdx:b.paragraph,controlIdx:first.controlIndex,cellIdx:first.cellIndex,cellParaIdx:first.cellParaIndex,charStart:(r.charStart??0)+entry.from};
+  if(!r.cellPath)return r;const entry=paths.get(JSON.stringify([r.secIdx,r.parentParaIdx,r.cellPath]));if(!entry)return r;if(entry.synthetic)return {...r,render_only_synthetic:true};const b=entry.block,first=b.cell_path[0];return {...r,cellPath:b.cell_path,paraIdx:b.cell_paragraph,parentParaIdx:b.paragraph,controlIdx:first.controlIndex,cellIdx:first.cellIndex,cellParaIdx:first.cellParaIndex,charStart:entry.projection?(entry.projection.offsets[r.charStart??0]??b.text.length):(r.charStart??0)+entry.from,...(entry.projection?{paraShapeId:b.paragraph_properties.paraShapeId}:{})};
  }};
+ }finally{original.free();}
 }

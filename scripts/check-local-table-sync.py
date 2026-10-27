@@ -43,7 +43,7 @@ for c in cases:
   if tag==66:
    x[16:18]=y[16:18]=bytes(2)
    if edit and i+1<len(rb) and rb[i+1][0]==67 and rb[i+1][2]==(edit['expected_old']+'\r').encode('utf-16le'):
-    expected_mask=struct.unpack_from('<I',old,4)[0]|((1<<10) if '\n' in edit['new_text'] else 0);assert struct.unpack_from('<I',new,4)[0]==expected_mask;x[4:8]=y[4:8]=bytes(4);x[:4]=y[:4]=bytes(4);x[12:14]=y[12:14]=bytes(2)
+    expected_mask=(struct.unpack_from('<I',old,4)[0]&~(1<<10))|((1<<10) if '\n' in edit['new_text'] else 0);assert struct.unpack_from('<I',new,4)[0]==expected_mask;x[4:8]=y[4:8]=bytes(4);x[:4]=y[:4]=bytes(4);x[12:14]=y[12:14]=bytes(2)
    if footer and in_footer and old[8:10]!=new[8:10]:footer_heads+=1;x[8:10]=y[8:10]=bytes(2)
   elif tag==67 and edit and old==(edit['expected_old']+'\r').encode('utf-16le'):
    assert new==(edit['new_text']+'\r').encode('utf-16le');changed_text+=1;continue

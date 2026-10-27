@@ -22,11 +22,11 @@ export function openLocalRenderView(HwpDocument,bytes,allowColumns=true){
    // Complete-row fragments were bound to their original rows before opening.
    // Partial rows, overflow and unknown pagination keep the original view.
    const roots=controls.filter(c=>c.stableIndex?.length===3);
-   if(count>32||!roots.length||controls.length!==nested.tables.length+roots.length||roots.some(root=>{const info=JSON.parse(document.getPageInfo(root.page));return root.x<info.bodyLeft-.5||root.x+root.w>info.bodyRight+.5||root.y<info.marginTop+info.marginHeader-.5||root.y+root.h>info.height-info.marginBottom-info.marginFooter+.5;})){const original=new HwpDocument(bytes);document.free();document=original;nested.unadapted.push({reason:'nested_render_pagination'});nested.tables=[];nested.remap=r=>r;}
+   if(count>32||!roots.length||controls.length!==nested.tables.length+roots.length||roots.some(root=>{const info=JSON.parse(document.getPageInfo(root.page));return root.x<info.bodyLeft-.5||root.x+root.w>info.bodyRight+.5||root.y<info.marginTop+info.marginHeader-.5||root.y+root.h>info.height-info.marginBottom-info.marginFooter+.5;})){const original=new HwpDocument(bytes);document.free();document=original;nested.unadapted.push({reason:'nested_render_pagination'});nested.tables=[];nested.cell_wraps=[];nested.unadapted_cells=[];nested.remap=r=>r;}
   }
   let anchors=adaptEmptyFloatingAnchors(document,bytes);
-  if(nested.tables.length&&!nested.refresh(document)){const original=new HwpDocument(bytes);document.free();document=original;nested.unadapted.push({reason:'nested_anchor_pagination'});nested.tables=[];nested.remap=r=>r;anchors=adaptEmptyFloatingAnchors(document,bytes);}
-  return {document,...anchors,nested_tables:nested.tables,unadapted_tables:nested.unadapted,remap:nested.remap};
+  if(nested.tables.length&&!nested.refresh(document)){const original=new HwpDocument(bytes);document.free();document=original;nested.unadapted.push({reason:'nested_anchor_pagination'});nested.tables=[];nested.cell_wraps=[];nested.unadapted_cells=[];nested.remap=r=>r;anchors=adaptEmptyFloatingAnchors(document,bytes);}
+  return {document,...anchors,nested_tables:nested.tables,unadapted_tables:nested.unadapted,cell_wraps:nested.cell_wraps??[],unadapted_cells:nested.unadapted_cells??[],remap:nested.remap};
  }catch(e){document.free();throw e;}
 }
 
@@ -87,6 +87,6 @@ export function renderLocalPreview(HwpDocument,bytes,page){
  const api=createEngineApi(HwpDocument),view=openLocalRenderView(HwpDocument,bytes),document=view.document;
  try{
   const preview=api.previewDocument(document,page);
-  return {...preview,render_adaptations:view.anchors,render_unadapted_anchors:view.unadapted,render_nested_tables:view.nested_tables,render_unadapted_tables:view.unadapted_tables,render_source:'disposable_view_of_current_bytes',warnings:[...preview.warnings,...(view.anchors.length?['Empty floating-anchor fixed line heights are materialized only in the disposable render view.']:[]),...(view.nested_tables.length?['Canonical nested-table origins and ancestor alignment are adapted only in the disposable render view; font wrapping and native pagination remain unverified.']:[])]};
+  return {...preview,render_adaptations:view.anchors,render_unadapted_anchors:view.unadapted,render_nested_tables:view.nested_tables,render_unadapted_tables:view.unadapted_tables,render_cell_wraps:view.cell_wraps,render_unadapted_cells:view.unadapted_cells,render_source:'disposable_view_of_current_bytes',warnings:[...preview.warnings,...(view.cell_wraps.length?['Bounded leaf-cell padding and line breaks use source-bound embedded base advances only in the disposable view; complete native font layout remains unverified.']:[]),...(view.anchors.length?['Empty floating-anchor fixed line heights are materialized only in the disposable render view.']:[]),...(view.nested_tables.length?['Canonical nested-table origins and ancestor alignment are adapted only in the disposable render view; font wrapping and native pagination remain unverified.']:[])]};
  }finally{document.free();}
 }
