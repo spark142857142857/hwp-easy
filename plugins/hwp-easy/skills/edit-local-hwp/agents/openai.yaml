@@ -1,0 +1,6 @@
+interface:
+  display_name: "HWP Easy"
+  short_description: "HWP 파일을 읽고 편집합니다\nRead and edit HWP files"
+  default_prompt: "$hwp-easy:edit-local-hwp로 내가 지정한 HWP를 편집하고 같은 파일에 저장해줘.\nUse $hwp-easy:edit-local-hwp to edit the HWP I select and save it in place."
+policy:
+  allow_implicit_invocation: false

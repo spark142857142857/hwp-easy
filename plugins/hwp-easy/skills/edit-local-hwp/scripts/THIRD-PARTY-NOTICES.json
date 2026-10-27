@@ -1,0 +1,28 @@
+{
+  "schema_version": 1,
+  "scope": "pinned_package_notices_not_complete_wasm_sbom",
+  "packages": [
+    {
+      "name": "@rhwp/core",
+      "version": "0.8.6",
+      "license": "MIT",
+      "revision": "e8800c8def63449808a4092798442652ed460552",
+      "integrity": "sha512-ZMO2QMHbR4v7t86feMWiRJ4QozjjqHDGv4PyzTT4LyMuX1LeUpmQaOHrGLQpbYMJV0IWCYjVRewKqkXx+w16XQ=="
+    },
+    {
+      "name": "pako",
+      "version": "3.0.2",
+      "license": "(MIT AND Zlib)",
+      "revision": "32be8f8e0ead1e6e8a74a1586a34f84734382d01",
+      "integrity": "sha512-uBv6IT2aT1A78iU6dpNEbf6+CyhlV/6g9JlJs9kpgjFGFhruIICVRysF/W0SLzXg5+hCl+KroH7e4YUyfEmgLg=="
+    }
+  ],
+  "notice_sha256_lf": {
+    "RHWP-LICENSE.txt": "1c3a7d5643b163a3ead4965e1bea33b832caee5bfca265efe42afcd7bc696b5b",
+    "RHWP-THIRD-PARTY-LICENSES.md": "25baf4e05f26ab6009522d47843ac7247c1be64ae45658400227497106fda79b",
+    "PAKO-LICENSE.txt": "a04665b3b2de56c66730c1f720f528175739e4104f79073614aa611da1e85539",
+    "PAKO-ZLIB-LICENSE.txt": "170d7d544d380b38d5f76ab5eda29475b44ef537f4564163d6d9bece85c51c13"
+  },
+  "wasm_sha256": "8000e4ce320b7994dca6bcd58be0c862144c7b805576504e523a420439da658b",
+  "upstream_resource_inventory_is_not_artifact_inventory": true
+}

@@ -1,0 +1,15 @@
+{
+  "name": "hwp-easy",
+  "version": "0.5.0",
+  "description": "HWP 파일을 읽고 편집하는 로컬 도구의 Codex 설치 도우미. Local installer for HWP Easy.",
+  "type": "module",
+  "bin": { "hwp-easy": "bin/hwp-easy.mjs" },
+  "engines": { "node": ">=22" },
+  "license": "MIT",
+  "repository": { "type": "git", "url": "git+https://github.com/spark142857142857/hwp-easy.git" },
+  "homepage": "https://github.com/spark142857142857/hwp-easy",
+  "bugs": { "url": "https://github.com/spark142857142857/hwp-easy/issues" },
+  "keywords": ["hwp", "codex", "plugin", "local", "document"],
+  "files": ["bin/", "lib/", "plugins/hwp-easy/", ".agents/plugins/marketplace.json", "release-manifest.json", "README.md", "LICENSE"],
+  "publishConfig": { "access": "public", "registry": "https://registry.npmjs.org/" }
+}

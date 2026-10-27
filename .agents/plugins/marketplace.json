@@ -1,0 +1,20 @@
+{
+  "name": "hwp-easy",
+  "interface": {
+    "displayName": "HWP Easy"
+  },
+  "plugins": [
+    {
+      "name": "hwp-easy",
+      "source": {
+        "source": "local",
+        "path": "./plugins/hwp-easy"
+      },
+      "policy": {
+        "installation": "AVAILABLE",
+        "authentication": "ON_INSTALL"
+      },
+      "category": "Productivity"
+    }
+  ]
+}

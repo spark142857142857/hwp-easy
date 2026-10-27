@@ -1,0 +1,39 @@
+{
+  "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+  "name": "hwp-easy",
+  "version": "0.5.0",
+  "description": "선택한 HWP 파일을 읽고 편집한 뒤 같은 파일에 저장합니다. 이전 내용으로 복구할 수 있습니다.\nRead and edit a selected HWP file, save changes in place, and restore previous versions.",
+  "author": {
+    "name": "원석 유"
+  },
+  "homepage": "https://github.com/spark142857142857/hwp-easy",
+  "repository": "https://github.com/spark142857142857/hwp-easy",
+  "extensions": {
+    "com.openai": {
+      "interface": {
+        "displayName": "HWP Easy",
+        "developerName": "원석 유",
+        "shortDescription": "HWP 파일을 읽고 편집합니다\nRead and edit HWP files",
+        "longDescription": "선택한 HWP 파일을 읽고 문서 내용을 수정합니다. 표와 그림, 글자 모양도 지원 범위 안에서 바꿀 수 있습니다. 변경 사항은 같은 파일에 저장하며 저장 전 내용은 복구할 수 있습니다.\n\n파일 처리는 사용 중인 에이전트의 실행 환경에서 이루어집니다. HWP Easy에 문서를 업로드하거나 별도 계정을 만들 필요는 없습니다. 실행 환경에는 파일 접근 권한과 Node.js 22 이상이 필요합니다.\n\n지원 여부는 문서 구조에 따라 달라집니다. 미리보기의 글꼴과 줄바꿈, 쪽 배치는 다른 문서 프로그램에서 보는 결과와 다를 수 있습니다. HWP Easy는 개인 개발자가 제공하는 독립 문서 편집 도구입니다.\n\nRead a selected HWP file and edit its contents. Supported changes include tables, pictures and character formatting. Save changes to the same file and restore the contents from before a save.\n\nFiles are processed in your agent's execution environment. No document upload to HWP Easy or separate HWP Easy account is required. The execution environment needs filesystem access and Node.js 22 or later.\n\nSupport depends on the document structure. Preview fonts, line breaks and page layout may differ from those in other document applications. HWP Easy is an independent document editing tool provided by an individual developer.",
+        "composerIcon": "./assets/hwp-easy.svg",
+        "logo": "./assets/hwp-easy.svg",
+        "category": "Productivity",
+        "capabilities": [
+          "HWP 파일 읽기\nRead HWP files",
+          "문서 내용 편집\nEdit document contents",
+          "같은 파일에 저장\nSave changes in place",
+          "이전 내용 복구\nRestore previous versions"
+        ],
+        "websiteURL": "https://github.com/spark142857142857/hwp-easy",
+        "supportURL": "https://github.com/spark142857142857/hwp-easy/issues",
+        "defaultPrompt": [
+          "$hwp-easy:edit-local-hwp로 내가 지정한 HWP를 읽고 편집한 뒤 같은 파일에 저장해줘.",
+          "Use $hwp-easy:edit-local-hwp to read and edit the HWP file I select, saving it in place."
+        ],
+        "privacyPolicyURL": "https://github.com/spark142857142857/hwp-easy/blob/main/docs/privacy-policy.md",
+        "termsOfServiceURL": "https://github.com/spark142857142857/hwp-easy/blob/main/docs/terms-of-service.md"
+      },
+      "requires_local_executor": true
+    }
+  }
+}

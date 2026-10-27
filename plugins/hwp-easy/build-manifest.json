@@ -1,0 +1,41 @@
+{
+  "package": "hwp-easy",
+  "version": "0.5.0",
+  "runtime": "Node >=22; bundled JS and WASM; no npm or Python at execution time",
+  "local_cfb_writer": {
+    "name": "cfb",
+    "version": "1.2.2",
+    "license": "Apache-2.0",
+    "integrity": "sha512-KfdUZsSOw19/ObEWasvBP/Ac4reZvAGauZhs6S/gqNhXhI7cKwvlH7ulj+dOEYnca4bm4SGo8C1bTAQvnTjgQA==",
+    "source_sha256_lf": "239f7fb9d74b0cb8856e0b1a182bdf310f9fcf5b75a958e84edc158cd387dab2",
+    "license_sha256_lf": "279ce5f639ecd1767f96948f9fbe6f0aa8145cb280cf98473fb366eab5e6de26",
+    "scope": "local complex formatting and derived preview cache writer; not deployed Worker",
+    "npm_provenance": "https://registry.npmjs.org/cfb/-/cfb-1.2.2.tgz"
+  },
+  "local_preview": {
+    "renderer": {
+      "name": "@resvg/resvg-wasm",
+      "version": "2.6.2",
+      "license": "MPL-2.0",
+      "integrity": "sha512-FqALmHI8D4o6lk/LRWDnhw95z5eO+eAa6ORjVg09YRR7BkcM6oPHU9uyC0gtQG5vpFLvgpeU4+zEAz2H8APHNw==",
+      "wasm_sha256": "22bf6e9f9a100d972da0411a69c5ba504367fc1fa87b3b64e3f35e53926d2d70",
+      "source": "https://github.com/thx/resvg-js/tree/v2.6.2",
+      "source_modified": false
+    },
+    "font": {
+      "name": "NanumGothic Regular",
+      "license": "OFL-1.1",
+      "sha256": "76f45ef4a6bcff344c837c95a7dcc26e017e38b5846d5ae0cdcb5b86be2e2d31",
+      "source": "https://github.com/google/fonts/tree/133ccbee9a8b408eb71f31a36ccb9116f5c695ad/ofl/nanumgothic",
+      "modified": false,
+      "scope": "fallback font for local derived thumbnails only; not installed or substituted in HWP records"
+    }
+  },
+  "engine": "@rhwp/core 0.8.6",
+  "wasm_sha256": "8000e4ce320b7994dca6bcd58be0c862144c7b805576504e523a420439da658b",
+  "runner_sha256": "a98648ea6c4e3be181b40c32c8c3d3597ec67fbde1025c287b6061b2ab0fb173",
+  "global_registration_changed": false,
+  "remote_deployment_changed": false,
+  "portal_submission": "NOT_RUN",
+  "directory_publication": "NOT_DONE"
+}
