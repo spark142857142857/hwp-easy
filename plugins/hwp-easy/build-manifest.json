@@ -1,6 +1,6 @@
 {
   "package": "hwp-easy",
-  "version": "0.5.0",
+  "version": "0.5.1",
   "runtime": "Node >=22; bundled JS and WASM; no npm or Python at execution time",
   "local_cfb_writer": {
     "name": "cfb",

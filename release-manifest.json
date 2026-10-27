@@ -1,10 +1,10 @@
 {
-  "version": "0.5.0",
-  "plugin_digest": "ca6c2f0868d01d01f8fda70e4a45bc868619054e4e09c681c11d799a58e61f01",
+  "version": "0.5.1",
+  "plugin_digest": "a24b8b32fbf8d38ef6127657ad5791e0ec84bda19adabe098d36d50f79db1b44",
   "plugin_files": {
     "LICENSE": "3742f9bcd47f00dd7fca2822470db59ed010a83dc7d05e3a78f6576679830b50",
     "assets/hwp-easy.svg": "5b65dfb4797b754ac9929a22fece9e60abf747955227b5b6e21d38b4ff577330",
-    "build-manifest.json": "d01d39eaf52a41581972559930e7b4fcdc508b040eb76ded0a363856b418c4f2",
+    "build-manifest.json": "44be510712001bcbecbbb7775f3ddf37b12d53d7244d39cdd08f45fe0d97b50e",
     "licenses/CFB-LICENSE.txt": "279ce5f639ecd1767f96948f9fbe6f0aa8145cb280cf98473fb366eab5e6de26",
     "licenses/NANUM-OFL.txt": "eeacf16032901d0ed0456876ec77b8f0fda6b3fecec7d972f8543eb602e6c30f",
     "licenses/PAKO-LICENSE.txt": "a04665b3b2de56c66730c1f720f528175739e4104f79073614aa611da1e85539",
@@ -13,7 +13,7 @@
     "licenses/RHWP-LICENSE.txt": "1c3a7d5643b163a3ead4965e1bea33b832caee5bfca265efe42afcd7bc696b5b",
     "licenses/RHWP-THIRD-PARTY-LICENSES.md": "25baf4e05f26ab6009522d47843ac7247c1be64ae45658400227497106fda79b",
     "licenses/THIRD_PARTY_NOTICES.md": "a560d229f18711e84ff73bdc1a612e8f1579b4eeb5740cdfc0e16259c6e35a30",
-    "plugin.json": "feb0cf9c5acf47a2e5b005b48c76696371e8c7a8aba043e57be5c20903f53761",
+    "plugin.json": "aafd1f1f26022cf3ec5d9c10dc883863b61ab9f8df9e3cad5f29931715e4094b",
     "skills/edit-local-hwp/SKILL.md": "82fd18507e4eaa5f5388f4d38e510100bbf9060f3d1a425d0352a0f21bf45302",
     "skills/edit-local-hwp/agents/openai.yaml": "33d924dfed377c0192d1e6b81579b5267f16cb21777fe4a1922f1ce902e4392c",
     "skills/edit-local-hwp/references/editing.md": "5943b95f035605acdd59f9b52a2ffb9a2ac27effe97ce7ab6796a810c71a4d97",
