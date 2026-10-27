@@ -47,10 +47,10 @@ finally {await fs.rename(paused,pkg);}
 
 const updateHome=await prepare('update'),oldRun=codexRunner(codex,updateHome);
 await oldRun(['plugin','marketplace','add',old,'--json']);await oldRun(['plugin','add','hwp-easy@hwp-easy','--json']);
-const upgraded=installer('update','update');assert.equal(upgraded.previous_version,'0.2.19');assert.equal(upgraded.version,'0.5.0');
+const upgraded=installer('update','update');assert.equal(upgraded.previous_version,'0.2.19');assert.equal(upgraded.version,selected.version);
 const documentUpdate=checkDocument(upgraded,'update-document');
 assert.equal(installer('rollback','update').version,'0.2.19');
-assert.equal(installer('rollback','update').version,'0.5.0');
+assert.equal(installer('rollback','update').version,selected.version);
 assert.match(await fs.readFile(path.join(updateHome,'config.toml'),'utf8'),/hide_agent_reasoning = true/);
 
 const failHome=await prepare('failure'),failRun=codexRunner(codex,failHome);

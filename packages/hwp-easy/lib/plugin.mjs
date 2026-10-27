@@ -3,6 +3,15 @@ import path from 'node:path';
 import {createHash} from 'node:crypto';
 
 export const sha256 = bytes => createHash('sha256').update(bytes).digest('hex');
+// Windows desktop package redirection may report a different physical path
+// for the same LocalAppData directory. Compare filesystem identity, not text.
+export async function sameDirectory(a,b) {
+  const [left,right]=await Promise.all([fs.stat(a,{bigint:true}),fs.stat(b,{bigint:true})]);
+  if(!left.isDirectory()||!right.isDirectory())return false;
+  if(left.ino!==0n&&right.ino!==0n)return left.dev===right.dev&&left.ino===right.ino;
+  const canonical=async value=>{const result=await fs.realpath(value);return process.platform==='win32'?result.toLowerCase():result;};
+  return await canonical(a)===await canonical(b);
+}
 const skill = 'skills/edit-local-hwp';
 export const pluginFiles = [
   'LICENSE', 'plugin.json', 'assets/hwp-easy.svg', 'build-manifest.json',

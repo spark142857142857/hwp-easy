@@ -12,7 +12,7 @@ const source=path.join(root,'packages/hwp-easy');
 const npm=JSON.parse(await fs.readFile(path.join(source,'package.json'),'utf8'));
 if(npm.version!==metadata.version || npm.name!=='hwp-easy') throw Error('npm and plugin versions must match');
 await writeMarketplace(plugin,output);
-for(const name of ['package.json','bin/hwp-easy.mjs','lib/install.mjs','lib/plugin.mjs','README.md']) {
+for(const name of ['package.json','bin/hwp-easy.mjs','lib/install.mjs','lib/plugin.mjs','lib/agent-install.mjs','lib/agent-package.mjs','lib/agent-skill.mjs','README.md']) {
   const target=path.join(output,name);await fs.mkdir(path.dirname(target),{recursive:true});
   await fs.copyFile(path.join(source,name),target,fs.constants.COPYFILE_EXCL);
 }

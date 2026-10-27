@@ -4,28 +4,24 @@
 
 [프로젝트 개요](../README.md) · [문서 인덱스](README.md) · [사용 가이드](quick-start.md)
 
-HWP Easy **0.2.19**을 Claude Code와 Cursor에서 설치하고 호출하는 방법입니다. 두 앱은 같은 버전의 Codex용 배포본과 **같은 로컬 엔진**을 사용합니다. 현재 Codex 배포와 설치는 0.5.0이며 Claude Code와 Cursor는 사용자 요청으로 0.2.19를 유지합니다. 새 [Codex 설치 도우미](distribution.md)는 이 두 앱을 변경하지 않습니다. 새 기능 범위는 [지원 기능](supported-features.md)의 버전 구분을 따릅니다. HWP Easy 서버·원격 MCP·한글 설치가 필요하지 않으며, 실행 환경에 파일 접근 권한과 Node.js 22 이상이 필요합니다. 에이전트의 로그인과 이용 조건은 해당 앱을 따릅니다.
-
-Codex만 지원하는 도구는 아닙니다. Claude Code와 Cursor는 이 문서의 개인 스킬 패키지로 실행합니다. `npx hwp-easy@0.5.0 install`은 Codex용 설치 명령이며 두 앱을 설치하거나 갱신하지 않습니다.
+HWP Easy **0.5.1**은 Claude Code와 Cursor에서 Codex와 같은 로컬 엔진과 기능 범위를 제공합니다. Node.js 22 이상과 파일 접근 권한이 필요하며 HWP Easy 서버나 Codex CLI는 필요하지 않습니다. 에이전트 로그인과 모델 이용 조건은 각 앱을 따릅니다.
 
 ## 설치와 호출
 
-1. [0.2.19 릴리스](https://github.com/spark142857142857/hwp-easy/releases/tag/hwp-easy-local-v0.2.19)에서 앱에 맞는 ZIP을 내려받습니다. 함께 제공하는 SHA-256으로 파일을 확인할 수 있습니다. 소스 빌드는 [개발 안내](developer-guide.md#클라이언트-패키지-생성과-검증)를 따릅니다.
-2. ZIP을 풀고 안의 `hwp-easy` 폴더를 아래 위치에 둡니다. 같은 이름의 스킬이 이미 있으면 아래 업데이트 절차를 먼저 따릅니다.
-3. 새 대화에서 `/hwp-easy`를 호출하고 파일 경로와 바꿀 내용을 알려 줍니다.
+```bash
+npx hwp-easy@0.5.1 install --client claude-code
+npx hwp-easy@0.5.1 install --client cursor
+```
 
-| 앱 | ZIP 이름 | 개인 스킬 위치 |
-| --- | --- | --- |
-| Claude Code | `hwp-easy-claude-code-0.2.19.zip` | Windows: `%USERPROFILE%\.claude\skills\hwp-easy`; 다른 환경: `~/.claude/skills/hwp-easy` |
-| Cursor | `hwp-easy-cursor-0.2.19.zip` | Windows: `%USERPROFILE%\.cursor\skills\hwp-easy`; 다른 환경: `~/.cursor/skills/hwp-easy` |
+사용하는 앱의 명령 하나를 실행하고 새 대화에서 `/hwp-easy`를 호출합니다. 설치 위치는 각각 `~/.claude/skills/hwp-easy`와 `~/.cursor/skills/hwp-easy`입니다. Windows의 `~`는 사용자 프로필 폴더입니다. ZIP 수동 설치와 다른 위치 지정은 [설치 안내](distribution.md)를 따릅니다.
 
 > /hwp-easy C:\문서\지원서.hwp의 지원 동기 칸을 “지역사회 문제를 해결하는 경험을 쌓고 싶습니다.”로 채우고 같은 파일에 저장해줘. 다른 칸은 유지해줘.
 
-스킬은 사용자가 호출한 작업에만 적용됩니다. 두 앱의 `disable-model-invocation: true`와 Codex의 `allow_implicit_invocation: false`를 유지하며, 설명이나 설치를 요청한 것만으로 문서를 수정하지 않습니다. 스킬 메뉴와 실행 권한은 앱 설정을 따릅니다. [Claude Code 공식 안내](https://code.claude.com/docs/en/skills), [Cursor 공식 안내](https://cursor.com/docs/skills)
+스킬은 호출한 작업에만 적용됩니다. `disable-model-invocation: true`와 `allow_implicit_invocation: false`를 유지합니다. 설명이나 설치 요청만으로 문서를 수정하지 않습니다. [Claude Code 공식 안내](https://code.claude.com/docs/en/skills), [Cursor 공식 안내](https://cursor.com/docs/skills)
 
 ## 업데이트
 
-진행 중인 HWP 작업을 마친 뒤 기존 `hwp-easy` 폴더 전체를 `skills` 밖의 별도 보관 폴더로 이동하고 새 ZIP의 폴더를 설치합니다. 이전 폴더를 `skills` 안에서 이름만 바꾸면 앱이 중복 스킬로 발견할 수 있습니다. 새 설치가 정상인지 확인할 때까지 이전 폴더를 유지합니다. 자동으로 기존 설치를 덮어쓰지 않습니다. 개발자용 업데이트 도구는 [개발 가이드](developer-guide.md#클라이언트-패키지-생성과-검증)에 있습니다.
+이미 설치했다면 위 명령의 `install`을 `update`로 바꿉니다. `status`는 설치 버전을 확인하고 `rollback`은 보관한 이전 스킬로 돌아갑니다. 앱 이름과 설치 경로를 계속 같게 지정합니다. 이전 설치는 검색 경로 밖에 보관하며 실패 시 복원합니다. [백업 위치와 복귀](distribution.md#업데이트와-복귀)
 
 ## 저장과 복구
 
@@ -41,20 +37,21 @@ Codex만 지원하는 도구는 아닙니다. Claude Code와 Cursor는 이 문�
 
 ## 검증 범위
 
-기준일: **2026년 10월 13일**. 유지관리자의 Windows에서 두 개인 스킬을 0.2.18에서 0.2.19로 업데이트하고 실제 설치본의 파일 처리를 다시 검사했습니다.
+기준일: **2026년 10월 27일**. 두 앱의 실제 개인 스킬을 0.2.19에서 **0.5.1**로 업데이트했습니다.
 
 | 확인한 흐름 | 결과 |
 | --- | --- |
-| 설치된 실행기의 파일 처리 | 합성 HWP의 본문·두 문단 셀 편집, 같은 파일 저장·재읽기, 충돌 거부, 무변경 무저장, 이력 조회를 통과했습니다. |
-| 원본과 편집본 복구 | 원본의 정확한 바이트 복구와 보관한 편집본 재복구를 통과했습니다. |
-| Claude Code 실제 호출 | 0.2.18의 Windows Claude Code **2.1.296**에서 `/hwp-easy` 호출로 편집·저장·재읽기를 수행하고, 별도 호출로 이력 확인과 원본 복구를 통과했습니다. |
-| Cursor 실제 호출 | 0.2.18의 Windows Cursor **CLI 2026.10.01-e373342**에서 같은 편집·저장·복구 흐름을 통과했습니다. |
-| 독립 판독 | 별도 Python OLE/레코드 판독과 전체 파일 해시로 요청한 내용, 비대상 스트림·서식 보존과 정확한 복구를 확인했습니다. |
-| 패키지와 설치 검사 | 기존 설치 보존, 해시 변조, 자동 호출 허용, 필수 복구 참조 누락, 서버 설정과 잘못된 파일·경로를 검사합니다. 격리 실행·독립 판독은 Linux·Windows CI에서도 수행합니다. |
+| 신규 설치와 업데이트 | 최종 TGZ로 두 앱의 신규 설치, 0.2.19 업데이트, 이전 설치 복귀와 다시 갱신 통과 |
+| 실제 모델 호출 | Windows Claude Code와 Cursor CLI에서 `/hwp-easy`로 설치 실행기를 사용해 본문과 셀 두 문단 편집, 같은 파일 저장과 재읽기, 별도 호출의 원본 복구 확인 |
+| 독립 판독 | Python OLE/레코드 판독으로 요청한 내용, 비대상 내용과 서식 보존 및 원본 바이트의 정확한 복구 확인 |
+| 설치 보호 | 잠금, 변조와 연결 경로 거부, 실패 시 복원, 동시 변경 보존 검사 |
+| 공통 엔진 | 세 앱 실행기와 WASM 해시 일치. 엔진 코드는 0.5.0과 동일 |
 
-실제 호스트는 설치된 참조와 실행기를 사용했으며 복구 전 편집본도 유지됐습니다. 계정·토큰과 개인 문서는 배포본과 공개 기록에 포함하지 않았습니다.
+Cursor의 마지막 복구는 파일 저장과 독립 판독은 통과했으나 최종 CLI 응답에서 계정 사용량 제한이 발생했습니다. 전체 호출 종료 성공과 파일 복구 성공을 구분합니다.
 
-Cursor IDE 채팅 검사는 이번 작업 범위에서 제외했습니다. 0.2.19 설치와 업데이트·미리보기 근거는 [현재 검증 기록](local-release-0.2.19.md)을 참조하세요. 위 결과가 임의 문서의 모든 편집이나 외부 뷰어의 최종 쪽 배치를 인증하는 것은 아닙니다. 다른 사용자의 설치와 공개 배포를 포함한 남은 작업은 [프로젝트 상태](project-status.md)에 기록합니다.
+계정 인증과 개인 문서는 배포본에 포함하지 않습니다. Cursor IDE 채팅, 다른 PC와 현재 버전의 새 Codex 채팅 모델 호출은 이번 검사 범위에서 제외합니다. 외부 뷰어의 쪽 배치를 이번에 다시 인증하지 않았습니다. [상세 근거와 제한](unified-release-0.5.1.md)
+
+이전 0.2.18 실제 호출과 0.2.19 설치 결과는 [당시 검증](local-release-0.2.19.md)에 보관합니다.
 
 ## 개발자 재현
 
@@ -62,8 +59,6 @@ Cursor IDE 채팅 검사는 이번 작업 범위에서 제외했습니다. 0.2.1
 
 ## English
 
-HWP Easy 0.2.19 provides explicitly invoked personal skills for Claude Code and Cursor. Both use the same bundled local Node/WASM runtime as the Codex distribution. HWP processing requires no HWP Easy server, remote MCP or Hancom installation. The environment needs filesystem access and Node.js 22+; the agent's account requirements still apply.
+HWP Easy 0.5.1 uses one bundled local engine across Codex, Claude Code and Cursor. Install with `npx hwp-easy@0.5.1 install --client claude-code` or `--client cursor`, restart the app and explicitly invoke `/hwp-easy`. Node.js 22+ and filesystem access are required; these two targets do not require Codex CLI or an HWP Easy server.
 
-Extract the matching ZIP and place its `hwp-easy` folder in `~/.claude/skills/` or `~/.cursor/skills/`. Preserve an existing installation before replacing it. In a new conversation, invoke `/hwp-easy` with the HWP path and requested edits. `disable-model-invocation: true` prevents automatic activation. Verified edits save in place and retain adjacent backups; recovery also keeps the edited version.
-
-Actual `/hwp-easy` calls on 0.2.18 in Windows Claude Code 2.1.296 and Cursor CLI 2026.10.01-e373342 edited, saved, reread and restored a synthetic HWP through the installed runner. An independent OLE/record reader verified the requested changes, preservation and exact original bytes. Packaging and isolated runtime checks also run in Linux/Windows CI. The installed 0.2.19 runners were rechecked after updating both skills. ZIP downloads are available in the public release; directory publication and arbitrary external-viewer layout remain separate. Cursor IDE chat verification is excluded from this work. See the [project status](project-status.md) and [developer guide](developer-guide.md) for details; these guides are primarily in Korean.
+Use `update`, `status` and `rollback` with the same client selection. Previous installations are retained outside skill discovery. Actual Windows CLI model calls edited, saved, reread and restored synthetic HWP files through installed 0.5.1 runners. Independent readers verified content preservation and exact original bytes. See the [verification report](unified-release-0.5.1.md) for evidence and limits. Cursor IDE chat and other-PC checks remain excluded.

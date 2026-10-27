@@ -21,23 +21,19 @@ Support depends on document structure. Unverified structures may be read-only or
 
 ## Installation
 
-The current Codex distribution is **0.5.0**. Install Node.js 22+, run Codex once and ensure its CLI supports plugin commands.
+The common release is **0.5.1**. Install Node.js 22+ and choose your client.
 
-```bash
-npx hwp-easy@0.5.0 install
-```
-
-Restart Codex and explicitly select **HWP Easy** from the skill menu. For an existing installation, use `update` instead of `install`. Installing the public package does not require an npm account or 2FA.
-
-| Client | Current distribution | Installation |
+| Client | Install command | Format |
 | --- | --- | --- |
-| Codex | **0.5.0** | npm command above, or [GitHub marketplace and ZIP](docs/distribution.md) |
-| Claude Code | **0.2.19** | [Personal skill package](docs/agent-client-skills.md#설치와-호출) |
-| Cursor | **0.2.19** | [Personal skill package](docs/agent-client-skills.md#설치와-호출) |
+| Codex | `npx hwp-easy@0.5.1 install --client codex` | Local plugin |
+| Claude Code | `npx hwp-easy@0.5.1 install --client claude-code` | Personal skill |
+| Cursor | `npx hwp-easy@0.5.1 install --client cursor` | Personal skill |
 
-**The npm installer currently targets Codex.** Claude Code and Cursor remain usable through their existing packages; their 0.5.0 updates are deferred. Packages built at the same version share one engine, but the currently distributed versions have different feature scopes.
+Each command changes only the selected client's HWP Easy installation. Use `update` for an existing installation. Only the Codex target requires a Codex CLI with plugin commands. Public installation requires no npm account or 2FA.
 
-The [npm package](https://www.npmjs.com/package/hwp-easy) and [GitHub 0.5.0 release](https://github.com/spark142857142857/hwp-easy/releases/tag/hwp-easy-local-v0.5.0) are public. See [installation and updates](docs/distribution.md) for rollback and alternative installation paths. OpenAI public-directory publication is separate and has not occurred.
+Restart the app, then explicitly select **HWP Easy** in Codex or invoke `/hwp-easy` in Claude Code and Cursor. All three clients use the same engine and feature scope; installed copies remain independent.
+
+Get the [npm package](https://www.npmjs.com/package/hwp-easy) or [GitHub release](https://github.com/spark142857142857/hwp-easy/releases/tag/hwp-easy-local-v0.5.1). See [installation and updates](docs/distribution.md) for ZIP installation and rollback. OpenAI public-directory publication is separate and has not occurred.
 
 ## Usage
 
@@ -67,7 +63,7 @@ The runner checks the file version and edit targets before saving. Previous byte
 | `plugin.json` | Plugin identity, listing metadata and version |
 | Installer | Install, update and restore a previous plugin version |
 
-GitHub and npm distributions contain the same plugin files and engine. npm is an installation channel, not a document server. Copying only `SKILL.md` omits the runtime and does not work. See [architecture](docs/architecture.md).
+GitHub and npm distributions come from the same build. npm bundles one common engine and generates the selected client adapter during installation. npm is an installation channel, not a document server. Copying only `SKILL.md` omits the runtime and does not work. See [architecture](docs/architecture.md).
 
 ## Documentation
 
@@ -85,7 +81,7 @@ Source lives on `main`; the complete distribution lives on `distribution`. See t
 
 ## Project status
 
-Checks on 0.5.0 cover GitHub installation, updating from 0.2.19, recovery from an injected installation failure and plugin rollback. Installed runners also passed synthetic HWP editing, same-file saves and byte-exact restoration. The [distribution report](docs/distribution-0.5.0.md) distinguishes these checks from unverified environments and fresh-chat model calls.
+Checks on 0.5.1 cover installation for all three clients, updates from older versions, recovery from injected failures and installation rollback. Installed runners passed synthetic HWP editing, same-file saves and byte-exact restoration. Actual Claude Code and Cursor CLI model calls were also checked. The [unified release report](docs/unified-release-0.5.1.md) records the evidence and unverified environments.
 
 OpenAI directory submission is blocked by the skills-only intake restriction. Remote 0.1.9 and the Windows COM prototype remain [archived implementations](docs/README.md#보관-자료). See [remaining work](docs/remaining-work.md).
 

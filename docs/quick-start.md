@@ -5,7 +5,7 @@
 
 [프로젝트 개요](../README.md) · [문서 인덱스](README.md) · [지원 기능](supported-features.md)
 
-Codex용 HWP Easy 0.5.0의 스킬 호출, 파일 지정과 편집, 저장과 복구 절차입니다. 먼저 [설치와 업데이트](distribution.md)를 따릅니다. 실행 환경에는 Node.js 22 이상과 파일 접근 권한이 필요합니다. Claude Code와 Cursor는 0.2.19를 유지하며 버전별 지원 범위는 [프로젝트 상태](project-status.md)를 따릅니다.
+HWP Easy 0.5.1의 스킬 호출, 파일 지정과 편집, 저장과 복구 절차입니다. 세 앱에 같은 엔진을 제공하며 먼저 [설치와 업데이트](distribution.md)에서 앱을 선택합니다. 실행 환경에는 Node.js 22 이상과 파일 접근 권한이 필요합니다. 실제 검증 범위는 [프로젝트 상태](project-status.md)를 따릅니다.
 
 <a id="1-앱에서-스킬을-호출하세요"></a>
 

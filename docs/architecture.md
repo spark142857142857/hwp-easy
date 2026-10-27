@@ -8,7 +8,7 @@ HWP Easy는 공통 HWP 엔진과 로컬 실행기를 여러 에이전트 클라�
 
 ## 메인 로컬 파일 흐름
 
-메인 소스와 Codex 설치 및 GitHub 배포는 **0.5.0**, Claude Code와 Cursor의 실제 설치 및 공개 패키지는 **0.2.19**입니다. 같은 버전의 앱별 패키지는 공통 Node 실행기와 WASM을 포함합니다. HWP Easy 서버나 OAuth 연결이 필요하지 않습니다.
+현재 공통 배포 버전은 **0.5.1**입니다. 세 앱의 설치본에 공통 Node 실행기와 WASM을 포함하며 해시가 일치합니다. HWP Easy 서버나 OAuth 연결이 필요하지 않습니다.
 
 ```mermaid
 flowchart LR
@@ -43,9 +43,9 @@ flowchart LR
 
 ## 배포와 설치
 
-소스는 `main`, 실행 자원을 포함한 완성된 플러그인은 `distribution` 브랜치에서 관리합니다. GitHub 마켓플레이스는 배포 브랜치의 `.agents/plugins/marketplace.json`에서 `plugins/hwp-easy`를 찾습니다. npm 패키지도 같은 25개 플러그인 파일을 포함하며 엔진을 별도로 구현하지 않습니다. npm 0.5.0 설치 도우미는 Codex용이며 Claude Code와 Cursor는 기존 0.2.19 개인 스킬 패키지로 사용합니다.
+소스는 `main`, 실행 자원을 포함한 완성된 플러그인은 `distribution` 브랜치에서 관리합니다. GitHub 마켓플레이스는 배포 브랜치의 `.agents/plugins/marketplace.json`에서 `plugins/hwp-easy`를 찾습니다. npm 패키지도 같은 25개 플러그인 파일을 포함하며 엔진을 별도로 구현하지 않습니다. npm 0.5.1은 공통 엔진을 한 번 포함하고 `--client`로 선택한 앱의 설치 형식을 만듭니다. Claude Code와 Cursor는 같은 파일에서 호출 이름과 명시 호출 정책을 갖춘 개인 스킬을 생성합니다.
 
-`packages/hwp-easy/`의 설치 도우미는 패키지를 영구 폴더에 복사하고 Codex의 공식 플러그인 명령으로 등록합니다. 업데이트 전 설치는 발견 경로 밖에 보관하며 실패 시 복원합니다. 설치 복귀와 HWP 내용 복구는 별개입니다. 설치 도우미는 문서를 읽거나 편집하지 않습니다. npm 레지스트리 게시 상태와 실제 명령은 [설치 안내](distribution.md)를 따릅니다.
+`packages/hwp-easy/`의 설치 도우미는 Codex에는 영구 마켓플레이스를 복사하고 공식 플러그인 명령으로 등록합니다. Claude Code와 Cursor에는 해당 앱의 개인 스킬 폴더에 설치하며 Codex를 실행하지 않습니다. `lib/agent-package.mjs`는 공통 빌드로 어댑터를 만들고 `agent-install.mjs`는 앱별 설치와 복귀 상태를 관리합니다. 설치된 세 사본은 독립적이므로 한 앱의 업데이트가 다른 앱을 변경하지 않습니다. 업데이트 전 설치는 발견 경로 밖에 보관하며 실패 시 복원합니다. 설치 복귀와 HWP 내용 복구는 별개입니다. 설치 도우미는 문서를 읽거나 편집하지 않습니다. npm 레지스트리 게시 상태와 실제 명령은 [설치 안내](distribution.md)를 따릅니다.
 
 ## 로컬 저장과 복구
 

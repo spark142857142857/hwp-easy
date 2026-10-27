@@ -4,7 +4,7 @@
 
 [프로젝트 개요](../README.md) · [문서 인덱스](README.md) · [아키텍처](architecture.md)
 
-소스를 변경하거나 배포 패키지를 생성할 때 필요한 환경과 검사 명령입니다. 현재 소스와 Codex 배포는 **로컬 HWP Easy 0.5.0**입니다. GitHub 배포와 설치 도우미는 [배포 검증](distribution-0.5.0.md)을 따르며 Claude Code와 Cursor 갱신은 보류합니다. 같은 버전의 앱별 패키지는 공통 실행기를 포함하며 실제 설치 버전은 [프로젝트 상태](project-status.md)에서 구분합니다. 파일 편집 절차는 [사용 가이드](quick-start.md), 실제 설치·호출 결과는 [프로젝트 상태](project-status.md)에 정리합니다.
+소스를 변경하거나 배포 패키지를 생성할 때 필요한 환경과 검사 명령입니다. 현재 공통 버전은 **로컬 HWP Easy 0.5.1**입니다. 세 앱의 공통 설치와 실제 호출 근거는 [통합 배포 검증](unified-release-0.5.1.md)을 따릅니다. 같은 버전의 앱별 패키지는 공통 실행기를 포함하며 실제 설치 버전은 [프로젝트 상태](project-status.md)에서 구분합니다. 파일 편집 절차는 [사용 가이드](quick-start.md), 실제 설치·호출 결과는 [프로젝트 상태](project-status.md)에 정리합니다.
 
 ## 환경과 구성
 
@@ -88,28 +88,28 @@ npm run test:engine
 검증한 플러그인을 다시 빌드하지 않고 GitHub와 npm 공통 배포 폴더를 준비합니다. 새 출력 폴더가 필요하며 준비 명령은 설치나 게시를 하지 않습니다.
 
 ```bash
-node --test tests/test_distribution_install.mjs
+node --test tests/test_distribution_install.mjs tests/test_agent_skill_install.mjs tests/test_unified_install.mjs
 node scripts/prepare_distribution.mjs outputs/plugin-package/hwp-easy outputs/distribution-check/marketplace
 ```
 
-생성한 폴더에서 `npm pack --ignore-scripts`를 실행한 뒤, 원래 플러그인 ZIP과 TGZ를 `scripts/archive_distribution.py`로 대조하고 릴리스 파일을 만듭니다. 실제 격리 Codex 설치 검사는 [0.5.0 재현 절차](distribution-0.5.0.md#개발자-재현)를 따릅니다. npm 로그인, 계정 인증과 외부 게시는 배포 준비에 포함하지 않습니다. 게시자 인증을 AI 대화에 전달하지 않습니다.
+생성한 폴더에서 `npm pack --ignore-scripts`를 실행한 뒤, 원래 플러그인 ZIP과 TGZ를 `scripts/archive_distribution.py`로 대조하고 릴리스 파일을 만듭니다. 실제 격리 세 앱 설치 검사는 [0.5.1 재현 절차](unified-release-0.5.1.md#개발자-재현)를 따릅니다. npm 로그인, 계정 인증과 외부 게시는 배포 준비에 포함하지 않습니다. 게시자 인증을 AI 대화에 전달하지 않습니다.
 
 `main`은 소스, `distribution`은 생성한 배포본입니다. 배포 태그와 게시한 npm 버전은 기존 내용을 덮어써 재사용하지 않습니다. 새 버전은 검증 후 새 아티팩트로 배포하며 기존 공개 이력을 유지합니다. GitHub Actions는 배포 단계에서도 명시 요청 전까지 실행하지 않습니다.
 
 ## 클라이언트 패키지 생성과 검증
 
-다음은 공통 Node/WASM 실행기와 앱별 패키지를 만드는 개발자 절차입니다. 현재 Codex 배포는 0.5.0이며 Claude Code와 Cursor의 공개본과 실제 설치는 0.2.19를 유지합니다. 두 앱의 갱신을 재개할 때만 앱별 생성 명령을 실행하며 생성 자체는 설치가 아닙니다.
+다음은 공통 Node/WASM 실행기와 앱별 패키지를 만드는 개발자 절차입니다. 현재 세 앱 공통 버전은 0.5.1입니다. `lib/agent-package.mjs`의 같은 생성 함수를 npm 도우미와 ZIP 빌드가 함께 사용합니다. 생성 자체는 앱 설치가 아닙니다.
 
 ```bash
 node scripts/package_local_plugin.mjs
 python scripts/archive_local_plugin.py
-node scripts/package_agent_skills.mjs
-python scripts/archive_agent_skills.py
+node scripts/package_agent_skills.mjs outputs/plugin-package/hwp-easy outputs/agent-packages
+python scripts/archive_agent_skills.py outputs/agent-packages
 ```
 
 | 배포 대상 | 생성 ZIP |
 | --- | --- |
-| Codex | `outputs/plugin-package/hwp-easy-0.5.0.zip` |
+| Codex | `outputs/plugin-package/hwp-easy-0.5.1.zip` |
 | Claude Code | `outputs/agent-packages/hwp-easy-claude-code-<공통-빌드-버전>.zip` |
 | Cursor | `outputs/agent-packages/hwp-easy-cursor-<공통-빌드-버전>.zip` |
 
@@ -136,7 +136,7 @@ node scripts/install_agent_skill.mjs --client cursor --package outputs/agent-pac
 OpenAI 포털의 기존 MCP 등록은 서버 없는 패키지로 변경할 수 없어, 로컬판에는 별도 식별자 `hwp-easy-local`을 사용합니다. 다음 명령은 검증한 ZIP에서 등록 이름·호출 안내·표시 필드만 조정하고 모든 실행 자원의 바이트 일치를 검사합니다. 업로드·설치·심사 제출을 수행하지 않습니다.
 
 ```bash
-python scripts/package_directory_plugin.py outputs/plugin-package/hwp-easy-0.5.0.zip outputs/directory-package
+python scripts/package_directory_plugin.py outputs/plugin-package/hwp-easy-0.5.1.zip outputs/directory-package
 ```
 
 포털 관측과 남은 차단 항목은 [로컬 디렉터리 등록 기록](local-directory-submission.md)에 정리합니다.

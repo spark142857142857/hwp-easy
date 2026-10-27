@@ -122,3 +122,13 @@ test('marketplace preparation refuses an existing directory',async t=>{
   await assert.rejects(writeMarketplace(f.plugin,destination),{code:'EEXIST'});
   assert.deepEqual(await fs.readdir(destination),[]);
 });
+
+test('Windows canonical path spelling does not trigger a false install rollback',{skip:process.platform!=='win32'},async t=>{
+  const f=await fixture(t);
+  const run=async args=>{
+    const value=await f.run(args);
+    if(args[1]==='marketplace'&&args[2]==='list')for(const source of value.marketplaces)source.root=source.root.toUpperCase();
+    return value;
+  };
+  assert.equal((await manageInstallation({...f.options,run})).status,'INSTALLED');
+});

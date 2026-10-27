@@ -3,8 +3,9 @@ import hashlib
 import json
 from pathlib import Path
 import zipfile
+import sys
 
-root = Path(__file__).resolve().parents[1] / 'outputs/agent-packages'
+root = Path(sys.argv[1]).resolve() if len(sys.argv) == 2 else Path(__file__).resolve().parents[1] / 'outputs/agent-packages'
 for client in ('claude-code', 'cursor'):
     directory = root / client / 'hwp-easy'
     manifest = json.loads((directory / 'build-manifest.json').read_text(encoding='utf-8'))

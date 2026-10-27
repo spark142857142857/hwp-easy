@@ -21,23 +21,19 @@ HWP Easy는 Codex, Claude Code와 Cursor에서 HWP 파일을 읽고 편집하는
 
 ## 설치
 
-Codex용 현재 배포 버전은 **0.5.0**입니다. Node.js 22 이상과 초기 실행을 마친 Codex, 플러그인 명령을 지원하는 Codex CLI가 필요합니다.
+현재 공통 배포 버전은 **0.5.1**입니다. Node.js 22 이상을 준비하고 사용하는 앱의 명령을 선택합니다.
 
-```bash
-npx hwp-easy@0.5.0 install
-```
-
-설치 후 Codex를 다시 열고 스킬 메뉴에서 **HWP Easy**를 선택합니다. 이미 설치했다면 `install` 대신 `update`를 사용합니다. 공개 패키지를 설치할 때 npm 계정이나 2FA 설정은 필요하지 않습니다.
-
-| 클라이언트 | 현재 배포 버전 | 설치 방법 |
+| 앱 | 설치 명령 | 설치 형식 |
 | --- | --- | --- |
-| Codex | **0.5.0** | 위 npm 명령 또는 [GitHub 마켓플레이스와 ZIP](docs/distribution.md) |
-| Claude Code | **0.2.19** | [개인 스킬 패키지 설치](docs/agent-client-skills.md#설치와-호출) |
-| Cursor | **0.2.19** | [개인 스킬 패키지 설치](docs/agent-client-skills.md#설치와-호출) |
+| Codex | `npx hwp-easy@0.5.1 install --client codex` | 로컬 플러그인 |
+| Claude Code | `npx hwp-easy@0.5.1 install --client claude-code` | 개인 스킬 |
+| Cursor | `npx hwp-easy@0.5.1 install --client cursor` | 개인 스킬 |
 
-**이번 npm 설치 도우미는 Codex용입니다.** Claude Code와 Cursor도 기존 패키지로 사용할 수 있으며, 두 앱의 0.5.0 갱신은 보류 중입니다. 같은 버전의 패키지는 공통 엔진을 사용하지만 현재 배포 버전의 기능 범위는 서로 다릅니다.
+한 명령은 선택한 앱만 설치합니다. 이미 설치했다면 `install` 대신 `update`를 사용합니다. Codex에는 플러그인 명령을 지원하는 Codex CLI가 필요하며, 다른 두 앱의 설치에는 필요하지 않습니다. 공개 패키지 설치에는 npm 계정이나 2FA가 필요하지 않습니다.
 
-[npm 패키지](https://www.npmjs.com/package/hwp-easy)와 [GitHub 0.5.0 릴리스](https://github.com/spark142857142857/hwp-easy/releases/tag/hwp-easy-local-v0.5.0)를 공개했습니다. 자세한 업데이트와 이전 버전 복귀는 [설치 안내](docs/distribution.md)를 따릅니다. OpenAI 공개 디렉터리 게시는 별도 절차이며 아직 완료하지 않았습니다.
+설치 후 앱을 다시 열고 Codex에서는 스킬 메뉴에서 **HWP Easy**를 선택하고 Claude Code와 Cursor에서는 `/hwp-easy`를 호출합니다. 세 앱은 같은 엔진과 기능 범위를 사용하며 설치된 사본은 각각 유지됩니다.
+
+[npm 패키지](https://www.npmjs.com/package/hwp-easy)와 [GitHub 릴리스](https://github.com/spark142857142857/hwp-easy/releases/tag/hwp-easy-local-v0.5.1)를 제공합니다. ZIP 설치와 업데이트 및 이전 버전 복귀는 [설치 안내](docs/distribution.md)를 따릅니다. OpenAI 공개 디렉터리 게시는 별도 절차이며 아직 완료하지 않았습니다.
 
 ## 사용법
 
@@ -65,9 +61,9 @@ C:\문서\지원서.hwp를 방금 수정하기 전 내용으로 복구해줘.
 | `local-runner.mjs` | 엔진 호출, 편집 검사와 로컬 저장 및 복구 |
 | HWP와 미리보기 WASM, 글꼴 | 문서 처리와 미리보기 자원 |
 | `plugin.json` | 플러그인 이름과 설명, 아이콘과 버전 |
-| 설치 도우미 | 같은 플러그인의 설치, 업데이트와 이전 버전 복귀 |
+| 설치 도우미 | 선택한 앱의 플러그인 또는 개인 스킬 설치, 업데이트와 이전 버전 복귀 |
 
-GitHub와 npm 배포본은 같은 플러그인 파일과 엔진을 사용합니다. npm은 배포와 설치 경로이며 문서 처리용 서버가 아닙니다. `SKILL.md`만 복사하면 실행기와 엔진이 빠져 작동하지 않습니다. [아키텍처](docs/architecture.md)
+GitHub와 npm은 같은 빌드에서 배포합니다. npm에는 공통 엔진을 한 번 포함하고 설치 시 선택한 앱의 스킬 설정을 생성합니다. npm은 배포와 설치 경로이며 문서 처리용 서버가 아닙니다. `SKILL.md`만 복사하면 실행기와 엔진이 빠져 작동하지 않습니다. [아키텍처](docs/architecture.md)
 
 ## 문서
 
@@ -85,7 +81,7 @@ GitHub와 npm 배포본은 같은 플러그인 파일과 엔진을 사용합니�
 
 ## 프로젝트 상태
 
-0.5.0의 GitHub 신규 설치와 0.2.19에서의 업데이트, 설치 실패 복구와 이전 플러그인 복귀를 검증했습니다. 설치된 실행기의 합성 HWP 편집, 같은 파일 저장과 정확한 원본 복구도 통과했습니다. [배포 검증](docs/distribution-0.5.0.md)에 실제 검사와 미검증 항목을 구분했습니다.
+0.5.1의 세 앱 신규 설치와 구버전 업데이트, 설치 실패 복구와 이전 버전 복귀를 검증했습니다. 설치된 실행기의 합성 HWP 편집과 같은 파일 저장 및 정확한 복구, Claude Code와 Cursor CLI의 실제 모델 호출을 확인했습니다. [통합 배포 검증](docs/unified-release-0.5.1.md)에 실제 검사와 미검증 항목을 구분했습니다.
 
 OpenAI 디렉터리는 스킬 전용 접수 제한으로 보류합니다. 원격 0.1.9와 Windows COM 프로토타입은 [이전 구현](docs/README.md#보관-자료)으로 보관합니다. 앞으로의 작업은 [remaining-work](docs/remaining-work.md)에서 관리합니다.
 
