@@ -8,7 +8,7 @@ on:
         description: Verification scope (all or a focused table feature)
         type: choice
         default: all
-        options: [all, table-flow, table-text, table-metrics, table-controls, table-floating, table-compact, package-balance, render-view]
+        options: [all, table-flow, table-text, table-metrics, table-controls, table-floating, table-compact, package-balance, render-view, placement-balance]
 
 permissions:
   contents: read
@@ -324,12 +324,6 @@ jobs:
       - name: Verify all table source regressions during floating checks
         if: ${{ inputs.scope == 'table-floating' }}
         run: node --test --test-concurrency=2 tests/test_local_table_reflow.mjs tests/test_local_table_hosts.mjs tests/test_local_table_text_flow.mjs tests/test_local_table_text_metrics.mjs tests/test_local_table_controls.mjs tests/test_local_table_floating.mjs tests/test_local_table_compact.mjs
-      # Move this existing pair out of the nearly-full complex job. Previous
-      # Windows/Linux timings were 165/125s; request and job bounds stay fixed.
-      - name: Node general placement
-        run: node scripts/check-local-placement.mjs
-      - name: Python general placement
-        run: python scripts/check-local-placement.py
 
   local-table-flow:
     if: ${{ inputs.scope == 'all' || inputs.scope == 'table-flow' || inputs.scope == 'package-balance' }}
@@ -508,8 +502,8 @@ jobs:
         run: python scripts/check-local-table-compact.py
 
   local-large-text:
-    if: ${{ inputs.scope == 'all' }}
-    name: Local large text / ${{ matrix.os }}
+    if: ${{ inputs.scope == 'all' || inputs.scope == 'render-view' || inputs.scope == 'placement-balance' }}
+    name: Large text and general placement / ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
     # Both checks finished near the old 12-minute boundary; allow runner cleanup.
     timeout-minutes: 18
@@ -542,17 +536,28 @@ jobs:
         working-directory: probes/sites-runtime
         run: npm ci --ignore-scripts --no-audit --no-fund
       - name: Verify full raw-run proofs and exact search ranges
+        if: ${{ inputs.scope == 'all' }}
         run: node --test tests/test_local_style.mjs tests/test_local_find.mjs
       - name: Build isolated local execution package
         run: node scripts/package_local_plugin.mjs
       - name: Verify long text, retained mixed styles and exact recovery
+        if: ${{ inputs.scope == 'all' }}
         run: node scripts/check-local-long-text.mjs
       - name: Python check local long text
+        if: ${{ inputs.scope == 'all' }}
         run: python scripts/check-local-long-text.py
       - name: Verify search pagination and same-file range edits
+        if: ${{ inputs.scope == 'all' }}
         run: node scripts/check-local-find.mjs
       - name: Python check local text
+        if: ${{ inputs.scope == 'all' }}
         run: python scripts/check-local-text.py outputs/local-find-20261011
+      # The previous Windows large-text job used 765 of 1080 seconds.
+      # General placement did not fit the floating job's 22-minute bound.
+      - name: Node general placement
+        run: node scripts/check-local-placement.mjs
+      - name: Python general placement
+        run: python scripts/check-local-placement.py
 
   worker-runtime:
     if: ${{ inputs.scope == 'all' }}
