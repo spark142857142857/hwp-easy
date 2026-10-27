@@ -9,13 +9,13 @@ const same=(a,b)=>JSON.stringify(a)===JSON.stringify(b);
 const path=b=>b.cell_path.flatMap(p=>[p.controlIndex,p.cellIndex,p.cellParaIndex]);
 const font=p=>p&&[70,74].includes(p.length)&&view(p).getUint32(42,true)>=100&&view(p).getUint32(42,true)<=20000&&(view(p).getUint32(46,true)&~(15|0x180000))===0&&[...p.subarray(14,21),...p.subarray(28,35)].every(n=>n>=50&&n<=200)&&[...p.subarray(21,28)].every(n=>n<=50||n>=236)&&[...p.subarray(35,42)].every(n=>n===0);
 
-export function projectCellLines(text,widths,width){
+export function projectCellLines(text,widths,width,wordBoundaries=new Set()){
  const cuts=new Set(),atoms=[...new Intl.Segmenter('und',{granularity:'grapheme'}).segment(text)].map(a=>({text:a.segment,at:a.index,width:widths.slice(a.index,a.index+a.segment.length).reduce((n,w)=>n+w,0)}));let x=0,line=[];
  const closing=/^[\p{Pe}\p{Pf},.!?:;、。，！？：；%‰]/u,opening=/[\p{Ps}\p{Pi}]$/u,word=/^[\p{Script=Latin}\p{Number}\p{Mark}]+$/u;
  const wrap=next=>{let carry=[];if(line.length&&(closing.test(next.text)||opening.test(line.at(-1).text))){carry.unshift(line.pop());while(line.length&&opening.test(line.at(-1).text))carry.unshift(line.pop());}const start=carry[0]?.at??next.at;cuts.add(start);line=carry;x=carry.reduce((n,a)=>n+a.width,0);};
  for(let i=0;i<atoms.length;i++){
   const atom=atoms[i];if(atom.text==='\n'){line=[];x=0;continue;}
-  if(word.test(atom.text)&&(i===0||!word.test(atoms[i-1].text))){let n=i,total=0;while(n<atoms.length&&word.test(atoms[n].text))total+=atoms[n++].width;if(x>0&&x+total>width)wrap(atom);}
+  if(word.test(atom.text)&&(i===0||!word.test(atoms[i-1].text)||wordBoundaries.has(atom.at))){let n=i,total=0;while(n<atoms.length&&word.test(atoms[n].text)&&(n===i||!wordBoundaries.has(atoms[n].at)))total+=atoms[n++].width;if(x>0&&x+total>width)wrap(atom);}
   if(atom.width>width||!Number.isFinite(atom.width)||atom.width<0)return null;
   if(!/^ +$/.test(atom.text)&&x>0&&x+atom.width>width)wrap(atom);
   line.push(atom);x+=atom.width;

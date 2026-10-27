@@ -47,6 +47,8 @@ export function captureRenderedLayout(HwpDocument,bytes){
    for(const [items,code] of [[renderView.anchors,'EMPTY_FLOATING_ANCHOR_RENDER_ADAPTED'],[renderView.unadapted,'EMPTY_FLOATING_ANCHOR_RENDER_UNVERIFIED']]){const selected=items.filter(a=>a.section===info.sectionIndex);if(selected.length)limitations.push({code,page,section:info.sectionIndex,anchors:selected});}
    if(renderView.cell_wraps.length)limitations.push({code:'CELL_WRAP_RENDER_ADAPTED',page,cells:renderView.cell_wraps});
    if(renderView.nested_tables.length)limitations.push({code:'NESTED_TABLE_RENDER_ADAPTED',page,tables:renderView.nested_tables});
+   const drawings=renderView.drawing_adaptations?.filter(a=>a.page===page)??[];
+   if(drawings.length)limitations.push({code:'DRAWING_TEXT_RENDER_ADAPTED',page,drawings});
    const uncertain=new Set();for(const r of body_runs){
     if(!rootRun(r)||contains(body,r))continue;const key=`${r.secIdx}:${r.paraIdx}`;if(uncertain.has(key))continue;
     const text=doc.getTextRange(r.secIdx,r.paraIdx,0,doc.getParagraphLength(r.secIdx,r.paraIdx));

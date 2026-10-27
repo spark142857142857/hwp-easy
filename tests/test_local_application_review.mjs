@@ -31,13 +31,13 @@ for(const profile of ['body','group','other_box'])test(`duplicate field definiti
  assert.deepEqual(fs.readFileSync(source),Buffer.from(bytes));assert.equal((await runLocal({action:'history',source,expected_sha256:read.source_sha256})).entries.length,0);
 });
 
-test('rotated grouped text omissions are explicit in preview, diagnostics and saved thumbnail metadata',async t=>{
+test('rotated grouped text is reconstructed in preview and saved thumbnail with bounded diagnostics',async t=>{
  const bytes=f4GroupFixture({nested:true,field:true}),source=path.join(workspace(t),'rotated.hwp');fs.writeFileSync(source,bytes);const before=await runLocal({action:'read',source});
  assert.deepEqual((await runLocal({action:'preview',source,expected_sha256:digest(fs.readFileSync(source))})).render_unadapted_drawings,[]);
  const node=before.drawing_groups.find(n=>n.parent_id),host=before.blocks.find(b=>b.id===node.block_id),saved=await runLocal({action:'edit',source,expected_sha256:before.source_sha256,operations:[{type:'transform_drawing_group',target_id:node.target_id,expected_old:host.text,expected_properties:node.properties,expected_rotation_angle:0,props:{width:16000,height:5000,horzOffset:2000,vertOffset:2000,rotationAngle:10}}]});
  const after=await runLocal({action:'read',source}),preview=await runLocal({action:'preview',source,expected_sha256:digest(fs.readFileSync(source))}),layout=await runLocal({action:'layout',source,scope:'rendered',expected_sha256:digest(fs.readFileSync(source))});
- assert.equal(preview.render_unadapted_drawings.length,2);assert.ok(preview.render_unadapted_drawings.every(d=>d.reason==='rotated_group_rectangle_text_not_rendered'&&d.text_characters>0));assert.equal(preview.render_content_complete,false);assert.ok(preview.warnings.some(w=>w.includes('누락')));
- assert.deepEqual(saved.preview_cache.render_unadapted_drawings,preview.render_unadapted_drawings);assert.equal(saved.preview_cache.image_content_complete,false);assert.equal(layout.diagnostics_complete,false);assert.ok(layout.engine_limitations.some(l=>l.code==='DRAWING_TEXT_RENDER_UNVERIFIED'));
+ assert.deepEqual(preview.render_unadapted_drawings,[]);assert.notEqual(preview.render_content_complete,false);assert.ok(preview.svg.includes('data-hwp-drawing-text'));
+ assert.deepEqual(saved.preview_cache.render_unadapted_drawings,[]);assert.equal(saved.preview_cache.status,'updated');assert.notEqual(saved.preview_cache.image_content_complete,false);assert.equal(layout.diagnostics_complete,false);assert.ok(layout.engine_limitations.some(l=>l.code==='DRAWING_TEXT_RENDER_ADAPTED'));assert.ok(!layout.engine_limitations.some(l=>l.code==='DRAWING_TEXT_RENDER_UNVERIFIED'));
  assert.deepEqual(after.text_boxes.map(b=>b.paragraphs.map(p=>p.text)),before.text_boxes.map(b=>b.paragraphs.map(p=>p.text)));
  await runLocal({action:'restore',source,expected_sha256:after.source_sha256,backup_id:saved.backup_id});assert.deepEqual(fs.readFileSync(source),Buffer.from(bytes));
 });

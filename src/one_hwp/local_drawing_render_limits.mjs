@@ -20,7 +20,9 @@ export function drawingRenderLimits(bytes){
    const texts=rows.slice(i+1,end).filter(p=>p.tag===67&&p.level===r.level+2),characters=texts.reduce((n,p)=>n+[...textTokens(p.payload).map(t=>t.text).join('')].length,0);
    if(!characters)continue;
    let reason;
-   try{const m=groupGeometry(r).combined;if(Math.abs(m[1])>1e-6||Math.abs(m[3])>1e-6)reason='rotated_group_rectangle_text_not_rendered';}
+   try{const m=groupGeometry(r).combined;if(Math.abs(m[1])>1e-6||Math.abs(m[3])>1e-6)reason='rotated_group_rectangle_text_not_rendered';
+    else if(m[0]<0||m[4]<0)reason='rotated_group_rectangle_text_orientation_unverified';
+    else if(groups.slice(1).some(r=>{const m=groupGeometry(r).combined;return Math.abs(m[1])>1e-6||Math.abs(m[3])>1e-6;}))reason='rotated_group_rectangle_origin_unverified';}
    catch(error){if(!(error instanceof GuardError))throw error;reason='group_rectangle_transform_unverified';}
    if(reason){limits.push({section,shape_record:i,reason,text_paragraphs:texts.length,text_characters:characters});if(limits.length>256)fail('RENDER_DRAWING_LIMIT');}
   }

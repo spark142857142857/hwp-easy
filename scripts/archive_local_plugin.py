@@ -2,6 +2,7 @@
 from pathlib import Path
 import hashlib
 import json
+import re
 import zipfile
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -15,7 +16,7 @@ FILES = ("LICENSE", "plugin.json", "assets/hwp-easy.svg", "build-manifest.json",
                                            "PAKO-LICENSE.txt", "PAKO-ZLIB-LICENSE.txt", "CFB-LICENSE.txt", "RESVG-LICENSE.txt", "NANUM-OFL.txt")))
 manifest = json.loads((PACKAGE / "build-manifest.json").read_text(encoding="utf-8"))
 version = manifest["version"]
-assert len(version.split(".")) == 3 and all(part.isdecimal() for part in version.split("."))
+assert re.fullmatch(r"(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)(?:-dev\.(?:0|[1-9][0-9]*))?", version)
 assert json.loads((PACKAGE / "plugin.json").read_text(encoding="utf-8"))["version"] == version
 assert len((PACKAGE / SKILL / 'SKILL.md').read_bytes()) <= 8000, 'Skill prompt would be truncated by the host'
 assert hashlib.sha256((PACKAGE / 'licenses/CFB-LICENSE.txt').read_text(encoding='utf-8').replace('\r\n', '\n').encode()).hexdigest() == manifest['local_cfb_writer']['license_sha256_lf']

@@ -14,14 +14,15 @@ import {openColumnRenderView} from './local_column_render_view.mjs';
 import {openPaginatedTableView} from './local_paginated_table_view.mjs';
 import {drawingRenderLimits} from './local_drawing_render_limits.mjs';
 import {prepareSetupFontRender} from './local_setup_font_render.mjs';
+import {adaptDrawingRenderView} from './local_drawing_render_view.mjs';
 
-export function openLocalRenderView(HwpDocument,bytes,allowColumns=true){
+export function openLocalRenderView(HwpDocument,bytes,allowColumns=true,allowDrawings=true){
  const setup=prepareSetupFontRender(bytes),result=openRenderInput(HwpDocument,setup.bytes,allowColumns);
- try{result.unadapted_drawings=drawingRenderLimits(bytes);result.flow_adaptations=[...setup.notes,...(result.flow_adaptations??[])];return result;}
+ try{result.flow_adaptations=[...setup.notes,...(result.flow_adaptations??[])];return allowDrawings?adaptDrawingRenderView(HwpDocument,bytes,result):{...result,unadapted_drawings:drawingRenderLimits(bytes),drawing_adaptations:[]};}
  catch(error){result.document.free();throw error;}
 }
 function openRenderInput(HwpDocument,bytes,allowColumns){
- const columns=allowColumns?openColumnRenderView(HwpDocument,bytes,b=>openLocalRenderView(HwpDocument,b,false)):null;
+ const columns=allowColumns?openColumnRenderView(HwpDocument,bytes,b=>openLocalRenderView(HwpDocument,b,false,false)):null;
  const finish=view=>{try{return adaptFooterRenderView(HwpDocument,bytes,view);}catch(e){view.document.free();throw e;}};
  if(columns?.document)return finish(columns);
  const paginated=openPaginatedTableView(HwpDocument,bytes);if(paginated)return finish(paginated);
