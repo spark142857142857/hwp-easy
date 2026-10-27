@@ -2,7 +2,7 @@
 
 [프로젝트 개요](../README.md) · [문서 인덱스](README.md) · [프로젝트 상태](project-status.md)
 
-이 문서는 **Codex용 로컬 플러그인의 실제 설치 기록과 개발자 재현 절차**입니다. 2026년 10월 23일 Codex 설치본을 0.2.42로 업데이트했습니다. 새 로컬 채팅의 명시적 스킬 호출로 세 합성 문서의 실제 편집·같은 파일 저장·별도 후속 요청의 정확한 복구를 확인했습니다. Claude Code·Cursor는 0.2.19를 유지합니다. [현재 검증 기록](local-install-0.2.42.md), [Claude Code·Cursor 설치](agent-client-skills.md)를 참조하세요.
+이 문서는 **Codex용 로컬 플러그인의 실제 설치 기록과 개발자 재현 절차**입니다. 2026년 10월 27일 Codex 설치본을 **0.2.51**로 업데이트했습니다. 새 로컬 채팅에서 설치 스킬을 명시적으로 읽고 세 합성 문서의 편집·같은 파일 저장·정확한 복구를 확인했습니다. Claude Code·Cursor는 0.2.19를 유지합니다. [현재 검증 기록](local-install-0.2.51.md), [Claude Code·Cursor 설치](agent-client-skills.md)를 참조하세요.
 
 파일 지정·편집·저장·복구 절차는 [사용 가이드](quick-start.md)에 정리합니다. 공개 다운로드와 다른 사용자의 설치 검증 상태는 [프로젝트 상태](project-status.md)를 따릅니다.
 
@@ -12,7 +12,7 @@
 
 ## 실제 확인한 설치
 
-0.2.42 ZIP의 25개 파일이 실제 설치 캐시와 바이트 단위로 일치했습니다. `installed:true`, `enabled:true`와 새 호스트의 0.2.42 스킬 발견을 확인했습니다. 설치 실행기·독립 판독과 새 채팅의 일반 문서·중첩 표 높이 축소·부동 개체 동반 표 성장·같은 파일 저장·복구가 통과했습니다. 메뉴 클릭은 검사하지 않았습니다. 이전 0.2.25 설치 사본과 ZIP을 보관했습니다. 현재 공개 ZIP은 0.2.19이며 [릴리스](https://github.com/spark142857142857/hwp-easy/releases/tag/hwp-easy-local-v0.2.19)에서 받을 수 있습니다.
+0.2.51 ZIP의 25개 파일과 실제 설치 캐시가 전부 일치합니다. `installed:true`, `enabled:true`와 새 호스트의 스킬 발견을 확인했습니다. 새 채팅에서 일반 본문/셀·중첩 표 쪽 이어짐·그룹 내부 글/필드/하위 그룹을 편집하고 같은 파일에 저장한 뒤 별도 restore 요청으로 정확히 복구했습니다. 독립 판독과 실제 한글 9개 파일·10쪽 대조도 통과했습니다. 회전 하위 그룹 글의 SVG 표시 누락은 I3로 남깁니다. 이전 0.2.42 설치 전체 사본·마켓플레이스·ZIP을 보관했습니다. 공개 다운로드는 아직 [0.2.19](https://github.com/spark142857142857/hwp-easy/releases/tag/hwp-easy-local-v0.2.19)이며 최신 설치 검증과 구분합니다.
 
 ## 이전 설치 기록
 
@@ -43,24 +43,19 @@ ZIP을 새로운 영구 로컬 폴더에 풀고 `.agents/plugins/marketplace.jso
 
 개인 HWP와 운영 사이트, 원격 저장 문서와 기존 심사 제출은 변경하지 않았다. 설치 명령이 추가한 로컬 플러그인과 마켓플레이스 설정은 사용자 요청에 따른 변경이다. 원격 MCP 등록은 추가하지 않았다.
 
-현재 설치·새 채팅의 결과와 합성 파일은 ignored `outputs/codex-0.2.42-20261023/`에 보관합니다. 설치 실행기의 별도 파일 검사와 새 채팅의 실제 모델 검사를 구분합니다. 후속 네이티브 검사는 한컴 자동화 API와 저장한 이미지로 확인했으며 computer-use는 0회입니다. 이는 해당 합성 문서의 확인 결과이며 임의 문서의 인쇄 배치 인증은 아닙니다. [검증 기록](local-install-0.2.42.md)을 따릅니다.
+현재 설치·새 채팅의 결과와 합성 파일은 ignored `outputs/codex-0.2.51-20261027/`에 보관합니다. 설치 실행기의 별도 파일 검사와 새 채팅의 실제 모델 검사를 구분합니다. 후속 네이티브 검사는 한컴 자동화 API와 저장한 이미지로 확인했으며 computer-use는 0회입니다. 이는 해당 합성 문서의 확인 결과이며 임의 문서의 인쇄 배치 인증은 아닙니다. [검증 기록](local-install-0.2.51.md)을 따릅니다.
 
 ## 개발자가 재현하기
 
-아래는 실제 설치를 검증한 **0.2.42 패키지를 생성·설치·검사하는 절차**입니다. 실제 Codex 설치·새 채팅의 편집·같은 파일 저장·별도 복구도 0.2.42로 확인했습니다. 공개 0.2.19 ZIP은 빌드 없이 설치 준비 입력으로 사용할 수 있습니다. [개발 환경](developer-guide.md#환경과-구성)을 먼저 준비하며 패키지 생성은 설치와 분리합니다. ZIP은 생성 시점에 따라 바이트가 달라질 수 있으므로 기존 검증 ZIP을 재사용할 때는 [기록된 해시](local-install-0.2.42.md#자원과-검사-근거)를 대조합니다.
+아래는 **이미 검증한 0.2.51 ZIP을 재사용**하는 설치 준비·검사 절차입니다. 이번 갱신에서는 ZIP/실행기를 다시 생성하지 않았습니다. [기록된 해시](local-install-0.2.51.md#자원과-근거)를 먼저 대조합니다. 새 빌드는 [개발 환경](developer-guide.md#환경과-구성)에서 별도로 다룹니다. 현재 공개 0.2.19 다운로드와 구분합니다.
+
+`prepare_local_marketplace.py`는 ZIP 경로·런타임 해시·명시 호출 정책을 검사하고 새로운 영구 폴더를 준비합니다. 기존 폴더는 덮어쓰지 않으며 그 자체로 등록/설치하지 않습니다.
 
 ```powershell
-node scripts/package_local_plugin.mjs
-python scripts/archive_local_plugin.py
-```
-
-출력은 `outputs/plugin-package/hwp-easy/`와 `outputs/plugin-package/hwp-easy-0.2.42.zip`이다. `prepare_local_marketplace.py`는 ZIP의 경로, 런타임 해시와 명시적 호출 정책을 확인한 뒤 **새로운 폴더**에 로컬 마켓플레이스를 준비한다. 기존 설치 폴더는 덮어쓰지 않으며 설치·등록을 수행하지 않는다.
-
-```powershell
-python scripts/prepare_local_marketplace.py outputs/plugin-package/hwp-easy-0.2.42.zip '<새 마켓플레이스 경로>'
-# 같은 이름의 마켓플레이스가 이미 있으면 이전 경로·설치본을 보관한 뒤 등록을 교체합니다.
+python scripts/prepare_local_marketplace.py outputs/plugin-package/hwp-easy-0.2.51.zip '<새 영구 마켓플레이스 경로>'
+# 같은 이름의 등록이 있으면 이전 경로·설치본을 보관한 뒤 참조만 교체합니다.
 # codex plugin marketplace remove hwp-easy --json
-codex plugin marketplace add '<새 마켓플레이스 경로>' --json
+codex plugin marketplace add '<새 영구 마켓플레이스 경로>' --json
 codex plugin add hwp-easy@hwp-easy --json
 codex plugin list --marketplace hwp-easy --json
 node scripts/check-installed-plugin.mjs '<설치 결과의 installedPath>' outputs/installed-plugin-check
