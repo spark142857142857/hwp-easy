@@ -7,7 +7,7 @@ initializeLocal(fs.readFileSync(new URL('../node_modules/@rhwp/core/rhwp_bg.wasm
 const read=source=>runLocal({action:'read',source,max_chars:64000,max_blocks:128});
 const move=s=>{const b=s.text_boxes[0];return {type:'reposition_floating_object',target_id:b.target_id,expected_old:s.blocks.find(p=>p.id===b.block_id).text,expected_properties:b.properties,expected_flow:b.flow,clearance:150};};
 function workspace(t,bytes){const dir=fs.mkdtempSync(path.join(os.tmpdir(),'hwp-inline-flow-'));t.after(()=>{assert.equal(path.dirname(dir),os.tmpdir());assert.ok(path.basename(dir).startsWith('hwp-inline-flow-'));fs.rmSync(dir,{recursive:true,force:true});});const source=path.join(dir,'여러 표와 문단.hwp');fs.writeFileSync(source,bytes);return {source,bytes};}
-for(const [index,options]of inlineCellProfiles.entries())test(`raw inline flow ${index}: same-file checked save, no-op and byte-exact recovery`,async t=>{
+for(const [index,options]of [...inlineCellProfiles,{prefix:'문'.repeat(27),wide:true}].entries())test(`raw inline flow ${index}: same-file checked save, no-op and byte-exact recovery`,async t=>{
  const w=workspace(t,inlineCellFixture(options)),before=await read(w.source),request={source:w.source,expected_sha256:before.source_sha256,operations:[move(before)],layout_policy:'reject_new_risk'};
  const plan=await runLocal({action:'plan',...request});assert.equal(plan.saved,false);assert.ok(fs.readFileSync(w.source).equals(Buffer.from(w.bytes)));
  const saved=await runLocal({action:'edit',...request}),after=await read(w.source);assert.equal(saved.saved_path,w.source);assertPlannedEdit(plan,saved,'test_local_inline_cell_flow');assert.deepEqual(saved.layout_diagnostics.new_issues,[]);assert.equal(saved.floating_state_preserved,true);
@@ -16,7 +16,7 @@ for(const [index,options]of inlineCellProfiles.entries())test(`raw inline flow $
  await runLocal({action:'restore',source:w.source,expected_sha256:after.source_sha256,backup_id:saved.backup_id});assert.ok(fs.readFileSync(w.source).equals(Buffer.from(w.bytes)));
 });
 test('ambiguous wrap decisions reject an entire batch before saving or history',async t=>{
- const w=workspace(t,inlineCellFixture({prefix:'문'.repeat(27),wide:true})),s=await read(w.source),operations=[{type:'insert_paragraphs',target_id:s.blocks[0].target_id,expected_old:s.blocks[0].text,paragraphs:['earlier insertion']},move(s)];
+ const w=workspace(t,inlineCellFixture({prefix:'문'.repeat(27),wide:true,rootWidth:41000})),s=await read(w.source),operations=[{type:'insert_paragraphs',target_id:s.blocks[0].target_id,expected_old:s.blocks[0].text,paragraphs:['earlier insertion']},move(s)];
  for(const action of ['plan','edit'])await assert.rejects(runLocal({action,source:w.source,expected_sha256:s.source_sha256,operations}),/NESTED_PLACEMENT_WRAP_UNVERIFIED/);
  assert.ok(fs.readFileSync(w.source).equals(Buffer.from(w.bytes)));assert.deepEqual((await runLocal({action:'history',source:w.source,expected_sha256:s.source_sha256})).entries,[]);
 });

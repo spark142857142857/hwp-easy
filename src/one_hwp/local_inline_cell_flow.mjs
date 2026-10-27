@@ -23,6 +23,8 @@ export function needsComposedCellFlow(state,box){
  * as a new grid. Limits bound hostile documents and ambiguous wrap decisions. */
 export function composeCellTables(state,root,snapshot,selectedRootCell){
  const rs=state.recordSets.get(root.section);for(const t of state.tables)if(t!==root&&t.section===root.section&&t.paragraph===root.paragraph)inlineTableFlow(rs[t.record_index]);
+ // Exact, source-bound regular Hamchorom widths use a 1% sensitivity band.
+ // Unknown metrics retain 4%; uncertain vertical wraps still refuse saving.
  const samples=[.96,1,1.04].map(scale=>compose(state,root,snapshot,selectedRootCell,scale)),middle=samples[1];
  for(const [table,layout]of middle)for(const [child,p]of layout.children){
   const positions=samples.map(s=>s.get(table).children.get(child));
@@ -42,7 +44,7 @@ function compose(state,root,snapshot,selectedRootCell,scale){
   if(typeof snapshot.measureInlineText!=='function')fail('NESTED_PLACEMENT_INLINE_PREFIX_UNVERIFIED');
   const widths=b.text?snapshot.measureInlineText(b.text,b.character_runs):[];
   if(widths.some(w=>!Number.isFinite(w)||w<0||w>size*3))fail('NESTED_PLACEMENT_INLINE_PREFIX_UNVERIFIED');
-  return {size,gap:size*(b.paragraph_properties.lineSpacing/100-1),widths};
+  return {size,gap:size*(b.paragraph_properties.lineSpacing/100-1),widths,exact:snapshot.measureInlineText.isExact?.(b.text,b.character_runs)===true};
  }
  function tableLayout(t){
   tick();if(visiting.has(t)||t.cell_path.length>2||!t.layout_editable||t.properties.cellSpacing!==0)fail('NESTED_PLACEMENT_GRID_UNVERIFIED');if(layouts.has(t))return layouts.get(t);visiting.add(t);
@@ -69,7 +71,7 @@ function compose(state,root,snapshot,selectedRootCell,scale){
     for(const token of b.tokens){
      if(!token.text||!/^[A-Za-z0-9]$/.test(token.text))flushWord();
      if(token.code===13)break;if(token.code===10){wrap(false);continue;}
-     if(token.text){const width=m.widths[index++]*scale;if(!Number.isFinite(width))fail('NESTED_PLACEMENT_INLINE_PREFIX_UNVERIFIED');if(/^[A-Za-z0-9]$/.test(token.text))word.push(width);else put(width,m.size);lineError+=Math.max(.1,width*.04);continue;}
+     if(token.text){const width=m.widths[index++]*(m.exact?1+(scale-1)/4:scale);if(!Number.isFinite(width))fail('NESTED_PLACEMENT_INLINE_PREFIX_UNVERIFIED');if(/^[A-Za-z0-9]$/.test(token.text))word.push(width);else put(width,m.size);lineError+=Math.max(.1,width*.04);continue;}
      const record=controls[ordinal++],anchor=rs[b.text_record]?.payload.subarray(token.unit*2+2,token.unit*2+6);if(!record||!anchor||!equal([...anchor],[...record.payload.subarray(0,4)]))fail('NESTED_PLACEMENT_CONTROL_MAPPING_UNVERIFIED');const child=state.tables.find(t=>rs[t.record_index]===record&&t.parent_id===b.id);
      if(child){const margins=inlineTableFlow(record);tableLayout(child);put(child.properties.tableWidth/75+margins.left+margins.right,child.properties.tableHeight/75+margins.top+margins.bottom,{table:child,margins});}
      else{const f=record?.payload.length>=36?view(record.payload):null,flags=f?.getUint32(4,true);if(!f||Buffer.from(record.payload.subarray(0,4)).toString()!==' osg'||(flags&1)||((flags>>>21)&7)!==3)fail('NESTED_PLACEMENT_CONTENT_UNVERIFIED');}

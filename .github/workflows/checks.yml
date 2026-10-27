@@ -199,7 +199,7 @@ jobs:
       # Keep cold preview workers out of the concurrent complex test batch.
       # Production worker deadlines and all assertions remain unchanged.
       - name: Verify preview worker and bounded cell wrapping serially
-        run: node --test --test-concurrency=1 tests/test_local_render_view.mjs tests/test_local_cell_wrap_render.mjs tests/test_local_ancestor_alignment.mjs
+        run: node --test --test-concurrency=1 tests/test_local_render_view.mjs tests/test_local_cell_wrap_render.mjs tests/test_local_ancestor_alignment.mjs tests/test_local_source_font_measure.mjs
       - name: Verify mixed/column guards during focused render checks
         if: ${{ inputs.scope == 'render-view' }}
         run: node --test tests/test_local_nested_mixed_render.mjs
@@ -493,6 +493,13 @@ jobs:
         run: node scripts/check-local-table-metrics.mjs
       - name: Independently verify logical order, UTF-16 styles and recovery
         run: python scripts/check-local-table-text-flow.py outputs/local-table-metrics
+
+      # C2 eight-case package check takes about one minute locally. Keep it
+      # with source metrics, outside the near-full floating job.
+      - name: Verify source fonts and mixed sizes through isolated package
+        run: node scripts/check-local-nested-forest.mjs outputs/local-source-fonts fonts
+      - name: Independently verify source font definitions and requested styles
+        run: python scripts/check-local-source-fonts.py outputs/local-source-fonts
 
       - name: Verify content-fit rows during full checks
         if: ${{ inputs.scope == 'all' }}

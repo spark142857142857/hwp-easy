@@ -6,7 +6,7 @@ import {parseRecords} from '../../probes/sites-runtime/guard/records.mjs';
 import {renderTableKey} from './local_render_table_identity.mjs';
 const same=(a,b)=>JSON.stringify(a)===JSON.stringify(b);
 const path=b=>b.cell_path.flatMap(p=>[p.controlIndex,p.cellIndex,p.cellParaIndex]);
-const font=p=>p&&[70,74].includes(p.length)&&view(p).getUint32(42,true)===1000&&view(p).getUint32(46,true)===0&&[...p.subarray(14,21),...p.subarray(28,35)].every(n=>n===100)&&[...p.subarray(21,28),...p.subarray(35,42)].every(n=>n===0);
+const font=p=>p&&[70,74].includes(p.length)&&view(p).getUint32(42,true)>=100&&view(p).getUint32(42,true)<=20000&&(view(p).getUint32(46,true)&~2)===0&&[...p.subarray(14,21),...p.subarray(28,35)].every(n=>n===100)&&[...p.subarray(21,28),...p.subarray(35,42)].every(n=>n===0);
 
 function project(text,widths,width){
  const cuts=new Set();let x=0,at=0;
@@ -15,7 +15,7 @@ function project(text,widths,width){
   const token=match[0],total=widths.slice(at,at+token.length).reduce((a,b)=>a+b,0);
   if(token==='\n'){x=0;at++;continue;}
   if(token[0]===' '){x+=total;at+=token.length;continue;}
-  if(/^[A-Za-z0-9]/.test(token)&&total<=width&&x>0&&x+total>width){cuts.add(at);x=0;}
+  if(/^[A-Za-z0-9]/.test(token)&&x>0&&x+total>width){cuts.add(at);x=0;}
   for(let i=0;i<token.length;i++,at++){
    const advance=widths[at];if(advance>width)return null;
    if(x>0&&x+advance>width){cuts.add(at);x=0;}x+=advance;
@@ -61,17 +61,31 @@ export function adaptLeafCellWraps(document,state,bindings,context){
    }
    const width=cell.width-left-right,projection=valid&&width>0?project(first.text,widths,width):null;
    if(!projection){reject('cell_wrap_font_metrics_unverified');continue;}
-   const expectedHeight=projection.lines*1000*first.paragraph_properties.lineSpacing/100-1000*(first.paragraph_properties.lineSpacing/100-1);
+   const sizes=first.unit_styles.map(id=>view(fonts[id].payload).getUint32(42,true));
+   projection.styleOffsets=projection.offsets.map((offset,i)=>projection.synthetic.has(i)?(sizes[Math.max(0,offset-1)]<=sizes[offset]?Math.max(0,offset-1):offset):offset);
+   const lineSizes=[];let lineSize=0;for(let i=0;i<projection.text.length;i++){if(projection.text[i]==='\n'){lineSizes.push(Math.max(lineSize,sizes[projection.styleOffsets[i]]));lineSize=0;}else lineSize=Math.max(lineSize,sizes[projection.styleOffsets[i]]);}lineSizes.push(lineSize||sizes.at(-1));
+   const spacing=first.paragraph_properties.lineSpacing/100,expectedHeight=lineSizes.reduce((n,size,i)=>n+Math.max(size,lineSizes[i-1]??size,lineSizes[i+1]??size)*spacing,0)-lineSizes.at(-1)*(spacing-1);
    if(expectedHeight>cell.height-p.getUint16(28,true)-p.getUint16(30,true)){reject('cell_wrap_exceeds_stored_height');continue;}
    const fixed=shape.payload.slice(),q=view(fixed);q.setUint32(0,(q.getUint32(0,true)&~28)|4,true);q.setInt32(4,left*2,true);q.setInt32(8,right*2,true);
-   const h={...rs[first.record_index],payload:rs[first.record_index].payload.slice()},v=view(h.payload),text=Buffer.from(projection.text+'\r','utf16le'),ids=projection.offsets.map((offset,i)=>first.unit_styles[projection.synthetic.has(i)?Math.max(0,offset-1):offset]),styles=[];
+   const h={...rs[first.record_index],payload:rs[first.record_index].payload.slice()},v=view(h.payload),text=Buffer.from(projection.text+'\r','utf16le'),ids=projection.styleOffsets.map(offset=>first.unit_styles[offset]),styles=[];
    ids.forEach((id,i)=>{if(!i||id!==ids[i-1])styles.push([i,id]);});if(styles.length>32){reject('cell_wrap_style_budget');continue;}
    const styleBytes=Buffer.alloc(styles.length*8);styles.forEach(([at,id],i)=>{styleBytes.writeUInt32LE(at,i*8);styleBytes.writeUInt32LE(id,i*8+4);});
    v.setUint32(0,((v.getUint32(0,true)&0x80000000)|text.length/2)>>>0,true);v.setUint32(4,projection.text.includes('\n')?1024:0,true);v.setUint16(8,shapes.length+extra.length,true);v.setUint16(12,styles.length,true);v.setUint16(16,0,true);
    p.setUint16(24,0,true);p.setUint16(26,0,true);changes.set(rs[first.record_index],h);changes.set(rs[first.text_record],{...rs[first.text_record],payload:text});changes.set(rs[first.shape_record],{...rs[first.shape_record],payload:styleBytes});extra.push({tag:25,level:shape.level,payload:fixed});headers.set(h,{block:first,from:0,projection});
    for(let at=first.record_index+1;at<first.records_end;at++)if(rs[at].tag===69&&rs[at].level===first.raw_level+1)removed.add(rs[at]);
-   adapted.push({block_id:first.id,section:first.section,paragraph:first.paragraph,cell_path:first.cell_path,padding_left:left,padding_right:right,render_lines:projection.lines,inserted_line_breaks:projection.synthetic.size,metric_source:'pinned_document_exact_base_advances',font_and_native_layout_verified:false});
+   adapted.push({block_id:first.id,section:first.section,paragraph:first.paragraph,cell_path:first.cell_path,padding_left:left,padding_right:right,render_lines:projection.lines,render_line_sizes:lineSizes,inserted_line_breaks:projection.synthetic.size,metric_source:'pinned_document_exact_base_advances',font_and_native_layout_verified:false});
   }
  }
  return {adapted,unadapted};
+}
+
+/** Runs may split a physical line at a source character-style boundary. */
+export function validateProjectedCellRuns(runs,projection,block){
+ const lines=[];let at=0;for(const text of projection.text.split('\n')){lines.push({text,start:at,end:at+text.length,runs:[]});at+=text.length+1;}
+ let previous=-1;
+ for(const r of runs){const start=r.charStart;if(!Number.isSafeInteger(start)||start<=previous||start<0||projection.text.slice(start,start+r.text.length)!==r.text)return false;previous=start;
+  const line=lines.find(l=>start>=l.start&&start<l.end);if(!line||start+r.text.length>line.end||block.unit_styles.slice(start,start+r.text.length).some(id=>id!==r.charShapeId))return false;line.runs.push(r);
+ }
+ let y=-Infinity;for(const l of lines.filter(l=>l.text)){if(l.runs.map(r=>r.text).join('')!==l.text||l.runs[0].y<=y+.5||l.runs.some(r=>Math.abs(r.y-l.runs[0].y)>.2))return false;y=l.runs[0].y;}
+ return true;
 }

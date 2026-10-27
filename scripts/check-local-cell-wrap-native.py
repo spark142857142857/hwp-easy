@@ -24,12 +24,21 @@ for c in cases:
   for f in unique.values():
    for im,label in [(original,'native'),(preview,'SVG')]:assert min(border_scores(im,f))>.94,(name,stage,label,f,border_scores(im,f))
    frames+=1
-  runs=json.loads((root/f'{name}-{stage}-runs.json').read_text(encoding='utf-8'));answer=[r for r in runs if r.get('cellPath')==c['fixture']['selected_path']];assert [r['text'] for r in answer]==[r['text'] for r in model['rows']],(name,stage,'shipped rows')
+  runs=json.loads((root/f'{name}-{stage}-runs.json').read_text(encoding='utf-8'));answer=[r for r in runs if r.get('cellPath')==c['fixture']['selected_path']]
+  if c['fixture'].get('source_fonts'):
+   rows=[]
+   for run in answer:
+    if rows and abs(rows[-1]['y']-run['y'])<.2:rows[-1]['text']+=run['text']
+    else:rows.append(dict(run))
+   answer=rows
+  assert [r['text'] for r in answer]==[r['text'] for r in model['rows']],(name,stage,'shipped rows')
   leaf=next(t for t in tables if t.get('cellPath',[])==c['fixture']['selected_path'][:-1]);cell=next(f for f in leaf['cells'] if f['cellIdx']==c['fixture']['selected_path'][-1]['cellIndex']);x,y,w,h=[cell[k] for k in ['x','y','w','h']];ys=[];points=[]
   for yy in range(round(y)+3,round(y+h)-2):
    ink=[xx for xx in range(round(x)+3,round(x+w)-2) if max(original.getpixel((xx,yy)))<180]
    if ink and len(ink)<.85*w:ys.append(yy);points.extend((xx,yy) for xx in ink)
   spans=bands(ys);assert len(spans)==len(answer),(name,stage,'original ink',len(spans),len(answer))
+  if c['fixture'].get('source_fonts'):
+   assert all(-4<=band[0]-run['y']<=8 for band,run in zip(spans,answer)),(name,stage,'native row tops',[(band[0],run['y']) for band,run in zip(spans,answer)])
   # Leftmost ink stays inside the authored padding, with a two-pixel glyph
   # bearing allowance. Vertical native glyph baselines/justification remain
   # separate from exact row membership and table-frame checks.

@@ -6,7 +6,7 @@ import {objectFlow as commonObjectFlow,validObjectHeader} from './local_flow_rec
 import {view,equal,equalBytes,fail} from './local_complex_records.mjs';
 import {publishVerifiedPatch} from './local_verified_patch.mjs';
 import {invalidateSectionLayout} from './local_layout_cache.mjs';
-import {createNaturalTextMeasurer} from './local_rendered_layout.mjs';
+import {createNaturalTextMeasurer} from './local_font_measure.mjs';
 import {tableParagraphHeight as paragraphHeight} from './local_table_text_metrics.mjs';
 import {tableHostParagraphHeight,inlineTableHostObject} from './local_table_host_controls.mjs';
 import {GuardError} from '../../probes/sites-runtime/guard/records.mjs';
@@ -53,7 +53,7 @@ function reflowSingle(HwpDocument,source,version,op,blockFlow=false,selectedRoot
  // A body host still selects one root. Nested hosts may contain several tables;
  // explicit reflow stacks them below the prefix in their original anchor order.
  const hosts=new Map(tables.map(t=>[t.id,state.blocks.find(b=>b.id===t.parent_id)]));
- const patches=new Map(),heights=new Map(),changes=[],measure=createNaturalTextMeasurer(HwpDocument),hostPeers=new Map();
+ const patches=new Map(),heights=new Map(),changes=[],measure=createNaturalTextMeasurer(HwpDocument,source),hostPeers=new Map();
  const rootHost=hosts.get(root.id);if(!rootHost?.unit_styles||!Array.isArray(rootHost.character_runs)||rootHost.text.includes('\n')||rootHost.text.length>120||measure(rootHost.text,rootHost.character_runs).reduce((n,w)=>n+w*75,0)>bodyWidth*.9)fail('TABLE_REFLOW_ROOT_PREFIX_UNVERIFIED');
  for(const other of state.tables.filter(t=>t.section===root.section&&!t.cell_path.length&&t!==root))if(!objectFlow(rs[other.record_index]).treatAsChar&&!selectedRoots.includes(other.id)&&!tablePaginationEnabled(state,other))fail('TABLE_REFLOW_OTHER_FLOATING_TABLE_UNSUPPORTED');
  const patch=i=>{if(!patches.has(i))patches.set(i,rs[i].payload.slice());return view(patches.get(i));};

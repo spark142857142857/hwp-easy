@@ -14,7 +14,7 @@ import {bindRenderTables,renderTableKey} from './local_render_table_identity.mjs
 import {patchLocalPackedStreams} from './local_container_write.mjs';
 import {tableHostFields,inlineTableHostObject} from './local_table_host_controls.mjs';
 import {bindRenderObjects,renderRunKey} from './local_render_object_identity.mjs';
-import {adaptLeafCellWraps,projectCellRenderText} from './local_cell_render_wrap.mjs';
+import {adaptLeafCellWraps,projectCellRenderText,validateProjectedCellRuns} from './local_cell_render_wrap.mjs';
 const id=r=>Buffer.from(r.payload.subarray(0,4)).toString();
 const key=b=>JSON.stringify([b.section,b.paragraph,b.cell_path]);
 const plain=p=>p&&['left','justify'].includes(p.alignment)&&p.lineSpacingType===0&&p.lineSpacing>=100&&p.lineSpacing<=300&&!p.keepWithNext&&!p.keepLines&&!p.pageBreakBefore&&!p.fontLineHeight&&['marginLeft','marginRight','indent','spacingBefore','spacingAfter'].every(k=>!p[k]);
@@ -121,7 +121,7 @@ function prepare(HwpDocument,bytes){
  if(extra.length){view(map.payload).setUint32(52,shapes.length+extra.length,true);definitions.splice(definitions.indexOf(shapes.at(-1))+1,0,...extra);}
  const pack=value=>(view(raw.streams.get('FileHeader')).getUint32(36,true)&1)?deflateRawSync(encodeRecords(value),{level:9}):encodeRecords(value),privateBytes=patchLocalPackedStreams(bytes,new Map([['BodyText/Section0',pack(out)],['DocInfo',pack(definitions)]])),after=inspectLocalComplex(HwpDocument,privateBytes,{includeDocumentInfo:false,verifyCharacterModel:false}),paths=new Map();
  for(const b of after.blocks){const old=origins.get(b.record_index);if(!old?.block)return unadapted('nested_identity_profile');paths.set(key(b),old);}
- const joined=new Map();for(const b of after.blocks){const entry=paths.get(key(b)),old=entry.block,projected=entry.projection?projectCellRenderText(b.text,entry.projection):b.text;if(projected===null)return unadapted('cell_wrap_projection_identity');if(entry.projection&&(!equal(b.unit_styles,entry.projection.offsets.map((offset,i)=>old.unit_styles[entry.projection.synthetic.has(i)?Math.max(0,offset-1):offset]))))return unadapted('cell_wrap_style_identity');joined.set(old,(joined.get(old)??'')+(entry.synthetic?'':projected));}
+ const joined=new Map();for(const b of after.blocks){const entry=paths.get(key(b)),old=entry.block,projected=entry.projection?projectCellRenderText(b.text,entry.projection):b.text;if(projected===null)return unadapted('cell_wrap_projection_identity');if(entry.projection&&(!equal(b.unit_styles,entry.projection.styleOffsets.map(offset=>old.unit_styles[offset]))))return unadapted('cell_wrap_style_identity');joined.set(old,(joined.get(old)??'')+(entry.synthetic?'':projected));}
  if(state.blocks.some(b=>joined.get(b)!==b.text))return unadapted('nested_text_profile');
  let controls=new Map(),objectControls=new Map(),objectRuns=new Map();
  const privateObjects=new Map(),objectSources=new Map();
@@ -132,8 +132,8 @@ function prepare(HwpDocument,bytes){
   if(cellWraps.adapted.length){
    const runs=[];for(let page=0;page<document.pageCount();page++)runs.push(...JSON.parse(document.getPageTextLayout(page)).runs);
    for(const b of after.blocks){const entry=paths.get(key(b));if(!entry.projection)continue;
-    const selected=runs.filter(r=>r.secIdx===b.section&&r.parentParaIdx===b.paragraph&&equal(r.cellPath,b.cell_path)&&r.text),expected=entry.projection.text.split('\n').filter(Boolean);
-    if(!equal(selected.map(r=>r.text),expected)||selected.some(r=>!Number.isSafeInteger(r.charStart)||r.charStart<0||entry.projection.text.slice(r.charStart,r.charStart+r.text.length)!==r.text))return false;
+    const selected=runs.filter(r=>r.secIdx===b.section&&r.parentParaIdx===b.paragraph&&equal(r.cellPath,b.cell_path)&&r.text);
+    if(!validateProjectedCellRuns(selected,entry.projection,b))return false;
    }
   }
   const bound=bindRenderObjects(document,after,privateObjects);if(!bound)return false;

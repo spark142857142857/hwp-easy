@@ -26,10 +26,10 @@ for(const p of cellWrapRenderProfiles)test(`narrow cell rows, padding and origin
  const preview=renderLocalPreview(HwpDocument,bytes,0),snapshot=captureRenderedLayout(HwpDocument,bytes),report=analyzeRenderedLayout(HwpDocument,bytes);
  assert.deepEqual(preview.render_cell_wraps,snapshot.render_cell_wraps);assert.deepEqual(report.render_cell_wraps,preview.render_cell_wraps);assert.equal(report.layout_verified,false);assert.equal(report.diagnostics_complete,false);assert.ok(report.engine_limitations.some(l=>l.code==='CELL_WRAP_RENDER_ADAPTED'));assert.equal(digest(bytes),hash);assert.deepEqual(inspect(bytes).blocks.map(b=>[b.text,b.unit_styles]),state.blocks.map(b=>[b.text,b.unit_styles]));
 });
-for(const variant of ['bold','mixed-size','unsupported-character','word-break','spacing','private-offset-mismatch','font-trace-missing','font-trace-ambiguous','font-metric-fallback'])test(`unverified cell wrapping stays explicit: ${variant}`,()=>{
+for(const variant of ['italic','oversized','unsupported-character','word-break','spacing','private-offset-mismatch','font-trace-missing','font-trace-ambiguous','font-metric-fallback'])test(`unverified cell wrapping stays explicit: ${variant}`,()=>{
  let bytes=cellWrapRenderFixture(cellWrapRenderProfiles[0],true),s=inspect(bytes),b=s.blocks.find(b=>b.text===cellWrapRenderProfiles[0].text),Engine=HwpDocument;
- if(['bold','mixed-size','unsupported-character'].includes(variant)){
-  const hash=digest(bytes),op=variant==='unsupported-character'?{type:'splice_text',start:0,end:b.text.length,new_text:b.text+'!'}:{type:'format_text',start:0,end:variant==='bold'?b.text.length:1,props:variant==='bold'?{bold:true}:{fontSize:1100}};
+ if(['italic','oversized','unsupported-character'].includes(variant)){
+  const hash=digest(bytes),op=variant==='unsupported-character'?{type:'splice_text',start:0,end:b.text.length,new_text:b.text+'!'}:{type:'format_text',start:0,end:b.text.length,props:variant==='italic'?{italic:true}:{fontSize:30000}};
   bytes=editLocalComplex(HwpDocument,bytes,hash,{...op,target_id:`hwp5:${hash}:${Buffer.from(b.id).toString('base64url')}`,expected_old:b.text}).bytes;
  }
  if(variant==='word-break'){
