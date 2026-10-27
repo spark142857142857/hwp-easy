@@ -30,3 +30,8 @@ for(const variant of ['unknown-alignment','unverified-prefix-width'])test(`unsup
  }
  const hash=digest(bytes),preview=renderLocalPreview(HwpDocument,bytes,0);assert.deepEqual(preview.render_nested_tables,[]);assert.ok(preview.render_unadapted_tables.length);assert.equal(preview.layout_verified,false);assert.equal(digest(bytes),hash);
 });
+
+test('invalid host character reference returns the original render view',()=>{
+ const original=ancestorAlignmentFixture(ancestorAlignmentProfiles[1]),state=inspectLocalComplex(HwpDocument,original,{includeDocumentInfo:false,verifyCharacterModel:false}),rs=state.recordSets.get(0).map(r=>({...r,payload:r.payload.slice()})),host=state.blocks.find(b=>b.text==='OUTER');view(rs[host.shape_record].payload).setUint32(4,65535,true);
+ const bytes=publishVerifiedPatch(original,state,0,rs),hash=digest(bytes),preview=renderLocalPreview(HwpDocument,bytes,0);assert.deepEqual(preview.render_nested_tables,[]);assert.ok(preview.render_unadapted_tables.some(t=>t.reason==='nested_host_style_unverified'));assert.ok(preview.svg.startsWith('<svg'));assert.equal(digest(bytes),hash);
+});

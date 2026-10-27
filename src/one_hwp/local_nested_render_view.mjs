@@ -69,6 +69,7 @@ function prepare(HwpDocument,bytes){
   if(!c.blocks.some(b=>hosts.has(b)))continue;
   let height=0,lastGap=0;
   for(const b of c.blocks){
+   if(!Array.isArray(b.unit_styles)||!b.unit_styles.length)return unadapted('nested_host_style_unverified');
    const sizes=new Set(b.unit_styles.map(i=>fonts[i]?.payload.length>=46?view(fonts[i].payload).getUint32(42,true):NaN)),size=[...sizes][0],children=hosts.get(b)?.peers;
    if(sizes.size!==1||!Number.isFinite(size)||b.text.includes('\n')||b.text.length*size>c.width*.85)return unadapted('nested_multiline_host');
    if(children){height+=view(rs[children[0].record_index].payload).getInt32(8,true)+children.reduce((n,t)=>n+t.properties.tableHeight,0);lastGap=0;}
