@@ -512,3 +512,11 @@ Copy complete current properties. Dimensions are the unrotated displayed frame, 
 For editable fields, `update_field` requires the exact `expected_old` visible value, `expected_metadata:{name,guide,command}` and nonempty `props`. ClickHere permits `name`/`guide`; other supported field kinds permit `name`/`command`. Unrequested bytes and the value are retained. On an object paragraph, `insert_field` uses the existing offset/name/guide/value schema for ClickHere. Explicit `field_type:"hyperlink"` or `"bookmark"` additionally requires `command` and an empty `guide`, on a mapped body/cell/object paragraph. This creates a wrapper around the inserted visible value, not an external-resource operation. `delete_field` removes only a supported wrapper and retains its value/styles. Reread to target a newly created field.
 
 `DRAWING_TEXT_BOX_HEIGHT_RISK` is a font estimate against the list's intrinsic frame, not a page/cell boundary measurement. Existing strict layout policies can reject it. Group/box page composition, arbitrary rotations/text orientation, complex field evaluation and whole-HWP printing remain outside certification; keep `layout_verified:false`.
+
+### Review safeguards (0.2.52)
+
+A repeated raw field ID is ambiguous even when names and values match. Such fields return `editable:false` and `read_only_reason:"FIELD_ID_AMBIGUOUS"`; re-read or ask for a corrected document instead of selecting the first match. Ordinary repeated field names with unique IDs remain supported.
+
+`preview.render_unadapted_drawings` and the saved `preview_cache` expose known rotated-group rectangle text omissions. `render_content_complete:false` / `image_content_complete:false` indicate missing preview content, not missing saved HWP text. Rendered layout reports `DRAWING_TEXT_RENDER_UNVERIFIED` and `diagnostics_complete:false`. These flags do not fix the SVG omission or certify other content when null.
+
+A `setup_anchor_font` flow adaptation corrects only the private preview height of a verified uniform first title whose invisible section setup run has a different font size. It preserves the saved HWP text, styles and controls. Mixed titles and unsupported first-paragraph controls are outside this adjustment.

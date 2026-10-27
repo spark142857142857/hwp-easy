@@ -33,3 +33,14 @@ export function inspectParagraphFields(records,block){
  return stack.length?[]:fields.sort((a,b)=>a.from-b.from);
 }
 export function publicFieldMetadata(f){return {field_type:f.field_type,field_id:f.field_id,name:f.name,guide:f.guide,command:f.command,properties:f.properties,extra_properties:f.extra_properties};}
+
+/** A field ID must identify one definition, including unmapped object lists. */
+export function ambiguousFieldIds(recordSets){
+ const counts=new Map();
+ for(const rows of recordSets.values())for(const r of rows){
+  if(r.tag!==71||!fieldKinds.has(fieldControlId(r)))continue;
+  const definition=fieldDefinition(r);if(!definition)continue;
+  counts.set(definition.field_id,(counts.get(definition.field_id)??0)+1);
+ }
+ return new Set([...counts].filter(([,count])=>count>1).map(([id])=>id));
+}

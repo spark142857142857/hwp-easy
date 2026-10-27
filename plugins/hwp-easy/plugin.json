@@ -1,7 +1,7 @@
 {
   "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
   "name": "hwp-easy",
-  "version": "0.2.51",
+  "version": "0.2.52",
   "description": "선택한 HWP를 직접 읽고 편집해 검증한 결과를 같은 파일에 저장합니다.\nRead and edit a selected local HWP, saving verified changes to the same file.",
   "author": {
     "name": "원석 유"

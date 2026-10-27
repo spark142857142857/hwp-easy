@@ -12,8 +12,15 @@ import {adaptPartialRenderGeometry} from './local_fragment_render_view.mjs';
 import {adaptEmptyParagraphFlow} from './local_empty_render_flow.mjs';
 import {openColumnRenderView} from './local_column_render_view.mjs';
 import {openPaginatedTableView} from './local_paginated_table_view.mjs';
+import {drawingRenderLimits} from './local_drawing_render_limits.mjs';
+import {prepareSetupFontRender} from './local_setup_font_render.mjs';
 
 export function openLocalRenderView(HwpDocument,bytes,allowColumns=true){
+ const setup=prepareSetupFontRender(bytes),result=openRenderInput(HwpDocument,setup.bytes,allowColumns);
+ try{result.unadapted_drawings=drawingRenderLimits(bytes);result.flow_adaptations=[...setup.notes,...(result.flow_adaptations??[])];return result;}
+ catch(error){result.document.free();throw error;}
+}
+function openRenderInput(HwpDocument,bytes,allowColumns){
  const columns=allowColumns?openColumnRenderView(HwpDocument,bytes,b=>openLocalRenderView(HwpDocument,b,false)):null;
  const finish=view=>{try{return adaptFooterRenderView(HwpDocument,bytes,view);}catch(e){view.document.free();throw e;}};
  if(columns?.document)return finish(columns);
@@ -94,6 +101,6 @@ export function renderLocalPreview(HwpDocument,bytes,page){
  const api=createEngineApi(HwpDocument),view=openLocalRenderView(HwpDocument,bytes),document=view.document;
  try{
   const preview=api.previewDocument(document,page);
-  return {...preview,render_flow_adaptations:view.flow_adaptations??[],render_adaptations:view.anchors,render_unadapted_anchors:view.unadapted,render_nested_tables:view.nested_tables,render_unadapted_tables:view.unadapted_tables,render_cell_wraps:view.cell_wraps,render_unadapted_cells:view.unadapted_cells,render_source:'disposable_view_of_current_bytes',warnings:[...preview.warnings,...(view.cell_wraps.length?['Bounded leaf-cell padding and line breaks use source-bound embedded base advances only in the disposable view; complete native font layout remains unverified.']:[]),...(view.anchors.length?['Empty floating-anchor fixed line heights are materialized only in the disposable render view.']:[]),...(view.nested_tables.length?['Canonical nested-table origins and ancestor alignment are adapted only in the disposable render view; font wrapping and native pagination remain unverified.']:[])]};
+  return {...preview,render_unadapted_drawings:view.unadapted_drawings,render_content_complete:view.unadapted_drawings.length===0?null:false,render_flow_adaptations:view.flow_adaptations??[],render_adaptations:view.anchors,render_unadapted_anchors:view.unadapted,render_nested_tables:view.nested_tables,render_unadapted_tables:view.unadapted_tables,render_cell_wraps:view.cell_wraps,render_unadapted_cells:view.unadapted_cells,render_source:'disposable_view_of_current_bytes',warnings:[...preview.warnings,...(view.unadapted_drawings.length?['회전한 그룹 안의 글이 이 미리보기에서 누락될 수 있습니다. 저장된 HWP 내용과 미리보기는 구분해서 확인하세요.']:[]),...(view.cell_wraps.length?['Bounded leaf-cell padding and line breaks use source-bound embedded base advances only in the disposable view; complete native font layout remains unverified.']:[]),...(view.anchors.length?['Empty floating-anchor fixed line heights are materialized only in the disposable render view.']:[]),...(view.nested_tables.length?['Canonical nested-table origins and ancestor alignment are adapted only in the disposable render view; font wrapping and native pagination remain unverified.']:[])]};
  }finally{document.free();}
 }

@@ -10,7 +10,7 @@ import {prepareComplexBoundary} from './local_complex_boundary.mjs';
 import {prepareObjectField} from './local_object_fields.mjs';
 import {prepareDrawingTransform} from './local_drawing_transform.mjs';
 const inspect=(Doc,bytes)=>inspectLocalComplex(Doc,bytes,{includeDocumentInfo:false,verifyCharacterModel:false});
-const fieldsOf=s=>{const raw=s.blocks.flatMap(b=>inspectParagraphFields(s.recordSets.get(b.section),b));return [...s.fields.map(f=>({...f,...raw.find(x=>x.id===f.id)})),...s.additional_fields,...s.object_fields];};
+const fieldsOf=s=>{const raw=s.blocks.flatMap(b=>inspectParagraphFields(s.recordSets.get(b.section),b));return [...s.fields.map(f=>({...f,...raw.find(x=>x.id===f.id),editable:f.editable,...(f.read_only_reason?{read_only_reason:f.read_only_reason}:{})})),...s.additional_fields,...s.object_fields];};
 const entities=s=>[...s.blocks,...fieldsOf(s),...s.groups,...s.pictures,...s.text_boxes,...s.text_boxes.flatMap(b=>b.paragraphs),...s.drawing_tree.nodes,...s.opaque_drawings];
 function entityRecord(e){return e.shape_record!=null&&(e.address||e.paragraphs)?e.shape_record:e.record_index;}
 export function editObjectTarget(Doc,source,version,op){
@@ -18,6 +18,7 @@ export function editObjectTarget(Doc,source,version,op){
  const isObject=id.includes(':tb')||id.includes(':dg:'),fieldType=['set_field','insert_field','delete_field','update_field'].includes(op.type);if(!isObject&&!fieldType&&!/:f[0-9]+$/.test(id))return null;
  if(!['transform_drawing_group','set_field','insert_field','delete_field','update_field','format_text','format_paragraph','split_paragraph','merge_paragraph','insert_paragraphs','duplicate_paragraph','delete_paragraph','splice_text','replace_text'].includes(op.type))return null;
  const state=inspect(Doc,source),allFields=fieldsOf(state),field=allFields.find(f=>f.id===id),box=state.text_boxes.find(b=>b.paragraphs.some(p=>p.id===(field?.block_id??id))),paragraph=box?.paragraphs.find(p=>p.id===(field?.block_id??id)),node=state.drawing_tree.groups.find(n=>n.id===id),selectedBlock=paragraph??state.blocks.find(b=>b.id===(field?.block_id??id)||standardBlockId(b)===id);
+ if(field?.read_only_reason==='FIELD_ID_AMBIGUOUS')fail('FIELD_ID_AMBIGUOUS');
  let block=selectedBlock;
  // Keep the established body/cell ClickHere route and legacy target aliases.
  if(!isObject&&!Object.hasOwn(op,'field_type')&&op.type!=='update_field'&&(!field||field.field_type==='clickhere'))return null;
@@ -44,7 +45,7 @@ export function editObjectTarget(Doc,source,version,op){
  for(const old of state.blocks)remap[standardBlockId(old)]=remap[old.id];
  for(const old of allFields){if(remap[old.id])continue;const candidates=afterFields.filter(f=>f.field_id===old.field_id&&f.block_id===(remap[old.block_id]??old.block_id));if(candidates.length===1)remap[old.id]=candidates[0].id;}
  const nowBlock=block?[...after.blocks,...after.text_boxes.flatMap(b=>b.paragraphs)].find(p=>p.id===remap[block.id]):null;
- if(patch.wanted&&typeof patch.wanted==='string'&&nowBlock?.text!==patch.wanted)fail('OBJECT_CONTENT_MISMATCH');
+ if(typeof patch.wanted==='string'&&nowBlock?.text!==patch.wanted)fail('OBJECT_CONTENT_MISMATCH');
  if(op.type==='set_field'){const now=afterFields.find(f=>f.id===remap[field.id]);if(!now||now.value!==op.new_text)fail('FIELD_CONTENT_MISMATCH');}
  if(op.type==='format_text'&&!equal(nowBlock?.unit_styles,patch.ids))fail('OBJECT_STYLE_MISMATCH');
  if(op.type==='format_paragraph'&&!equal(nowBlock?.paragraph_properties,patch.props))fail('OBJECT_PARAGRAPH_MISMATCH');

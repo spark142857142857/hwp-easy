@@ -4,7 +4,7 @@
 
 [프로젝트 개요](../README.md) · [문서 인덱스](README.md) · [사용 가이드](quick-start.md) · [개선·남은 작업](remaining-work.md)
 
-갱신일: **2026년 10월 27일**. 소스·검증 패키지는 **0.2.51**, 실제 Codex 설치도 **0.2.51**, Claude Code·Cursor 설치와 공개 사전 릴리스는 **0.2.19**입니다. [F4 추가 개체 편집](f4-support-0.2.51.md)을 한 묶음으로 마감했습니다. F3의 확정 범위도 유지합니다. 실제 Codex 설치·새 채팅의 편집/복구를 확인했습니다. 공개 배포는 갱신하지 않았습니다. GitHub Actions는 사용자 명시 요청 때만 실행하며 이번에는 실행하지 않았습니다.
+갱신일: **2026년 10월 27일**. 소스·검증 패키지는 **0.2.52**, 실제 Codex 설치는 **0.2.51**, Claude Code·Cursor 설치와 공개 사전 릴리스는 **0.2.19**입니다. [F4 추가 개체 편집](f4-support-0.2.51.md)을 한 묶음으로 마감했습니다. F3의 확정 범위도 유지합니다. 실제 Codex 설치·새 채팅의 편집/복구를 확인했습니다. 공개 배포는 갱신하지 않았습니다. GitHub Actions는 사용자 명시 요청 때만 실행하며 이번에는 실행하지 않았습니다.
 
 <a id="현재-배포와-실제-설치"></a>
 
@@ -12,12 +12,12 @@
 
 | 구분 | 확인한 상태 |
 | --- | --- |
-| 메인 소스 | **0.2.51:** 그룹/상자 내부 문단·서식·필드, 개별 하위 그룹 변형과 형제 배치를 지키는 좌표계 보정. [F4 확정 범위](f4-support-0.2.51.md) · [검증 기록](local-release-0.2.51.md) |
+| 메인 소스 | **0.2.52:** 중복 필드 ID 차단·첫 제목 높이 렌더 보정·회전 그룹 글 누락 경고, 합성 자소서 작성/저장/복구 검증. [최신 기록](local-release-0.2.52.md). 0.2.51은 그룹/상자 내부 문단·서식·필드, 개별 하위 그룹 변형과 형제 배치를 지키는 좌표계 보정. [F4 확정 범위](f4-support-0.2.51.md) · [검증 기록](local-release-0.2.51.md) |
 | 공통 엔진 | 한 소스의 Node 실행기와 @rhwp/core 0.8.6 WASM을 사용합니다. 같은 버전으로 생성한 앱별 패키지는 동일 실행 자원을 포함합니다. |
 | 실제 설치 | 10월 27일 Codex **0.2.51** 설치·25개 파일 대조·새 채팅 3건 편집/같은 파일 저장/정확한 복구. 독립 판독·실제 한글 9개 파일/10쪽 확인. 이전 0.2.42 보관. Claude Code·Cursor **0.2.19**는 불변. [설치 기록](local-install-0.2.51.md) |
 | 호출 정책 | Codex 스킬 선택 또는 명시적 스킬 참조, Claude Code·Cursor의 `/hwp-easy` 호출. 자동 적용은 금지합니다. |
 | 공개 패키지 | [0.2.19 사전 릴리스](https://github.com/spark142857142857/hwp-easy/releases/tag/hwp-easy-local-v0.2.19)를 공개했습니다. 앱별 ZIP과 SHA-256을 제공하며 로그인 없는 다운로드와 해시를 확인했습니다. |
-| OpenAI 디렉터리 | 과거 확인 기록에서 원격 제출은 심사 중·미게시였고, 10월 13일 로컬 0.2.19 초안은 스킬 검사 `Checks passed`, 정책 URL·접수 제한에 따른 미제출 상태였습니다. 현재 포털 상태는 재확인이 필요합니다. [등록 기록](local-directory-submission.md)을 참고하세요. |
+| OpenAI 디렉터리 | **기존 원격 제출본 반려:** 10월 27일 메일에서 명칭/설명의 제휴·상표 관련 사유를 확인. 특정 단어는 미지목. 독립 이름 결정과 로컬 후보의 후속 제출/심사가 남으며 0.2.52는 미제출. [공개 준비 기록](public-plugin-release.md) |
 
 <a id="실제로-통과한-검증"></a>
 
@@ -63,9 +63,9 @@
 | 회귀 및 설치 검사 | 로컬 회귀 377개, 새 기능 분리 실행 17개와 설치 실행기의 저장·복구 검사 통과. 설치본과 공개 사례는 별도 Python OLE/레코드 판독으로 확인했습니다. |
 | 대용량 및 배포 재설치 | 8만 코드 포인트 편집 6개와 정확한 복구를 통과했습니다. GitHub ZIP 세 개를 다시 받아 체크섬 대조 후 새 경로의 실행기·독립 판독을 통과했습니다. |
 
-최신 소스 검사는 [0.2.51 검증 기록](local-release-0.2.51.md), 실제 Codex 설치·모델 호출은 [0.2.51 설치 기록](local-install-0.2.51.md)에 정리합니다. 아래 CI 실행은 과거 커밋의 이력이며 이번 설치 검증에서 새 Actions는 실행하지 않았습니다. 검증 코드 `0d04fb5`의 [Windows·Linux CI 10개 작업](https://github.com/spark142857142857/hwp-easy/actions/runs/38353110296)이 모두 통과했습니다. 0.2.21 기능 커밋 `eb8b35b`의 [Windows·Linux CI 10개 작업](https://github.com/spark142857142857/hwp-easy/actions/runs/38362789720)도 모두 통과했습니다. 0.2.22 최종 기능 커밋 `9499e7a`의 [Windows·Linux CI 10개 작업](https://github.com/spark142857142857/hwp-easy/actions/runs/38379018791)도 모두 통과했습니다. 0.2.23 기능 커밋 `bd4aa8d`의 [Windows·Linux CI 10개 작업](https://github.com/spark142857142857/hwp-easy/actions/runs/38385246383)도 모두 통과했습니다. 0.2.24 검증 커밋 `35b5e71`의 [Windows·Linux CI 10개 작업](https://github.com/spark142857142857/hwp-easy/actions/runs/38706600137)도 모두 통과했습니다. 0.2.25 CI 정리 커밋 `0bb3620`의 [Windows·Linux CI 10개 작업](https://github.com/spark142857142857/hwp-easy/actions/runs/38715305302)도 모두 통과했습니다. 첫 실행은 모든 테스트 단계 성공 후 Windows 정리 시간 제한으로 취소됐으며, 중복 검사 10개를 각 플랫폼의 복잡한 개체 작업에 모아 전체 검사 범위를 유지했습니다. 이후 변경의 상태는 [Actions](https://github.com/spark142857142857/hwp-easy/actions)에서 확인합니다.
+최신 소스 검사는 [0.2.52 리뷰·검증 기록](local-release-0.2.52.md), 실제 Codex 설치·모델 호출은 [0.2.51 설치 기록](local-install-0.2.51.md)에 정리합니다. 아래 CI 실행은 과거 커밋의 이력이며 이번 설치 검증에서 새 Actions는 실행하지 않았습니다. 검증 코드 `0d04fb5`의 [Windows·Linux CI 10개 작업](https://github.com/spark142857142857/hwp-easy/actions/runs/38353110296)이 모두 통과했습니다. 0.2.21 기능 커밋 `eb8b35b`의 [Windows·Linux CI 10개 작업](https://github.com/spark142857142857/hwp-easy/actions/runs/38362789720)도 모두 통과했습니다. 0.2.22 최종 기능 커밋 `9499e7a`의 [Windows·Linux CI 10개 작업](https://github.com/spark142857142857/hwp-easy/actions/runs/38379018791)도 모두 통과했습니다. 0.2.23 기능 커밋 `bd4aa8d`의 [Windows·Linux CI 10개 작업](https://github.com/spark142857142857/hwp-easy/actions/runs/38385246383)도 모두 통과했습니다. 0.2.24 검증 커밋 `35b5e71`의 [Windows·Linux CI 10개 작업](https://github.com/spark142857142857/hwp-easy/actions/runs/38706600137)도 모두 통과했습니다. 0.2.25 CI 정리 커밋 `0bb3620`의 [Windows·Linux CI 10개 작업](https://github.com/spark142857142857/hwp-easy/actions/runs/38715305302)도 모두 통과했습니다. 첫 실행은 모든 테스트 단계 성공 후 Windows 정리 시간 제한으로 취소됐으며, 중복 검사 10개를 각 플랫폼의 복잡한 개체 작업에 모아 전체 검사 범위를 유지했습니다. 이후 변경의 상태는 [Actions](https://github.com/spark142857142857/hwp-easy/actions)에서 확인합니다.
 
-전체 CI는 [사용자가 명시적으로 요청할 때만 수동 실행](developer-guide.md#검사)합니다. 0.2.30까지의 기록은 해당 단계의 로컬 검사입니다. 버전별 전체 CI의 검사 커밋과 결과는 각 검증 기록에 남깁니다. 최신 로컬 검사/CI 미실행 상태는 [0.2.51 기록](local-release-0.2.51.md#검증-결과)을 따릅니다.
+전체 CI는 [사용자가 명시적으로 요청할 때만 수동 실행](developer-guide.md#검사)합니다. 0.2.30까지의 기록은 해당 단계의 로컬 검사입니다. 버전별 전체 CI의 검사 커밋과 결과는 각 검증 기록에 남깁니다. 최신 로컬 검사/CI 미실행 상태는 [0.2.52 기록](local-release-0.2.52.md#재현과-검증)을 따릅니다.
 
 ## 남은 작업
 

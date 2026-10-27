@@ -2,7 +2,7 @@
 import {readHwp,inflateBoundedRaw} from '../../probes/sites-runtime/guard/container.mjs';
 import {inspectTextBoxes,publicTextBoxes} from './local_text_boxes.mjs';
 import {inspectDrawingTree,publicDrawingGroups} from './local_drawing_tree.mjs';
-import {fieldKinds,inspectParagraphFields} from './local_field_records.mjs';
+import {fieldKinds,inspectParagraphFields,ambiguousFieldIds} from './local_field_records.mjs';
 import {sectionPages} from './local_page_state.mjs';
 import {objectFlow} from './local_flow_records.mjs';
 import {inspectOpaqueDrawings,publicOpaqueDrawings} from './local_opaque_drawings.mjs';
@@ -99,6 +99,8 @@ function inspection(HwpDocument,bytes,{includeDocumentInfo=true,verifyCharacterM
   }
   const opaqueParagraphs=[...recordSets.values()].reduce((n,records)=>n+records.filter(r=>r.tag===66).length,0)-blocks.length;
   const legacyBoxes=inspectTextBoxes(doc,raw,recordSets,blocks,definitions),drawing_tree=inspectDrawingTree(HwpDocument,bytes,raw,recordSets,blocks,definitions,legacyBoxes),text_boxes=[...legacyBoxes.map(box=>drawing_tree.boxes.find(x=>x.id===box.id)??box),...drawing_tree.boxes.filter(x=>!legacyBoxes.some(b=>b.id===x.id))],object_fields=text_boxes.flatMap(b=>b.paragraphs.flatMap(p=>p.fields??[])),additional_fields=blocks.flatMap(b=>inspectParagraphFields(recordSets.get(b.section),b)).filter(f=>f.field_type!=='clickhere'),opaque_drawings=inspectOpaqueDrawings(recordSets,blocks,groups);
+  const ambiguous=ambiguousFieldIds(recordSets);
+  for(const f of [...fields,...additional_fields,...object_fields])if(ambiguous.has(f.field_id)){f.editable=false;f.read_only_reason='FIELD_ID_AMBIGUOUS';}
   return {raw,blocks,fields,additional_fields,object_fields,drawing_tree,groups,pictures,text_boxes,opaque_drawings,character_definition_count:definitions,tables:complexTables(recordSets,blocks),recordSets,unhandled_fields:allFields.length-fields.length,unhandled_groups:unhandledGroups,opaque_paragraphs:opaqueParagraphs,...(includeDocumentInfo?{info:JSON.parse(doc.getDocumentInfo())}:{})};
  }finally{doc.free();}
 });}
@@ -106,7 +108,7 @@ export {inspection as inspectLocalComplex};
 export function createLocalComplexSnapshot(HwpDocument,bytes,version){
  const state=inspection(HwpDocument,bytes),publicBlock=b=>{const {tokens,unit_styles,character_runs,record_index,records_end,text_record,shape_record,raw_level,...rest}=b;return {...rest,target_id:b.text_mapping_verified?idTarget(b.id,version):null,editable:b.text_range_editable&&tokens.every(t=>t.text||t.code===13),character_format_editable:b.text_range_editable,structural_editable:b.structural_editable,...(!b.text_mapping_verified?{read_only_reason:'TARGET_TEXT_UNVERIFIED'}:{}),style:{profile:'complex_raw_preservation',character_runs:character_runs??[]}};};
  const rawFields=state.blocks.flatMap(b=>inspectParagraphFields(state.recordSets.get(b.section),b));
- const publicFields=[...state.fields.map(f=>({...f,...rawFields.find(x=>x.id===f.id)})),...state.additional_fields,...state.object_fields].map(f=>{const {from,to,record_index,records_end,command_end,...rest}=f;return {...rest,target_id:idTarget(f.id,version)};}),publicGroups=state.groups.map(g=>{const {record_index,...rest}=g;return {...rest,target_id:idTarget(g.id,version),pictures:g.pictures.map(p=>{const {record_index,...rest}=p;return rest;})};});
+ const publicFields=[...state.fields.map(f=>({...f,...rawFields.find(x=>x.id===f.id),editable:f.editable,...(f.read_only_reason?{read_only_reason:f.read_only_reason}:{})})),...state.additional_fields,...state.object_fields].map(f=>{const {from,to,record_index,records_end,command_end,...rest}=f;return {...rest,target_id:idTarget(f.id,version)};}),publicGroups=state.groups.map(g=>{const {record_index,...rest}=g;return {...rest,target_id:idTarget(g.id,version),pictures:g.pictures.map(p=>{const {record_index,...rest}=p;return rest;})};});
  return {source_sha256:version,tableReflowContexts:factory=>factory(state,version),read(options){
   if(options.expected_sha256!==version)fail('VERSION_CONFLICT');let {max_chars=8000,max_blocks=128,cursor}=options;
   if(!Number.isSafeInteger(max_chars)||max_chars<1||max_chars>64000||!Number.isSafeInteger(max_blocks)||max_blocks<1||max_blocks>128)fail('INVALID_LIMIT');
@@ -126,6 +128,7 @@ export function editLocalComplex(HwpDocument,source,version,op){
  if(!pictureOperation&&!tableOperation&&!fieldOperation&&!groupOperation&&!boundaryOperation&&(!schemas[op.type]||!equal(Object.keys(op).sort(),['type','target_id','expected_old',...schemas[op.type]].sort())))fail('COMPLEX_OPERATION_UNSUPPORTED');
  if(typeof op.target_id!=='string'||!op.target_id.startsWith(`hwp5:${version}:`))fail('VERSION_CONFLICT');const encoded=op.target_id.slice(70),id=Buffer.from(encoded,'base64url').toString();if(Buffer.from(id).toString('base64url')!==encoded)fail('INVALID_TARGET');
  const before=inspection(HwpDocument,source),field=before.fields.find(f=>f.id===id),group=before.groups.find(g=>g.id===id),b=before.blocks.find(b=>b.id===(field?.block_id??group?.block_id??id)||(tableOperation||fieldOperation||boundaryOperation)&&standardBlockId(b)===id);if(!b)fail('INVALID_TARGET');
+ if(field?.read_only_reason==='FIELD_ID_AMBIGUOUS')fail('FIELD_ID_AMBIGUOUS');
  const expected=field?field.value:b.text;if(expected!==op.expected_old)fail('EXPECTED_OLD_MISMATCH');let records=before.recordSets.get(b.section),wanted=b.text;
  if(b.empty_text_materialization&&['splice_text','replace_text','insert_picture','insert_field'].includes(op.type)){
   if(['splice_text','replace_text'].includes(op.type)&&op.new_text===''){
