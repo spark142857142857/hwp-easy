@@ -12,7 +12,7 @@ export {locateCell} from './local_cell_frame.mjs';
 const same=(a,b)=>JSON.stringify(a)===JSON.stringify(b);
 
 export function diagnoseCellTextBoxes(state,{HwpDocument,bytes,snapshot:provided,estimateHeight,estimateParagraphHeight,estimateCellHeight,estimateTableHeight,getContainer},add){
- const boxes=(state.text_boxes??[]).filter(b=>b.cell_path.length),limitations=[];let checks=0,checked=0;
+ const boxes=(state.text_boxes??[]).filter(b=>!b.nested_object&&b.cell_path.length),limitations=[];let checks=0,checked=0;
  const result=()=>({status:!boxes.length?'not_applicable':limitations.length?'inconclusive':'checked_supported_profiles',checks,checked_boxes:checked,total_boxes:boxes.length,limitations,native_layout_verified:false});
  if(!boxes.length)return result();
  const limit=(code,box)=>{limitations.push({code,...(box?{text_box_id:box.id,section:box.section,cell_path:box.cell_path}:{})});};

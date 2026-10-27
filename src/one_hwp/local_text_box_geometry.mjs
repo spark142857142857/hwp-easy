@@ -7,7 +7,7 @@ import {invalidateSectionLayout} from './local_layout_cache.mjs';
 import {publishVerifiedPatch} from './local_verified_patch.mjs';
 
 export function textBoxGeometry(state,box){
- const f=box.flow,p=box.properties;
+ if(box.nested_object)return null;const f=box.flow,p=box.properties;
  if(f.treatAsChar||f.widthRelTo!==4||f.heightRelTo!==2||f.horzAlign!==0||f.vertAlign!==0||p.width<1||p.height<1)return null;
  const rs=state.recordSets.get(box.section),shape=rs[box.record_index+1],rects=rs.slice(box.record_index+1,box.records_end).filter(r=>r.tag===79);
  if(rects.length!==1||rects[0].payload.length!==33)return null;

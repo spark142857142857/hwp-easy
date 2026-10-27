@@ -2,7 +2,7 @@
 import {GuardError} from '../../probes/sites-runtime/guard/records.mjs';
 import {digest} from './local_file.mjs';
 const fail=code=>{throw new GuardError(code);};
-const positionKeys=['kind','section','paragraph','control','cell','cell_paragraph','row','column','row_span','column_span','cell_path','list_id'];
+const positionKeys=['kind','section','paragraph','control','cell','cell_paragraph','row','column','row_span','column_span','cell_path','list_id','text_box_id','object_path'];
 export function validateFind(options,version){
   const {query,max_matches=50,cursor}=options;
   if(typeof query!=='string'||!query.length||query.length>256||!query.isWellFormed()||/[\u0000-\u001f]/.test(query))fail('INVALID_SEARCH_QUERY');
@@ -35,6 +35,7 @@ export function findLocalDocument(document,options){
     }
     pageCursor=page.next_cursor;
   }while(pageCursor);
+  for(const box of base.text_boxes??[])for(const p of box.paragraphs)blocks.push({kind:'text_box_paragraph',id:p.id,target_id:p.target_id,text:p.text,text_box_id:box.id,object_path:box.object_path,section:box.section,paragraph:p.paragraph,cell_path:box.cell_path,end_offset:[...p.text].length,total_chars:[...p.text].length});
   if(blocks.some(b=>b.end_offset!==b.total_chars))fail('SEARCH_READ_INCOMPLETE');
   let index=0,offset=0;
   if(cursor!==undefined){
@@ -46,7 +47,7 @@ export function findLocalDocument(document,options){
   const matches=[],length=[...query].length;
   const result=next=>({source_sha256:version,query,match_mode:'exact_case_sensitive_nonoverlapping_within_one_block',
     offsets:'unicode_code_points',matches,returned_matches:matches.length,complete:next===null,next_cursor:next,
-    scope:'supported_paragraph_and_cell_blocks',all_content_supported:base.all_content_supported,
+    scope:base.text_boxes?.length?'supported_paragraph_cell_and_text_box_blocks':'supported_paragraph_and_cell_blocks',all_content_supported:base.all_content_supported,
     unsupported:base.unsupported,target_mapping_verified:true,saved:false,persistence:'local_file'});
   for(;index<blocks.length;index++,offset=0){
     const block=blocks[index];let utf16=0,point=0,points;

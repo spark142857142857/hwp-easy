@@ -50,7 +50,7 @@ export function textBoxHeightEstimator(state){
  };
 }
 function fixedTextBoxRisks(state,add,estimateHeight){
- const boxes=state.text_boxes??[];if(!boxes.length)return 0;let checks=0;
+ const boxes=(state.text_boxes??[]).filter(b=>!b.nested_object);if(!boxes.length)return 0;let checks=0;
  for(const box of boxes){
   const f=box.flow,p=box.properties,rs=state.recordSets.get(box.section),pages=rs.filter(r=>r.tag===73);
   if(box.cell_path.length||f.treatAsChar||f.vertRelTo!==0||f.vertAlign!==0||f.widthRelTo!==4||f.heightRelTo!==2||p.width<=0||p.vertOffset<0||pages.length!==1||pages[0].payload.length!==40)continue;
@@ -91,7 +91,7 @@ export function analyzeLocalLayout(state,options={}){
    if(extent>parent.width)add(isPicture?'PICTURE_EXCEEDS_CELL_WIDTH':'GROUP_EXCEEDS_CELL_WIDTH',b,extent,parent.width,'geometry',extra);
    if(projected){const r=projected.rect,f=projected.frame;for(const [side,amount]of [['LEFT',f.x-r.x],['RIGHT',r.x+r.w-f.x-f.w],['TOP',f.y-r.y],['BOTTOM',r.y+r.h-f.y-f.h]])if(amount>.5)add((isPicture?'CELL_PICTURE_PROJECTED_':'CELL_GROUP_PROJECTED_')+side+'_BOUNDARY',b,Math.ceil(amount*75),0,'font_estimate',{...extra,basis:'hwp_column_and_root_paragraph_reference',page:projected.page});}
   }
-  for(const box of (state.text_boxes??[]).filter(box=>box.block_id===b.id&&!box.flow.treatAsChar&&box.flow.widthRelTo===4&&box.flow.horzRelTo===2&&box.flow.horzAlign===0)){
+  for(const box of (state.text_boxes??[]).filter(box=>!box.nested_object&&box.block_id===b.id&&!box.flow.treatAsChar&&box.flow.widthRelTo===4&&box.flow.horzRelTo===2&&box.flow.horzAlign===0)){
    let projected=false;if(snapshot)try{projected=Boolean(projectNestedAnchor(state,box,snapshot));}catch(error){if(!(error instanceof GuardError))throw error;}
    checks++;const p=box.properties,extent=p.width+(box.cell_path.length>1||projected?0:Math.max(0,p.horzOffset))+box.flow.marginLeft+box.flow.marginRight;
    if(extent>parent.width)add('TEXT_BOX_EXCEEDS_CELL_WIDTH',b,extent,parent.width,'geometry',{text_box_id:box.id,object_identity:layoutObjectIdentity(state,box)});
@@ -101,6 +101,13 @@ export function analyzeLocalLayout(state,options={}){
  const tableEstimates=tableHeightEstimator(state);cellPageRisks(state,add,tableEstimates.tableHeight);
  const estimateHeight=state.text_boxes?.length?textBoxHeightEstimator(state):()=>0;
  checks+=fixedTextBoxRisks(state,add,estimateHeight);
+ // Internal drawing coordinates are not page/cell coordinates. Estimate only
+ // the selected list's intrinsic content frame; never reuse its outer anchor.
+ for(const box of (state.text_boxes??[]).filter(b=>b.nested_object)){
+  const host=state.blocks.find(b=>b.id===box.block_id),inset=textBoxInsets(state,box);if(!host||!inset)continue;checks++;
+  const height=estimateHeight(box),available=box.content_size.height;
+  if(height>available)add('DRAWING_TEXT_BOX_HEIGHT_RISK',host,height,available,'font_estimate',{text_box_id:box.id,object_identity:layoutObjectIdentity(state,box)+':'+box.object_path.join('.'),basis:'intrinsic_text_list_frame_not_native_page_bounds',advice:'shorten the text or explicitly transform its containing group; native pagination is not certified'});
+ }
  const cell_text_boxes=diagnoseCellTextBoxes(state,{...options,snapshot,estimateHeight,estimateParagraphHeight:textHeight,estimateCellHeight:tableEstimates.cellHeight,estimateTableHeight:tableEstimates.tableHeight,getContainer:b=>cellContainer(state,b)},add);checks+=cell_text_boxes.checks;
  return {status:issues.length?'issues_detected':cell_text_boxes.status==='inconclusive'?'inconclusive':'no_checked_geometry_overflow',checks,issues,cell_text_boxes,geometry_overflows:issues.filter(x=>x.certainty==='geometry').length,font_warnings:issues.filter(x=>x.certainty==='font_estimate').length,layout_verified:false,scope:'mapped cell geometry, font-based height risks and bounded rendered cell text-box observations',not_checked:['native page pagination','stored minimum row height versus actual reflow','exact multi-line text height and nonzero internal text-box padding','unverified cell text-box anchors and ambiguous rendered identities','general floating-object overlap','font substitution','arbitrary shape transforms']};
 }

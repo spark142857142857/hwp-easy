@@ -1,0 +1,16 @@
+/** Verify a raw object's paragraph list in a disposable body, without flattening a save. */
+import {deflateRawSync} from 'node:zlib';
+import {parseRecords} from '../../probes/sites-runtime/guard/records.mjs';
+import {view,textTokens,encodeRecords} from './local_complex_records.mjs';
+import {patchLocalPackedStreams} from './local_container_write.mjs';
+export function verifyObjectParagraphs(HwpDocument,bytes,raw,records,paragraphs){
+ const setupRecords=[...parseRecords(raw.streams.get('BodyText/Section0'))],firstEnd=setupRecords.findIndex((r,i)=>i&&r.tag===66&&r.level===0),setup=[],text=setupRecords.find(r=>r.tag===67&&r.level===1)?.payload;
+ if(!text)return false;const anchors=textTokens(text).filter(t=>t.code===2).map(t=>text.subarray(t.unit*2,(t.unit+8)*2));if(anchors.length!==2)return false;
+ for(let i=1;i<(firstEnd<0?setupRecords.length:firstEnd);i++){const r=setupRecords[i];if(r.tag===71&&r.level===1&&['dces','dloc'].includes(Buffer.from(r.payload.subarray(0,4)).toString())){let j=i+1;while(j<setupRecords.length&&setupRecords[j].level>1)j++;setup.push(...setupRecords.slice(i,j).map(r=>({...r,payload:r.payload.slice()})));i=j-1;}}
+ if(setup.filter(r=>r.level===1).length!==2)return false;
+ const body=[];for(const p of paragraphs){const rows=records.slice(p.record_index,p.records_end).filter(r=>r.tag!==69).map(r=>({...r,level:r.level-p.raw_level,payload:r.payload.slice()}));for(const h of rows)if(h.tag===66)view(h.payload).setUint16(16,0,true);if(!rows.some(r=>r.tag===67&&r.level===1))rows.splice(1,0,{tag:67,level:1,payload:Buffer.from('\r','utf16le')});body.push(...rows);}
+ const h=body[0],t=body.find(r=>r.tag===67&&r.level===1),s=body.find(r=>r.tag===68&&r.level===1);if(!h||!t||!s)return false;
+ const prefix=Buffer.alloc(8);prefix.writeUInt32LE(view(s.payload).getUint32(4,true),4);for(let i=0;i<s.payload.length;i+=8)view(s.payload).setUint32(i,view(s.payload).getUint32(i,true)+16,true);s.payload=Buffer.concat([prefix,s.payload]);t.payload=Buffer.concat([...anchors,t.payload]);view(h.payload).setUint32(0,((view(h.payload).getUint32(0,true)&0x80000000)|t.payload.length/2)>>>0,true);view(h.payload).setUint32(4,view(h.payload).getUint32(4,true)|4,true);view(h.payload).setUint16(12,s.payload.length/8,true);h.payload[11]|=3;body.splice(body.indexOf(s)+1,0,...setup);
+ const data=encodeRecords(body),packed=(view(raw.streams.get('FileHeader')).getUint32(36,true)&1)?deflateRawSync(data,{level:9}):data,privateBytes=patchLocalPackedStreams(bytes,new Map([['BodyText/Section0',packed]])),doc=new HwpDocument(privateBytes);
+ try{if(doc.getParagraphCount(0)!==paragraphs.length)return false;return paragraphs.every((p,i)=>{if(doc.getTextRange(0,i,0,doc.getParagraphLength(0,i))!==p.text)return false;const tokens=p.tokens.filter(t=>t.text),runs=[];for(let start=0;start<tokens.length;){let end=start+1;const shape=p.unit_styles[tokens[start].unit];while(end<tokens.length&&p.unit_styles[tokens[end].unit]===shape)end++;let props;for(const pos of new Set([start,Math.floor((start+end-1)/2),end-1])){const actual=JSON.parse(doc.getCharPropertiesAt(0,i,pos));if(actual.charShapeId!==shape)return false;props??=actual;}runs.push({start,end,properties:props});start=end;}p.character_runs=runs;return true;});}finally{doc.free();}
+}

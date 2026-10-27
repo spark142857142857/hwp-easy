@@ -11,6 +11,7 @@ import {hasLocalComplexContent,editLocalComplex,inspectLocalComplex} from './loc
 import {reflowLocal} from './local_reflow.mjs';
 import {reflowTableLocal,tablePaginationEnabled,tableReflowContexts} from './local_table_reflow.mjs';
 import {placementLocal} from './local_placement.mjs';
+import {editObjectTarget} from './local_object_edit.mjs';
 import {editTextBox} from './local_text_boxes.mjs';
 import {transformTextBox} from './local_text_box_geometry.mjs';
 import {layoutObjectIdentity} from './local_layout_identity.mjs';
@@ -28,6 +29,7 @@ function rawTarget(value,version){
 const target=(id,version)=>`hwp5:${version}:${Buffer.from(id).toString('base64url')}`;
 
 export async function applyLocalOperation(HwpDocument,bytes,version,operation){
+  const objectResult=editObjectTarget(HwpDocument,bytes,version,operation);if(objectResult)return objectResult;
   if(operation.type==='reflow_table')return reflowTableLocal(HwpDocument,bytes,version,operation);
   if(['reposition_floating_object','protect_page_bottom'].includes(operation.type))return placementLocal(HwpDocument,bytes,version,operation);
   if(operation.type==='transform_text_box'){
@@ -126,6 +128,11 @@ export async function editLocalBatch(HwpDocument,source,initialVersion,operation
         const old=inspectLocalComplex(HwpDocument,bytes,{includeDocumentInfo:false,verifyCharacterModel:false}),after=inspectLocalComplex(HwpDocument,next,{includeDocumentInfo:false,verifyCharacterModel:false});
         for(const box of old.text_boxes){if(Object.hasOwn(_target_remap,box.id))continue;const candidates=after.text_boxes.filter(b=>b.section===box.section&&b.subtree_sha256===box.subtree_sha256);if(candidates.length!==1)continue;const now=candidates[0];_target_remap[box.id]=now.id;for(const p of box.paragraphs)_target_remap[p.id]=now.paragraphs[p.paragraph]?.id??null;}
       }
+      if([...identities.values()].some(id=>id?.includes(':dg:')||id?.includes(':tbx:')||/:f[0-9]+$/.test(id??''))){
+        const old=inspectLocalComplex(HwpDocument,bytes,{includeDocumentInfo:false,verifyCharacterModel:false}),after=inspectLocalComplex(HwpDocument,next,{includeDocumentInfo:false,verifyCharacterModel:false});
+        for(const n of old.drawing_tree.nodes){if(Object.hasOwn(_target_remap,n.id))continue;const host=_target_remap[n.block_id]??n.block_id,candidates=after.drawing_tree.nodes.filter(x=>x.section===n.section&&x.block_id===host&&x.subtree_sha256===n.subtree_sha256);if(candidates.length!==1)continue;const now=candidates[0];_target_remap[n.id]=now.id;const box=old.text_boxes.find(b=>b.drawing_node_id===n.id),newBox=after.text_boxes.find(b=>b.drawing_node_id===now.id);if(box&&newBox){_target_remap[box.id]=newBox.id;for(const p of box.paragraphs)_target_remap[p.id]=newBox.paragraphs[p.paragraph]?.id??null;}}
+        for(const f of [...old.additional_fields,...old.object_fields]){if(Object.hasOwn(_target_remap,f.id))continue;const host=_target_remap[f.block_id]??f.block_id,candidates=[...after.additional_fields,...after.object_fields].filter(x=>x.block_id===host&&x.field_id===f.field_id&&x.definition_sha256===f.definition_sha256);if(candidates.length===1)_target_remap[f.id]=candidates[0].id;}
+      }
       if([...identities.values()].some(id=>id?.includes(':od'))){
         const old=inspectLocalComplex(HwpDocument,bytes,{includeDocumentInfo:false,verifyCharacterModel:false}),after=inspectLocalComplex(HwpDocument,next,{includeDocumentInfo:false,verifyCharacterModel:false});
         for(const d of old.opaque_drawings){if(Object.hasOwn(_target_remap,d.id))continue;const matches=after.opaque_drawings.filter(n=>n.section===d.section&&n.subtree_sha256===d.subtree_sha256);if(matches.length===1)_target_remap[d.id]=matches[0].id;}
@@ -164,6 +171,8 @@ export async function editLocalBatch(HwpDocument,source,initialVersion,operation
     table_formatting_changed:outcomes.some(o=>o.table_formatting_changed===true),
     text_range_changed:outcomes.some(o=>o.text_range_changed===true),
     picture_changed:outcomes.some(o=>o.picture_changed===true),
+    drawing_group_changed:outcomes.some(o=>o.drawing_group_changed===true),
+    drawing_frame_normalizations:outcomes.flatMap(o=>o.drawing_frame_normalization?[o.drawing_frame_normalization]:[]),
     picture_group_changed:outcomes.some(o=>o.picture_group_changed===true),
     page_layout_changed:outcomes.some(o=>o.page_layout_changed===true),
     text_box_changed:outcomes.some(o=>o.text_box_changed===true),

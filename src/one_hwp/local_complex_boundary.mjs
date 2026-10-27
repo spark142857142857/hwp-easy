@@ -24,7 +24,7 @@ function paragraph(original,payload,ids,controls,last,originHeader){
  let mask=0;for(const t of tokens)if(t.code<32&&t.code!==13)mask|=1<<t.code;
  v.setUint32(4,mask>>>0,true);v.setUint16(12,runs.length,true);v.setUint16(14,0,true);v.setUint16(16,0,true);if(!originHeader){v.setUint32(18,0,true);v.setUint8(11,0);}
  const level=original.level,empty=tokens.length===1;
- return [{...original,payload:header,...(originHeader?{originHeader}:{})},...(!empty?[{tag:67,level:level+1,payload}]:[]),{tag:68,level:level+1,payload:shape},...controls.flat()];
+ return [{...original,payload:header,_origin:originHeader?original._origin:undefined,...(originHeader?{originHeader}:{})},...(!empty?[{tag:67,level:level+1,payload}]:[]),{tag:68,level:level+1,payload:shape},...controls.flat()];
 }
 export function boundaryEligible(records,b){try{parts(records,b);return true;}catch{return false;}}
 /** Explicit block flow: retain every text/anchor unit and its style, inserting
