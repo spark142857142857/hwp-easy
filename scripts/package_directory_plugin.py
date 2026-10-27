@@ -49,7 +49,9 @@ def prepare(source: Path, destination: Path) -> dict:
     interface = metadata['extensions']['com.openai']['interface']
     # Directory subtitles are one line, at most 30 characters. Keep Korean
     # first; the bilingual long description still contains the English text.
-    interface['shortDescription'] = 'HWP 직접 편집·같은 파일 저장·복구'
+    interface['shortDescription'] = interface['shortDescription'].split('\n', 1)[0]
+    if not interface['shortDescription'] or len(interface['shortDescription']) > 30:
+        raise ValueError('Directory subtitle must be between 1 and 30 characters')
     interface['capabilities'] = [text.split('\n', 1)[0] for text in interface.get('capabilities', [])]
     interface['defaultPrompt'] = [text.replace('$hwp-easy:', '$hwp-easy-local:')
                                   for text in interface.get('defaultPrompt', [])]

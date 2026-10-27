@@ -7,9 +7,12 @@ import {digest} from '../src/one_hwp/local_file.mjs';
 import {drawingRenderProfiles,drawingRenderFixture,drawingRenderOperations} from '../tests/local_drawing_render_fixtures.mjs';
 import {assertPlannedEdit} from './local-plan-proof.mjs';
 initializeLocal(fs.readFileSync('node_modules/@rhwp/core/rhwp_bg.wasm'));
-const out=path.resolve(process.argv[2]??'outputs/drawing-render'),packaged=process.argv.includes('--package');assert.equal(fs.existsSync(out),false);fs.mkdirSync(out,{recursive:true});
+const runnerAt=process.argv.indexOf('--runner'),installedRunner=runnerAt>=0?process.argv[runnerAt+1]:null;
+if(runnerAt>=0)assert.ok(installedRunner&&!installedRunner.startsWith('--'),'--runner requires an installed runner path');
+const out=path.resolve(process.argv[2]??'outputs/drawing-render'),packaged=process.argv.includes('--package')||Boolean(installedRunner);assert.equal(fs.existsSync(out),false);fs.mkdirSync(out,{recursive:true});
 const temp=fs.mkdtempSync(path.join(os.tmpdir(),'hwp-drawing-render-'));let runner;
-if(packaged){fs.cpSync('outputs/plugin-package/hwp-easy',path.join(temp,'package'),{recursive:true});runner=path.join(temp,'package/skills/edit-local-hwp/scripts/local-runner.mjs');}
+if(installedRunner)runner=path.resolve(installedRunner);
+else if(packaged){fs.cpSync('outputs/plugin-package/hwp-easy',path.join(temp,'package'),{recursive:true});runner=path.join(temp,'package/skills/edit-local-hwp/scripts/local-runner.mjs');}
 const call=async req=>{if(!packaged)return runLocal(req);const f=path.join(temp,'request.json');fs.writeFileSync(f,JSON.stringify(req));const p=spawnSync(process.execPath,[runner,'--request',f],{cwd:temp,encoding:'utf8',windowsHide:true,timeout:65000,maxBuffer:16*1024*1024,env:{...process.env,NODE_PATH:''}});const v=JSON.parse(p.stdout);if(p.status!==0||v.ok!==true)throw Error(p.stdout||p.stderr);return v.result;};
 const cases=[];
 try{for(const profile of drawingRenderProfiles){
@@ -26,5 +29,5 @@ try{for(const profile of drawingRenderProfiles){
   }finally{view.document.free();}
  }
  cases.push({name:profile.name,profile,before,after,operations,saved,verification:saved,rendered});fs.writeFileSync(path.join(out,'cases.json'),JSON.stringify(cases,null,2)+'\n');console.log(JSON.stringify({case:profile.name,status:'PASS'}));
-}const result={status:'PASS',cases:cases.length,isolated_bundle:packaged,same_file_save:true,exact_restore:true,no_op_no_history:true,all_group_paragraphs_visible:true,request_view_svg_equal:true,source_packaged_svg_equal:packaged?true:null,layout_verified:false};fs.writeFileSync(path.join(out,'cases.json'),JSON.stringify(cases,null,2)+'\n');fs.writeFileSync(path.join(out,'summary.json'),JSON.stringify(result,null,2)+'\n');console.log(JSON.stringify(result));
+}const result={status:'PASS',cases:cases.length,isolated_bundle:packaged,runtime_origin:installedRunner?'installed':packaged?'packaged':'source',same_file_save:true,exact_restore:true,no_op_no_history:true,all_group_paragraphs_visible:true,request_view_svg_equal:true,source_packaged_svg_equal:packaged?true:null,layout_verified:false};fs.writeFileSync(path.join(out,'cases.json'),JSON.stringify(cases,null,2)+'\n');fs.writeFileSync(path.join(out,'summary.json'),JSON.stringify(result,null,2)+'\n');console.log(JSON.stringify(result));
 }finally{assert.equal(path.dirname(temp),os.tmpdir());assert.ok(path.basename(temp).startsWith('hwp-drawing-render-'));fs.rmSync(temp,{recursive:true,force:true});}
