@@ -23,7 +23,7 @@
 | 실제 한글·배포 SVG | **33개 파일·33쪽**, 표/셀 경계 **138곳**, 접두부 위치 **24곳**, 답변 **67줄**. 원래 색의 잉크·캐럿 줄 소속·텍스트 순서와 공개 SVG를 대조 |
 | 복구·썸네일 | 전체 원본 바이트와 **복구 11쪽 픽셀 일치**. 명시적 패키지 SVG로 만든 BMP와 저장 `PrvImage` 일치 |
 | 실제 설치·보관 | Codex 0.2.42의 25개 파일 ZIP 대조, Claude Code·Cursor 0.2.19 각 23개 파일의 기존 트리 해시 불변. 이전 0.2.47 ZIP 보존 |
-| CI | 최종 제품 소스 `be65eb8`의 [전체 실행](https://github.com/spark142857142857/hwp-easy/actions/runs/40437398236)은 **17개 통과·Windows 일반 배치 1개 시간 초과**. 혼합/다단까지 통과했고 마지막 일반 배치에서 22분 상한으로 중단. 검사 위치를 다시 분산하고 해당 2개 OS만 검증하며 단일 전체 성공으로 합치지 않음 |
+| CI | 최종 제품 소스 `be65eb8`의 [전체 실행](https://github.com/spark142857142857/hwp-easy/actions/runs/40437398236)은 **17개 통과·Windows 일반 배치 1개 시간 초과**. 혼합/다단까지 통과했고 마지막 일반 배치에서 22분 상한으로 중단. 검사 위치를 다시 분산한 [일반 배치 2개 OS](https://github.com/spark142857142857/hwp-easy/actions/runs/40439972583) 통과. 같은 제품 코드의 검증을 완료하되 단일 전체 성공으로 합치지 않음 |
 
 검증 합계는 **20건 저장/복구·독립 판독**, 실제 한글 **60개 상태 파일·60쪽**, 표/셀 경계 **254곳**·접두부 위치 **50곳**·답변 **175줄**·복구 **20쪽 픽셀 일치**다. 새 11건과 기존 9건을 구분하며 60개 서로 다른 양식으로 세지 않는다.
 
@@ -35,7 +35,7 @@
 
 최종 배치는 일반 배치 1쌍을 여유 있는 장문 작업으로 옮긴다. 이번 장문 작업 실측은 Windows 12분 45초/18분, Linux 11분 26초/18분이었다. 새 B4 11건은 격리 패키지 작업에 유지한다. 기존 모든 명령·전체 18개 작업·각 작업 예산·제품 5초 한도를 유지하며 제품 소스와 검증 ZIP은 바꾸지 않는다.
 
-수동 `placement-balance`는 옮긴 일반 배치의 **2개 OS 실행**만 선택한다. 기존 장문/검색 검사는 `all`에서 그대로 실행하고, 전체는 **18개**, `render-view`는 장문/일반 배치도 포함한 **8개 OS 실행**이다. 이미 통과한 전체 작업을 반복하지 않는다. 격리 패키지 작업의 Claude Code·Cursor 이름은 실제 앱 설치·인증·모델 호출과 구분한 공통 엔진 QA다.
+설정 커밋 `60326c7`의 [수동 `placement-balance`](https://github.com/spark142857142857/hwp-easy/actions/runs/40439972583)는 옮긴 일반 배치의 **2개 OS 실행**만 선택하며 둘 다 통과했다. 제품 소스·실행기/ZIP은 `be65eb8`과 동일하며 장문/검색의 이전 두 OS 통과와 옮긴 일반 배치 통과를 구분한다. `all`은 장문/검색을 그대로 실행하고, 전체는 **18개**, `render-view`는 장문/일반 배치도 포함한 **8개 OS 실행**이다. 이미 통과한 전체 작업을 반복하지 않는다. 격리 패키지 작업의 Claude Code·Cursor 이름은 실제 앱 설치·인증·모델 호출과 구분한 공통 엔진 QA다.
 
 ## 지원 조건과 남은 작업
 
@@ -58,4 +58,4 @@ B4는 기존 정규화 중첩 렌더 범위의 원래 격자·표/셀·단일 �
 | 실행기 SHA-256 | `aefbb7cb98f86b6fcf2183375e1b43d80d5b4a2b565847021a583eea46eadacd` |
 | WASM SHA-256 | `8000e4ce320b7994dca6bcd58be0c862144c7b805576504e523a420439da658b` · @rhwp/core 0.8.6 유지 |
 
-근거는 `outputs/b4-048-20261027/`의 `package-guard/`, `legacy/`, `source-tests.log`, `guard-tests.log`, `archive-guard.json`, `client-before.json`, `workflow-audit.json`, `workflow-balance-audit.json`, `ci-guard-current.json`, `ci-timeout.log`에 보관한다. computer-use는 **0회**이며 실제 한글은 신뢰한 합성 문서에만 사용한 외부 QA다. 제품의 한글 설치·Python 의존성을 추가하지 않는다.
+근거는 `outputs/b4-048-20261027/`의 `package-guard/`, `legacy/`, `source-tests.log`, `guard-tests.log`, `archive-guard.json`, `client-before.json`, `workflow-audit.json`, `workflow-balance-audit.json`, `ci-full-verification.json`, `ci-timeout.log`, `ci-verification.json`에 보관한다. computer-use는 **0회**이며 실제 한글은 신뢰한 합성 문서에만 사용한 외부 QA다. 제품의 한글 설치·Python 의존성을 추가하지 않는다.
