@@ -100,7 +100,7 @@ jobs:
         run: python -m pip wheel --no-deps --wheel-dir dist .
 
   agent-clients:
-    if: ${{ inputs.scope == 'all' || inputs.scope == 'package-balance' }}
+    if: ${{ inputs.scope == 'all' || inputs.scope == 'package-balance' || inputs.scope == 'render-view' }}
     name: Claude Code and Cursor skills / ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
     timeout-minutes: 8
@@ -153,6 +153,12 @@ jobs:
         run: node scripts/check-local-nested-forest.mjs
       - name: Independently verify original paths, floating state and recovery
         run: python scripts/check-local-nested-forest.py
+      # Shared engine package QA only; no actual client installation or login.
+      # The previous Windows package job used 292 of its 480 seconds.
+      - name: Verify single-host ancestor alignment save and recovery
+        run: node scripts/check-local-nested-forest.mjs outputs/local-ancestor-alignment alignment
+      - name: Independently verify ancestor alignment raw preservation
+        run: python scripts/check-local-nested-forest.py outputs/local-ancestor-alignment
 
   local-complex:
     if: ${{ inputs.scope == 'all' || inputs.scope == 'render-view' }}
@@ -193,7 +199,7 @@ jobs:
       # Keep cold preview workers out of the concurrent complex test batch.
       # Production worker deadlines and all assertions remain unchanged.
       - name: Verify preview worker and bounded cell wrapping serially
-        run: node --test --test-concurrency=1 tests/test_local_render_view.mjs tests/test_local_cell_wrap_render.mjs
+        run: node --test --test-concurrency=1 tests/test_local_render_view.mjs tests/test_local_cell_wrap_render.mjs tests/test_local_ancestor_alignment.mjs
       - name: Verify mixed/column guards during focused render checks
         if: ${{ inputs.scope == 'render-view' }}
         run: node --test tests/test_local_nested_mixed_render.mjs
@@ -231,10 +237,6 @@ jobs:
         run: node scripts/check-local-reflow.mjs
       - name: Python reflow
         run: python scripts/check-local-reflow.py
-      - name: Node placement
-        run: node scripts/check-local-placement.mjs
-      - name: Python placement
-        run: python scripts/check-local-placement.py
 
   local-floating:
     if: ${{ inputs.scope == 'all' || inputs.scope == 'table-floating' || inputs.scope == 'render-view' }}
@@ -322,6 +324,12 @@ jobs:
       - name: Verify all table source regressions during floating checks
         if: ${{ inputs.scope == 'table-floating' }}
         run: node --test --test-concurrency=2 tests/test_local_table_reflow.mjs tests/test_local_table_hosts.mjs tests/test_local_table_text_flow.mjs tests/test_local_table_text_metrics.mjs tests/test_local_table_controls.mjs tests/test_local_table_floating.mjs tests/test_local_table_compact.mjs
+      # Move this existing pair out of the nearly-full complex job. Previous
+      # Windows/Linux timings were 165/125s; request and job bounds stay fixed.
+      - name: Node general placement
+        run: node scripts/check-local-placement.mjs
+      - name: Python general placement
+        run: python scripts/check-local-placement.py
 
   local-table-flow:
     if: ${{ inputs.scope == 'all' || inputs.scope == 'table-flow' || inputs.scope == 'package-balance' }}

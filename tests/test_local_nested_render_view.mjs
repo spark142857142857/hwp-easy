@@ -12,8 +12,8 @@ for(const p of nestedRenderProfiles)test(`nested render origin, prefix, alignmen
  const bytes=nestedRenderFixture(p),prior=digest(bytes),before=inspectLocalComplex(HwpDocument,bytes,{includeDocumentInfo:false,verifyCharacterModel:false}),raw=new HwpDocument(bytes);let identities;try{identities=JSON.parse(raw.getPageControlLayout(0)).controls.filter(c=>c.type==='table').map(c=>c.stableIndex);}finally{raw.free();}
  const s=captureRenderedLayout(HwpDocument,bytes),report=analyzeRenderedLayout(HwpDocument,bytes),preview=renderLocalPreview(HwpDocument,bytes,0),page=s.pages[0],tables=page.controls.filter(c=>c.type==='table');
  assert.equal(s.render_nested_tables.length,p.depth-1);assert.deepEqual(s.render_unadapted_tables,[]);assert.deepEqual(tables.map(c=>c.stableIndex),identities);
- for(let i=1;i<tables.length;i++){assert.ok(Math.abs(tables[i].x-(tables[i-1].x+6.8))<.2);assert.ok(Math.abs(tables[i].y-(tables[i-1].y+1.88+1728/75))<.2);}
- const outer=page.body_runs.find(r=>r.text==='OUTER');assert.ok(outer);assert.ok(outer.y+outer.h<tables[1].y);assert.ok(Math.abs(outer.y-(tables[0].y+1.88))<.2);
+ for(let i=1;i<tables.length;i++){assert.ok(Math.abs(tables[i].x-(tables[i-1].x+6.8))<.2);const shift=s.render_nested_tables[i-1].ancestor_alignment_shift_hwpunit/75;assert.ok(Math.abs(tables[i].y-(tables[i-1].y+1.88+1728/75+shift))<.2);}
+ const outer=page.body_runs.find(r=>r.text==='OUTER');assert.ok(outer);assert.ok(outer.y+outer.h<tables[1].y);assert.ok(Math.abs(outer.y-(tables[0].y+1.88+s.render_nested_tables[0].ancestor_alignment_shift_hwpunit/75))<.2);
  for(const r of page.body_runs.filter(r=>r.cellPath))assert.ok(before.blocks.some(b=>b.cell_path.length===r.cellPath.length&&JSON.stringify(b.cell_path)===JSON.stringify(r.cellPath)&&b.text.includes(r.text)),r.text);
  assert.ok(report.engine_limitations.some(l=>l.code==='NESTED_TABLE_RENDER_ADAPTED'));assert.equal(report.layout_verified,false);assert.equal(report.diagnostics_complete,false);assert.deepEqual(preview.render_nested_tables,s.render_nested_tables);assert.equal(digest(bytes),prior);
  assert.ok(s.render_nested_tables.every(t=>t.ancestor_alignment===p.alignment));

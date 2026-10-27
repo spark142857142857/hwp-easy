@@ -4,7 +4,7 @@
 
 [프로젝트 개요](../README.md) · [문서 인덱스](README.md) · [아키텍처](architecture.md)
 
-소스를 변경하거나 배포 패키지를 생성할 때 필요한 환경과 검사 명령입니다. 현재 소스·검증 패키지는 **로컬 HWP Easy 0.2.47**입니다. 같은 버전의 앱별 패키지는 공통 실행기를 포함하며 실제 설치 버전은 [프로젝트 상태](project-status.md)에서 구분합니다. 파일 편집 절차는 [사용 가이드](quick-start.md), 실제 설치·호출 결과는 [프로젝트 상태](project-status.md)에 정리합니다.
+소스를 변경하거나 배포 패키지를 생성할 때 필요한 환경과 검사 명령입니다. 현재 소스·검증 패키지는 **로컬 HWP Easy 0.2.48**입니다. 같은 버전의 앱별 패키지는 공통 실행기를 포함하며 실제 설치 버전은 [프로젝트 상태](project-status.md)에서 구분합니다. 파일 편집 절차는 [사용 가이드](quick-start.md), 실제 설치·호출 결과는 [프로젝트 상태](project-status.md)에 정리합니다.
 
 ## 환경과 구성
 
@@ -93,9 +93,9 @@ python scripts/archive_agent_skills.py
 
 | 배포 대상 | 생성 ZIP |
 | --- | --- |
-| Codex | `outputs/plugin-package/hwp-easy-0.2.47.zip` |
-| Claude Code | `outputs/agent-packages/hwp-easy-claude-code-0.2.47.zip` |
-| Cursor | `outputs/agent-packages/hwp-easy-cursor-0.2.47.zip` |
+| Codex | `outputs/plugin-package/hwp-easy-0.2.48.zip` |
+| Claude Code | `outputs/agent-packages/hwp-easy-claude-code-0.2.48.zip` |
+| Cursor | `outputs/agent-packages/hwp-easy-cursor-0.2.48.zip` |
 
 패키지 생성은 앱 설치나 공개 게시를 수행하지 않습니다. Claude Code·Cursor의 설치 검사와 격리된 폴더에 설치한 실행기의 검증은 다음으로 재현합니다.
 
@@ -120,7 +120,7 @@ node scripts/install_agent_skill.mjs --client cursor --package outputs/agent-pac
 OpenAI 포털의 기존 MCP 등록은 서버 없는 패키지로 변경할 수 없어, 로컬판에는 별도 식별자 `hwp-easy-local`을 사용합니다. 다음 명령은 검증한 ZIP에서 등록 이름·호출 안내·표시 필드만 조정하고 모든 실행 자원의 바이트 일치를 검사합니다. 업로드·설치·심사 제출을 수행하지 않습니다.
 
 ```bash
-python scripts/package_directory_plugin.py outputs/plugin-package/hwp-easy-0.2.47.zip outputs/directory-package
+python scripts/package_directory_plugin.py outputs/plugin-package/hwp-easy-0.2.48.zip outputs/directory-package
 ```
 
 포털 관측과 남은 차단 항목은 [로컬 디렉터리 등록 기록](local-directory-submission.md)에 정리합니다.
@@ -251,9 +251,14 @@ python scripts/check-local-table-sync.py <새-출력-폴더>
 
 0.2.46 혼합 호스트·명시적 다단은 `node --test tests/test_local_nested_mixed_render.mjs`, `node scripts/check-local-nested-forest.mjs <새-출력-폴더> mixed`, `python scripts/check-local-nested-forest.py <새-출력-폴더>`로 검사한다. 신뢰한 결과를 같은 네이티브 렌더러와 전체 크기 SVG 래스터로 만든 뒤 Pillow 환경의 `check-local-nested-mixed-native.py`로 표/상자/그림 경계·필드 원점·답변 줄·복구 픽셀을 대조한다. 이미지 자체의 색은 답변 표시 잉크로 세지 않는다.
 
-전체 CI는 같은 18개 OS 작업·수동 주기·개별 요청 제한을 유지한다. 렌더 보호 회귀 후에는 `gh workflow run checks.yml -f scope=render-view`로 복잡 개체·부동 패키지의 Windows/Linux 4개 실행만 확인할 수 있다. 새 13건의 혼합/다단 패키지 검사는 실측 여유가 있는 부동 배치 작업에 넣고, 새 소스 검사는 글/호스트 작업에서 수행한다. 기존 검사 대상은 유지한다. 0.2.46 전체 실행에서 Windows 부동 배치의 기존 작업만 16분 31초를 사용해 새 코퍼스 도중 18분 상한에 도달했다. 해당 Windows 상한만 22분으로 보완하고 Linux 18분·다른 작업 상한은 유지한다. `scope:table-floating` 두 OS 실행으로 보완을 확인한다. Windows 표 흐름만 실측 근거로 16분 상한을 사용하며 Linux 표 흐름은 10분이다. 예산 변경은 `gh workflow run checks.yml -f scope=table-flow`로 해당 두 OS 작업만 확인한다. 기존 F3-A 패키지 검사를 표 흐름 작업으로 옮겨 복잡 개체 작업의 여유를 확보하고, 새 B2 패키지는 여유 있는 기존 패키지 작업에서 검증한다. 실제 Claude Code/Cursor 설치·인증·모델 호출은 수행하지 않는다. [0.2.45 기록](local-release-0.2.45.md)
+전체 CI는 같은 18개 OS 작업·수동 주기·개별 요청 제한을 유지한다. 렌더 보호 회귀 후에는 `gh workflow run checks.yml -f scope=render-view`로 복잡 개체·부동 패키지의 Windows/Linux 6개 실행을 확인할 수 있다. 0.2.48부터 공통 엔진의 B4 코퍼스를 격리 패키지 작업에 배치해 해당 작업도 포함한다. 새 13건의 혼합/다단 패키지 검사는 실측 여유가 있는 부동 배치 작업에 넣고, 새 소스 검사는 글/호스트 작업에서 수행한다. 기존 검사 대상은 유지한다. 0.2.46 전체 실행에서 Windows 부동 배치의 기존 작업만 16분 31초를 사용해 새 코퍼스 도중 18분 상한에 도달했다. 해당 Windows 상한만 22분으로 보완하고 Linux 18분·다른 작업 상한은 유지한다. `scope:table-floating` 두 OS 실행으로 보완을 확인한다. Windows 표 흐름만 실측 근거로 16분 상한을 사용하며 Linux 표 흐름은 10분이다. 예산 변경은 `gh workflow run checks.yml -f scope=table-flow`로 해당 두 OS 작업만 확인한다. 기존 F3-A 패키지 검사를 표 흐름 작업으로 옮겨 복잡 개체 작업의 여유를 확보하고, 새 B2 패키지는 여유 있는 기존 패키지 작업에서 검증한다. 실제 Claude Code/Cursor 설치·인증·모델 호출은 수행하지 않는다. [0.2.45 기록](local-release-0.2.45.md)
 
 
 0.2.47 좁은 말단 셀은 `node --test tests/test_local_cell_wrap_render.mjs`, `node scripts/check-local-nested-forest.mjs <새-출력-폴더> wrap`, `python scripts/check-local-nested-forest.py <새-출력-폴더>`로 검사한다. 신뢰한 합성 결과만 `render-local-cell-wrap-native.py`로 숨긴 한글에서 읽고, `render-local-nested-forest.mjs`로 공개 SVG 전체 크기 PNG를 만든다. Pillow 환경의 `check-local-cell-wrap-native.py`는 색/서식을 바꾸지 않고 캐럿의 줄 소속·원래 잉크·표 경계·복구 픽셀을 대조한다. 상위 셀 위 정렬과 말단 셀 정렬 3종의 검사이며, B4의 상위 정렬을 인증하지 않는다.
 
 CI에서는 기존 복잡 개체 작업에 새 셀 회귀·6건 패키지/독립 판독을 추가한다. 미리보기 작업자 테스트는 병렬 묶음 밖에서 직렬 실행하며 제품 5초 한도·실패 시 오래된 이미지 제거·기존 검사와 전체 18개 OS 작업을 유지한다. 실제 앱 설치·로그인·모델 호출은 하지 않는다.
+
+
+B4 0.2.48은 `node --test tests/test_local_ancestor_alignment.mjs`, `node scripts/check-local-nested-forest.mjs <새-출력-폴더> alignment`, `python scripts/check-local-nested-forest.py <새-출력-폴더>`로 검사한다. `render-local-cell-wrap-native.py`와 `render-local-nested-forest.mjs`로 신뢰한 합성 HWP의 원래 색 이미지·공개 SVG PNG를 만들고, Pillow 환경의 `check-local-ancestor-alignment-native.py`로 표/셀 경계·접두부 위치·답변 줄·텍스트 순서·복구 픽셀을 대조한다.
+
+0.2.47 Windows 실측에서 복잡 개체 작업은 21분 28초/22분, 부동 작업은 17분 15초/22분, 격리 패키지는 4분 52초/8분이었다. 0.2.48은 기존 일반 배치 Node/Python 1쌍을 복잡 개체에서 부동 작업으로 옮기고 새 B4 11건은 격리 패키지 작업에 둔다. 기존 검사 명령·전체 18개 작업·각 작업 예산과 제품 요청 한도를 유지한다. 실제 Claude Code·Cursor 설치·인증·모델 호출은 하지 않는다.

@@ -60,13 +60,13 @@ function prepare(HwpDocument,bytes){
   tables.push({section:t.section,table_id:t.id,cell_path:t.cell_path,prefix:!!host.text,stored_prefix_height:view(control.payload).getInt32(8,true),ancestor_alignment:(view(rs[cell.start].payload).getUint32(4,true)>>>5)&3});
   if(!hosts.has(host))hosts.set(host,{cell,peers:[]});hosts.get(host).peers.push(t);
  }
- // For multi-paragraph float hosts, native vertical alignment measures the
+ // For float hosts, native vertical alignment measures the
  // visible flow without the final line's trailing leading. The pinned engine
  // omits nested inline heights from that alignment measurement. Reserve the
  // bounded, single-line flow explicitly in the private cell's top padding.
  const fonts=definitions.filter(r=>r.tag===21);
  for(const t of ts)for(const c of t.cells){
-  if(c.blocks.length===1&&(view(rs[t.table_record].payload).getUint32(0,true)&3)!==1||!c.blocks.some(b=>hosts.has(b)))continue;
+  if(!c.blocks.some(b=>hosts.has(b)))continue;
   let height=0,lastGap=0;
   for(const b of c.blocks){
    const sizes=new Set(b.unit_styles.map(i=>fonts[i]?.payload.length>=46?view(fonts[i].payload).getUint32(42,true):NaN)),size=[...sizes][0],children=hosts.get(b)?.peers;
@@ -77,6 +77,7 @@ function prepare(HwpDocument,bytes){
   }
   const p=view(changes.get(rs[c.start]).payload),align=(view(rs[c.start].payload).getUint32(4,true)>>>5)&3,room=c.height-p.getUint16(28,true)-p.getUint16(30,true)-height+lastGap,shift=Math.max(0,Math.round(room*(align===1?.5:align===2?1:0)));
   if(p.getUint16(28,true)+shift>65535)return unadapted('nested_alignment_profile');p.setUint16(28,p.getUint16(28,true)+shift,true);
+  for(const b of c.blocks)for(const child of hosts.get(b)?.peers??[])tables.find(t=>t.table_id===child.id).ancestor_alignment_shift_hwpunit=shift;
  }
  // Inline drawings have their own verified line-height contribution in native
  // HWP. The pinned renderer places them correctly but advances only its empty
