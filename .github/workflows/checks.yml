@@ -1,7 +1,7 @@
 name: Source checks
 
 on:
-  # Run at development milestones and before releases, rather than every commit.
+  # Run only on an explicit request from the owner; milestones do not authorize dispatch.
   workflow_dispatch:
     inputs:
       scope:
@@ -193,7 +193,7 @@ jobs:
       # Keep cold preview workers out of the concurrent complex test batch.
       # Production worker deadlines and all assertions remain unchanged.
       - name: Verify preview worker and bounded cell wrapping serially
-        run: node --test --test-concurrency=1 tests/test_local_render_view.mjs tests/test_local_cell_wrap_render.mjs tests/test_local_ancestor_alignment.mjs tests/test_local_source_font_measure.mjs
+        run: node --test --test-concurrency=1 tests/test_local_render_view.mjs tests/test_local_cell_wrap_render.mjs tests/test_local_ancestor_alignment.mjs tests/test_local_source_font_measure.mjs tests/test_local_f3_closure.mjs
       - name: Verify mixed/column guards during focused render checks
         if: ${{ inputs.scope == 'render-view' }}
         run: node --test tests/test_local_nested_mixed_render.mjs

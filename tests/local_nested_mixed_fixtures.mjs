@@ -19,8 +19,8 @@ export const mixedRenderProfiles=[
  {name:'three-later',kind:'columns',alignment:1,column:2,columnCount:3},
  {name:'four-later',kind:'columns',alignment:2,column:3,columnCount:4}
 ];
-export function mixedRenderFixture({kind='fields',columns=kind==='columns',alignment=0,column=0,columnCount=2,unequal=false,lines=8,empty=false}={}){
- let bytes=kind==='columns'?nestedRenderFixture({alignment,lines,room:3000}):tableControlFixture({lines,fields:kind==='objects'?[]:['prefix','between','suffix'],objects:['objects','mixed'].includes(kind)?['picture','box']:[],mixed:kind!=='objects'&&!empty,empty});
+export function mixedRenderFixture({kind='fields',columns=kind==='columns',alignment=0,column=0,columnCount=2,unequal=false,lines=8,empty=false,guide='guide'}={}){
+ let bytes=kind==='columns'?nestedRenderFixture({alignment,lines,room:3000}):tableControlFixture({lines,fields:kind==='objects'?[]:['prefix','between','suffix'],objects:['objects','mixed'].includes(kind)?['picture','box']:[],mixed:kind!=='objects'&&!empty,empty,guide});
  if(kind!=='columns'){
   let s=inspect(bytes),hash=digest(bytes),c=tableReflowContexts(s,hash)[0];
   bytes=reflowTableLocal(HwpDocument,bytes,hash,{type:'reflow_table',target_id:c.target_id,expected_old:c.expected_old,expected_tables:c.expected_tables}).bytes;

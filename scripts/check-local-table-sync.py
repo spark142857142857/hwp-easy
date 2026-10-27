@@ -48,7 +48,7 @@ for c in cases:
   elif tag==67 and edit and old==(edit['expected_old']+'\r').encode('utf-16le'):
    assert new==(edit['new_text']+'\r').encode('utf-16le');changed_text+=1;continue
   elif tag==68 and edit and rb[i-1][0]==67 and rb[i-1][2]==(edit['expected_old']+'\r').encode('utf-16le'):
-   ids=styles(old,len(rb[i-1][2])//2);assert len(set(ids))==1;assert styles(new,len(ra[i-1][2])//2)==[ids[0]]*(len(ra[i-1][2])//2);continue
+   ids=styles(old,len(rb[i-1][2])//2);assert len(set(ids[:-1]))==1;assert styles(new,len(ra[i-1][2])//2)==[ids[0]]*(len(ra[i-1][2])//2-1)+[ids[-1]];continue
   elif not in_footer and tag==71 and old[:4]==b' lbt':
    mask=1|4|(3<<3)|(7<<5)|(3<<8)|(7<<10)|(1<<13)|(1<<14)|(1<<20)|(7<<21)|(3<<24);assert struct.unpack_from('<I',old,4)[0]&~mask==struct.unpack_from('<I',new,4)[0]&~mask
    x[4:16]=y[4:16]=bytes(12);x[20:24]=y[20:24]=bytes(4)

@@ -5,6 +5,9 @@ import {initializeLocal,runLocal} from '../src/one_hwp/local_runner.mjs';
 import {cellBoxFixture,placementFixture,opaqueGroupFixture} from './local_placement_fixtures.mjs';import {nestedFixture} from './local_complex_fixtures.mjs';
 import {fixture} from './rhwp_fixtures.mjs';import {checkedExport} from './local_complex_fixtures.mjs';
 import {readHwp} from '../probes/sites-runtime/guard/container.mjs';import {parseRecords} from '../probes/sites-runtime/guard/records.mjs';
+import {view,encodeRecords} from '../src/one_hwp/local_complex_records.mjs';
+import {patchLocalPackedStreams} from '../src/one_hwp/local_container_write.mjs';
+import {deflateRawSync} from 'node:zlib';
 import {analyzeRenderedLayout} from '../src/one_hwp/local_rendered_layout.mjs';
 initializeLocal(fs.readFileSync(new URL('../node_modules/@rhwp/core/rhwp_bg.wasm',import.meta.url)));
 const read=source=>runLocal({action:'read',source,max_chars:64000,max_blocks:128});
@@ -41,6 +44,7 @@ for(const inserted of [false,true])test(`opaque vector group outer placement pre
 
 test('unmodeled footer spacing still refuses floating relocation without saving',async t=>{
  const w=workspace(t,placementFixture({box:true,footer:true})),s=await read(w.source);await runLocal({action:'edit',source:w.source,expected_sha256:s.source_sha256,operations:[{type:'protect_page_bottom',target_id:s.blocks[0].target_id,expected_old:s.blocks[0].text,expected_page:s.page_definitions[0].properties,minimum_footer_height:10000}]});
+ const protectedBytes=fs.readFileSync(w.source),raw=readHwp(protectedBytes),rs=[...parseRecords(raw.streams.get('BodyText/Section0'))],defs=[...parseRecords(raw.streams.get('DocInfo'))],footer=rs.findIndex(r=>r.tag===71&&Buffer.from(r.payload.subarray(0,4)).toString()==='toof'),head=rs.find((r,i)=>i>footer&&r.tag===66),shape=defs.filter(r=>r.tag===25)[view(head.payload).getUint16(8,true)];view(shape.payload).setUint32(0,(view(shape.payload).getUint32(0,true)&~3)|1,true);view(shape.payload).setInt32(24,3200,true);if(shape.payload.length>=54){view(shape.payload).setUint32(46,1,true);view(shape.payload).setInt32(50,3200,true);}fs.writeFileSync(w.source,patchLocalPackedStreams(protectedBytes,new Map([['DocInfo',deflateRawSync(encodeRecords(defs),{level:9})]])));
  const a=await read(w.source),box=a.text_boxes[0],b=a.blocks.find(b=>b.id===box.block_id),prior=fs.readFileSync(w.source);
  await assert.rejects(runLocal({action:'edit',source:w.source,expected_sha256:a.source_sha256,operations:[{type:'reposition_floating_object',target_id:box.target_id,expected_old:b.text,expected_properties:box.properties,expected_flow:box.flow}]}),/PLACEMENT_PAGINATION_UNVERIFIED/);assert.deepEqual(fs.readFileSync(w.source),prior);
 });

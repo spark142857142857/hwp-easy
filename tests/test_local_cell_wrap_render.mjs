@@ -26,18 +26,19 @@ for(const p of cellWrapRenderProfiles)test(`narrow cell rows, padding and origin
  const preview=renderLocalPreview(HwpDocument,bytes,0),snapshot=captureRenderedLayout(HwpDocument,bytes),report=analyzeRenderedLayout(HwpDocument,bytes);
  assert.deepEqual(preview.render_cell_wraps,snapshot.render_cell_wraps);assert.deepEqual(report.render_cell_wraps,preview.render_cell_wraps);assert.equal(report.layout_verified,false);assert.equal(report.diagnostics_complete,false);assert.ok(report.engine_limitations.some(l=>l.code==='CELL_WRAP_RENDER_ADAPTED'));assert.equal(digest(bytes),hash);assert.deepEqual(inspect(bytes).blocks.map(b=>[b.text,b.unit_styles]),state.blocks.map(b=>[b.text,b.unit_styles]));
 });
-for(const variant of ['italic','oversized','unsupported-character','word-break','spacing','private-offset-mismatch','font-trace-missing','font-trace-ambiguous','font-metric-fallback'])test(`unverified cell wrapping stays explicit: ${variant}`,()=>{
+for(const variant of ['shadow','oversized','unsupported-character','word-break','spacing','private-offset-mismatch','font-trace-missing','font-trace-ambiguous','font-metric-fallback'])test(`unverified cell wrapping stays explicit: ${variant}`,()=>{
  let bytes=cellWrapRenderFixture(cellWrapRenderProfiles[0],true),s=inspect(bytes),b=s.blocks.find(b=>b.text===cellWrapRenderProfiles[0].text),Engine=HwpDocument;
- if(['italic','oversized','unsupported-character'].includes(variant)){
-  const hash=digest(bytes),op=variant==='unsupported-character'?{type:'splice_text',start:0,end:b.text.length,new_text:b.text+'!'}:{type:'format_text',start:0,end:b.text.length,props:variant==='italic'?{italic:true}:{fontSize:30000}};
+ if(['oversized','unsupported-character'].includes(variant)){
+  const hash=digest(bytes),op=variant==='unsupported-character'?{type:'splice_text',start:0,end:b.text.length,new_text:b.text+'😀'}:{type:'format_text',start:0,end:b.text.length,props:variant==='shadow'?{shadow:true}:{fontSize:30000}};
   bytes=editLocalComplex(HwpDocument,bytes,hash,{...op,target_id:`hwp5:${hash}:${Buffer.from(b.id).toString('base64url')}`,expected_old:b.text}).bytes;
  }
+ if(variant==='shadow'){const definitions=[...parseRecords(s.raw.streams.get('DocInfo'))].map(r=>({...r,payload:r.payload.slice()})),shape=definitions.filter(r=>r.tag===21)[b.unit_styles[0]];view(shape.payload).setUint32(46,view(shape.payload).getUint32(46,true)|16,true);bytes=publishVerifiedPatch(bytes,s,0,s.recordSets.get(0),encodeRecords(definitions));}
  if(variant==='word-break'){
   const definitions=[...parseRecords(s.raw.streams.get('DocInfo'))].map(r=>({...r,payload:r.payload.slice()})),shape=definitions.filter(r=>r.tag===25)[b.paragraph_properties.paraShapeId];view(shape.payload).setUint32(0,view(shape.payload).getUint32(0,true)^32,true);
   bytes=publishVerifiedPatch(bytes,s,0,s.recordSets.get(0),encodeRecords(definitions));
  }
  if(variant==='spacing'){
-  const definitions=[...parseRecords(s.raw.streams.get('DocInfo'))].map(r=>({...r,payload:r.payload.slice()})),shape=definitions.filter(r=>r.tag===21)[b.unit_styles[0]];shape.payload[21]=1;
+  const definitions=[...parseRecords(s.raw.streams.get('DocInfo'))].map(r=>({...r,payload:r.payload.slice()})),shape=definitions.filter(r=>r.tag===21)[b.unit_styles[0]];shape.payload[21]=70;
   bytes=publishVerifiedPatch(bytes,s,0,s.recordSets.get(0),encodeRecords(definitions));
  }
  if(variant==='private-offset-mismatch')Engine=class extends HwpDocument{getPageTextLayout(...args){const t=JSON.parse(super.getPageTextLayout(...args));for(const r of t.runs)r.charStart=999;return JSON.stringify(t);}};

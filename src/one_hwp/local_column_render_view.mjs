@@ -2,6 +2,7 @@
  * This facade has no export/save methods. Automatic column balancing, continued
  * tables and page/section breaks are deliberately outside this bounded profile.
  */
+import {openFlowingColumnView,fixedColumnBackground} from './local_flowing_column_view.mjs';
 import {deflateRawSync} from 'node:zlib';
 import {inspectLocalComplex} from './local_complex.mjs';
 import {view,encodeRecords} from './local_complex_records.mjs';
@@ -20,6 +21,7 @@ export function openColumnRenderView(HwpDocument,bytes,openSingle){
   const section=readHwp(bytes).streams.get('BodyText/Section0');if(!section)return null;
   const definition=[...parseRecords(section)].find(r=>r.tag===71&&id(r)==='dloc');if(!definition||definition.payload.length<8||((view(definition.payload).getUint16(4,true)>>>2)&255)<=1)return null;
  }catch(e){if(!(e instanceof GuardError)||e.code.includes('LIMIT'))throw e;return null;}
+ let flowing;try{flowing=openFlowingColumnView(HwpDocument,bytes,openSingle);}catch(e){if(!(e instanceof GuardError)||e.code.includes('LIMIT'))throw e;}if(flowing)return flowing;
  const original=new HwpDocument(bytes),parts=[];let keep=false;
  try{
   if(original.pageCount()>32)throw new GuardError('RENDERED_LAYOUT_PAGE_LIMIT');
@@ -33,10 +35,10 @@ export function openColumnRenderView(HwpDocument,bytes,openSingle){
   // The compositor clips each column to the body. Never silently discard an
   // authored page decoration or a column rule outside those column frames.
   const borders=[...parseRecords(state.raw.streams.get('DocInfo'))].filter(r=>r.tag===20),emptyBorder='00000000000000000000000000000000000000000000000000000100000000000000000000000000';
-  if(rs.filter(r=>r.tag===75).some(r=>r.payload.length!==14||Buffer.from(borders[view(r.payload).getUint16(12,true)-1]?.payload??[]).toString('hex')!==emptyBorder))return reject('column_page_decoration');
+  if(rs.filter(r=>r.tag===75).some(r=>r.payload.length!==14||Buffer.from(borders[view(r.payload).getUint16(12,true)-1]?.payload??[]).length===0))return reject('column_page_decoration');
   let x=left;
-  if(flags&0x1000){if(![12,16].includes(def.payload.length)||def.payload.subarray(8).some(n=>n))return reject('column_definition_profile');const gap=view(def.payload).getUint16(6,true),width=(bodyWidth-gap*(count-1))/count;for(let i=0;i<count;i++){frames.push({x:x/75,width:width/75});x+=width+gap;}}
-  else{if(def.payload.length!==14+count*4||def.payload.subarray(8+count*4).some(n=>n))return reject('column_definition_profile');const v=view(def.payload),weights=Array.from({length:count},(_,i)=>({w:v.getInt16(8+i*4,true),gap:v.getInt16(10+i*4,true)}));if(weights.some(c=>c.w<=0||c.gap<0)||weights.at(-1).gap!==0||weights.reduce((n,c)=>n+c.w+c.gap,0)!==32768)return reject('column_definition_profile');for(const c of weights){frames.push({x:x/75,width:bodyWidth*c.w/32768/75});x+=bodyWidth*(c.w+c.gap)/32768;}}
+  if(flags&0x1000){if(![12,16].includes(def.payload.length)||view(def.payload).getUint16(8,true)!==0||(def.payload[10]??0)>16||(def.payload[11]??0)>15||!(def.payload[10]??0)&&def.payload.subarray(11).some(n=>n))return reject('column_definition_profile');const gap=view(def.payload).getUint16(6,true),width=(bodyWidth-gap*(count-1))/count;for(let i=0;i<count;i++){frames.push({x:x/75,width:width/75});x+=width+gap;}}
+  else{if(def.payload.length!==14+count*4||(def.payload[8+count*4]??0)>16||(def.payload[9+count*4]??0)>15||!(def.payload[8+count*4]??0)&&def.payload.subarray(9+count*4).some(n=>n))return reject('column_definition_profile');const v=view(def.payload),weights=Array.from({length:count},(_,i)=>({w:v.getInt16(8+i*4,true),gap:v.getInt16(10+i*4,true)}));if(weights.some(c=>c.w<=0||c.gap<0)||weights.at(-1).gap!==0||weights.reduce((n,c)=>n+c.w+c.gap,0)!==32768)return reject('column_definition_profile');for(const c of weights){frames.push({x:x/75,width:bodyWidth*c.w/32768/75});x+=bodyWidth*(c.w+c.gap)/32768;}}
   if(frames.some((c,i)=>c.width<=0||Math.abs(c.x-info.columns[i].x)>.2||Math.abs(c.width-info.columns[i].width)>.2))return reject('column_frame_identity');
   const roots=state.blocks.filter(b=>!b.cell_path.length),groups=[[]];
   for(const [i,b]of roots.entries()){const split=rs[b.record_index].payload[11];if(i&&split&8)groups.push([]);if(i&&(split&~8)||!i&&(split&~3))return reject('column_break_profile');groups.at(-1).push(b);}
@@ -79,7 +81,7 @@ export function openColumnRenderView(HwpDocument,bytes,openSingle){
   const runs=parts.flatMap(p=>p.runs),controls=parts.flatMap(p=>p.controls);if(runs.length+controls.length>20000)return reject('column_item_limit');
   const document={
    pageCount:()=>1,getDocumentInfo:()=>JSON.stringify({...JSON.parse(original.getDocumentInfo()),pageCount:1}),getPageInfo:()=>JSON.stringify(info),getPositionOfPage:()=>JSON.stringify({ok:true,sec:0,para:0,charOffset:0}),getPageTextLayout:()=>JSON.stringify({runs}),getPageControlLayout:()=>JSON.stringify({controls}),getParagraphLength:(...args)=>original.getParagraphLength(...args),getTextRange:(...args)=>original.getTextRange(...args),
-   renderPageSvg:page=>{if(page!==0)throw new Error('Invalid page');const pieces=parts.map((part,i)=>{const svg=part.document.renderPageSvg(0),match=/^<svg\b[^>]*>([\s\S]*)<\/svg>\s*$/.exec(svg);if(!match)throw new Error('Unexpected render SVG');const prefix=`column-${i}-`,inner=match[1].replace(/\bid="([^"]+)"/g,(_,id)=>`id="${prefix}${id}"`).replace(/url\(#([^\)]+)\)/g,(_,id)=>`url(#${prefix}${id})`).replace(/((?:xlink:)?href=")#([^"]+)"/g,(_,a,id)=>`${a}#${prefix}${id}"`);return `<svg x="${part.frame.x-.25}" y="${top-.25}" width="${part.frame.width+.5}" height="${bottom-top+.5}" viewBox="${part.frame.x-.25} ${top-.25} ${part.frame.width+.5} ${bottom-top+.5}" overflow="hidden">${inner}</svg>`;});return `<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="${p.getUint32(0,true)/75}" height="${p.getUint32(4,true)/75}" viewBox="0 0 ${p.getUint32(0,true)/75} ${p.getUint32(4,true)/75}"><rect width="100%" height="100%" fill="#fff"/>${pieces.join('')}</svg>`;},
+   renderPageSvg:page=>{if(page!==0)throw new Error('Invalid page');const pieces=parts.map((part,i)=>{const svg=part.document.renderPageSvg(0),match=/^<svg\b[^>]*>([\s\S]*)<\/svg>\s*$/.exec(svg);if(!match)throw new Error('Unexpected render SVG');const prefix=`column-${i}-`,inner=match[1].replace(/\bid="([^"]+)"/g,(_,id)=>`id="${prefix}${id}"`).replace(/url\(#([^\)]+)\)/g,(_,id)=>`url(#${prefix}${id})`).replace(/((?:xlink:)?href=")#([^"]+)"/g,(_,a,id)=>`${a}#${prefix}${id}"`);return `<svg x="${part.frame.x-.25}" y="${top-.25}" width="${part.frame.width+.5}" height="${bottom-top+.5}" viewBox="${part.frame.x-.25} ${top-.25} ${part.frame.width+.5} ${bottom-top+.5}" overflow="hidden">${inner}</svg>`;});return `<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="${p.getUint32(0,true)/75}" height="${p.getUint32(4,true)/75}" viewBox="0 0 ${p.getUint32(0,true)/75} ${p.getUint32(4,true)/75}"><rect width="100%" height="100%" fill="#fff"/>${fixedColumnBackground(original.renderPageSvg(0),info,frames,top,bottom,0)}${pieces.join('')}</svg>`;},
    free:()=>{for(const part of parts)part.document.free();original.free();}
   };
   keep=true;return {document,anchors:[],unadapted:[],nested_tables:parts.flatMap(p=>p.sourceTables),unadapted_tables:[],cell_wraps:parts.flatMap(p=>p.sourceCellWraps),unadapted_cells:parts.flatMap(p=>p.sourceUnadaptedCells),remap:r=>r};

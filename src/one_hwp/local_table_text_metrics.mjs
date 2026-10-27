@@ -10,7 +10,7 @@ export function tableTextLines(b,width,measure){
  if(!b.text_mapping_verified||!b.unit_styles||!p||p.lineSpacingType!==0||p.lineSpacing<100||p.lineSpacing>300||p.keepLines||p.keepWithNext||p.marginLeft||p.marginRight||p.indent||p.spacingBefore||p.spacingAfter||p.pageBreakBefore||b.text.length>10000)fail('TABLE_REFLOW_PARAGRAPH_PROFILE_UNSUPPORTED');
  if(!supported.test(b.text))fail('TABLE_REFLOW_SHAPING_UNVERIFIED');
  const points=[...b.text],sizes=[],profiles=[];
- for(const run of b.character_runs){const q=run.properties;if(!Number.isFinite(q.fontSize)||q.fontSize<100||q.fontSize>20000||['ratios','relativeSizes'].some(k=>q[k]?.some(n=>n!==100)))fail('TABLE_REFLOW_FONT_PROFILE_UNSUPPORTED');const profile=JSON.stringify([q.fontFamily,q.fontFamilies,q.fontSize,q.bold,q.italic]);for(let i=run.start;i<run.end;i++){sizes[i]=q.fontSize;profiles[i]=profile;}}
+ for(const run of b.character_runs){const q=run.properties;if(!Number.isFinite(q.fontSize)||q.fontSize<100||q.fontSize>20000||['ratios','relativeSizes'].some(k=>q[k]?.some(n=>n<50||n>200)))fail('TABLE_REFLOW_FONT_PROFILE_UNSUPPORTED');const profile=JSON.stringify([q.fontFamily,q.fontFamilies,q.fontSize,q.bold,q.italic]);for(let i=run.start;i<run.end;i++){sizes[i]=Math.ceil(q.fontSize*Math.max(100,...(q.relativeSizes??[]))/100);profiles[i]=profile;}}
  if(points.some((_,i)=>!sizes[i]))fail('TABLE_REFLOW_FONT_PROFILE_UNSUPPORTED');
  const measured=measure(b.text,b.character_runs),advances=[];let next=0;
  for(const ch of points){const w=ch==='\n'?0:measured[next++]*75*1.04;if(!Number.isFinite(w)||w<0)fail('TABLE_REFLOW_FONT_PROFILE_UNSUPPORTED');advances.push(w);}

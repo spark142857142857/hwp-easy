@@ -7,6 +7,7 @@ import {captureRenderedLayout,contains,intersects} from './local_rendered_layout
 import {projectNestedAnchor,nestedTextBand} from './local_nested_anchor.mjs';
 import {locateCell} from './local_cell_frame.mjs';
 import {nestedReferenceLayout} from './local_nested_reference.mjs';
+import {textBoxInsets} from './local_text_box_metrics.mjs';
 export {locateCell} from './local_cell_frame.mjs';
 const same=(a,b)=>JSON.stringify(a)===JSON.stringify(b);
 
@@ -23,12 +24,14 @@ export function diagnoseCellTextBoxes(state,{HwpDocument,bytes,snapshot:provided
   const host=state.blocks.find(b=>b.id===box.block_id),container=host&&getContainer(host),f=box.flow,p=box.properties,identity=layoutObjectIdentity(state,box),rs=state.recordSets.get(box.section);
   const issue=(code,size,available,certainty,extra={})=>add(code,host,size,available,certainty,{text_box_id:box.id,object_identity:identity,...extra});
   if(!host||!container) {limit('CELL_TEXT_BOX_CONTAINER_UNVERIFIED',box);continue;}
-  const list=rs[box.record_index+2],plainMetrics=list?.tag===72&&list.payload.length===33&&list.payload.subarray(8).every(n=>n===0),estimate=plainMetrics?estimateHeight(box):p.height;
+  const inset=textBoxInsets(state,box),plainMetrics=Boolean(inset),estimate=plainMetrics?estimateHeight(box):p.height;
   if(!plainMetrics)limit('CELL_TEXT_BOX_INTERNAL_METRICS_UNVERIFIED',box);
   if(estimate>p.height)issue('CELL_TEXT_BOX_CONTENT_MAY_EXCEED_FRAME_HEIGHT',estimate,p.height,'font_estimate');
   const cellFlags=view(rs[container.cell.start].payload).getUint32(4,true);
-  if(!textBoxGeometry(state,box)||f.vertRelTo!==2||f.horzRelTo!==2||(cellFlags&7)!==0){limit('CELL_TEXT_BOX_ANCHOR_OR_FRAME_UNVERIFIED',box);continue;}
-  {let projected,band;try{
+  const absolute=[0,1].includes(f.vertRelTo)&&[0,1,2,3].includes(f.horzRelTo),relative=f.vertRelTo===2&&f.horzRelTo===2;
+  if(!textBoxGeometry(state,box)||!absolute&&!relative||(cellFlags&7)!==0){limit('CELL_TEXT_BOX_ANCHOR_OR_FRAME_UNVERIFIED',box);continue;}
+  if(absolute)limit('CELL_TEXT_BOX_ABSOLUTE_REFERENCE_RENDER_ONLY',box);
+  if(relative){let projected,band;try{
     const reference=nestedReferenceLayout(state,box,{HwpDocument,bytes,snapshot});
     projected=projectNestedAnchor(state,box,reference);if(estimateParagraphHeight)band=nestedTextBand(state,box,projected,estimateParagraphHeight);
    }catch(error){if(!(error instanceof GuardError))throw error;projected=null;limit(error.code,box);}
@@ -38,14 +41,13 @@ export function diagnoseCellTextBoxes(state,{HwpDocument,bytes,snapshot:provided
     continue;
    }
   }
-  if(box.cell_path.at(-1).cellParaIndex!==0){limit('CELL_TEXT_BOX_ANCHOR_OR_FRAME_UNVERIFIED',box);continue;}
   const at=locateCell(state,box,snapshot,tick);if(!at){limit('CELL_TEXT_BOX_RENDER_IDENTITY_UNVERIFIED',box);continue;}
   for(const l of at.page.limitations)if(!limitations.some(x=>x.code===l.code&&x.page===l.page))limitations.push(l);
   const paddingX=(container.cell.width-container.width)/75,paddingY=(container.cell.height-container.height)/75;
   // A first paragraph's top/left anchored rectangle must remain uniquely
   // attributable even when the renderer omits its recursive stableIndex.
   const full=[box.section,box.paragraph,...box.cell_path.flatMap(s=>[s.controlIndex,s.cellIndex,s.cellParaIndex]),box.control_index];
-  const candidates=at.page.controls.filter(c=>{tick();return c.type==='shape'&&c.controlIdx===box.control_index&&Math.abs(c.w-p.width/75)<2&&Math.abs(c.h-p.height/75)<2&&(same(c.stableIndex,full)||c.x>=at.cell.x+Math.min(0,p.horzOffset/75)-2&&c.x<=at.cell.x+paddingX+p.horzOffset/75+2&&Math.abs(c.y-at.cell.y-p.vertOffset/75)<=paddingY+2);});
+  const candidates=at.page.controls.filter(c=>{tick();return c.type==='shape'&&c.controlIdx===box.control_index&&Math.abs(c.w-p.width/75)<2&&Math.abs(c.h-p.height/75)<2&&(same(c.stableIndex,full)||relative&&box.cell_path.at(-1).cellParaIndex===0&&c.x>=at.cell.x+Math.min(0,p.horzOffset/75)-2&&c.x<=at.cell.x+paddingX+p.horzOffset/75+2&&Math.abs(c.y-at.cell.y-p.vertOffset/75)<=paddingY+2);});
   if(candidates.length!==1){limit('CELL_TEXT_BOX_RENDER_IDENTITY_UNVERIFIED',box);continue;}
   const frame=candidates[0],effective={...frame,h:Math.max(frame.h,estimate/75)},below=Math.max(0,frame.y+frame.h-(at.cell.y+at.cell.h)),above=Math.max(0,at.cell.y-frame.y);
   checked++;

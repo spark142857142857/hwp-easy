@@ -47,8 +47,9 @@ function reflowSingle(HwpDocument,source,version,op,blockFlow=false,selectedRoot
  if(tables.length>16||tables.some(t=>t.cell_path.length>2||!t.layout_editable||t.dimensions.rowCount>32||t.dimensions.colCount>16||t.properties.cellSpacing))fail('TABLE_REFLOW_PROFILE_UNSUPPORTED');
  if(tables.flatMap(t=>t.cells.flatMap(c=>c.blocks)).reduce((n,b)=>n+b.text.length,0)>100000)fail('TABLE_REFLOW_TEXT_LIMIT');
  const rs=state.recordSets.get(b.section),pages=rs.filter(r=>r.tag===73),cols=rs.filter(r=>r.tag===71&&Buffer.from(r.payload.subarray(0,4)).toString()==='dloc');
- if(pages.length!==1||pages[0].payload.length!==40||view(pages[0].payload).getUint32(36,true)!==0||cols.length!==1||cols[0].payload.length<8||((view(cols[0].payload).getUint16(4,true)>>>2)&255)!==1)fail('TABLE_REFLOW_PAGE_PROFILE_UNSUPPORTED');
- const page=view(pages[0].payload),bodyWidth=page.getUint32(0,true)-[8,12,32].reduce((n,i)=>n+page.getUint32(i,true),0),bodyHeight=page.getUint32(4,true)-[16,20,24,28].reduce((n,i)=>n+page.getUint32(i,true),0);
+ if(pages.length!==1||pages[0].payload.length!==40||view(pages[0].payload).getUint32(36,true)!==0||cols.length!==1||cols[0].payload.length<8)fail('TABLE_REFLOW_PAGE_PROFILE_UNSUPPORTED');
+ const page=view(pages[0].payload),columnFlags=view(cols[0].payload).getUint16(4,true),columnCount=(columnFlags>>>2)&255;let bodyWidth=page.getUint32(0,true)-[8,12,32].reduce((n,i)=>n+page.getUint32(i,true),0),bodyHeight=page.getUint32(4,true)-[16,20,24,28].reduce((n,i)=>n+page.getUint32(i,true),0);
+ if(columnCount!==1){if(columnCount<2||columnCount>4||!(columnFlags&4096)||(columnFlags&~0x13fd)||bodyFloatingObjects(state,b.section).length)fail('TABLE_REFLOW_PAGE_PROFILE_UNSUPPORTED');bodyWidth=(bodyWidth-view(cols[0].payload).getUint16(6,true)*(columnCount-1))/columnCount;}
  if(bodyWidth<=0||bodyHeight<7200||root.properties.tableWidth>bodyWidth)fail('TABLE_REFLOW_PAGE_PROFILE_UNSUPPORTED');
  // A body host still selects one root. Nested hosts may contain several tables;
  // explicit reflow stacks them below the prefix in their original anchor order.

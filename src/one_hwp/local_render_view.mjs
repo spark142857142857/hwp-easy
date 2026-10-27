@@ -7,26 +7,33 @@ import {fail,view} from './local_complex_records.mjs';
 import {validObjectHeader,objectFlow} from './local_flow_records.mjs';
 import {createEngineApi} from './rhwp_api.mjs';
 import {prepareNestedRenderInput} from './local_nested_render_view.mjs';
+import {adaptFooterRenderView} from './local_fixed_render_view.mjs';
+import {adaptPartialRenderGeometry} from './local_fragment_render_view.mjs';
+import {adaptEmptyParagraphFlow} from './local_empty_render_flow.mjs';
 import {openColumnRenderView} from './local_column_render_view.mjs';
+import {openPaginatedTableView} from './local_paginated_table_view.mjs';
 
 export function openLocalRenderView(HwpDocument,bytes,allowColumns=true){
  const columns=allowColumns?openColumnRenderView(HwpDocument,bytes,b=>openLocalRenderView(HwpDocument,b,false)):null;
- if(columns?.document)return columns;
+ const finish=view=>{try{return adaptFooterRenderView(HwpDocument,bytes,view);}catch(e){view.document.free();throw e;}};
+ if(columns?.document)return finish(columns);
+ const paginated=openPaginatedTableView(HwpDocument,bytes);if(paginated)return finish(paginated);
  const nested=prepareNestedRenderInput(HwpDocument,bytes);let document=new HwpDocument(nested.bytes);
  if(columns?.unsupported_column_profile)nested.unadapted.push({reason:columns.unsupported_column_profile});
  try{
   if(document.pageCount()>32)fail('RENDERED_LAYOUT_PAGE_LIMIT');
   if(nested.tables.length){
    const count=document.pageCount(),controls=[];
-   for(let page=0;page<Math.min(count,33);page++)controls.push(...JSON.parse(document.getPageControlLayout(page)).controls.filter(c=>c.type==='table').map(c=>({...c,page})));
+   for(let page=0;page<Math.min(count,33);page++)controls.push(...JSON.parse(document.getPageControlLayout(page)).controls.filter(c=>c.type==='table').map(c=>nested.remap(c,page)).filter(c=>!c.render_fixed_region).map(c=>({...c,page})));
    // Complete-row fragments were bound to their original rows before opening.
    // Partial rows, overflow and unknown pagination keep the original view.
    const roots=controls.filter(c=>c.stableIndex?.length===3);
-   if(count>32||!roots.length||controls.length!==nested.tables.length+roots.length||roots.some(root=>{const info=JSON.parse(document.getPageInfo(root.page));return root.x<info.bodyLeft-.5||root.x+root.w>info.bodyRight+.5||root.y<info.marginTop+info.marginHeader-.5||root.y+root.h>info.height-info.marginBottom-info.marginFooter+.5;})){const original=new HwpDocument(bytes);document.free();document=original;nested.unadapted.push({reason:'nested_render_pagination'});nested.tables=[];nested.cell_wraps=[];nested.unadapted_cells=[];nested.remap=r=>r;}
+   if(count>32||!roots.length||!nested.partial_rows&&controls.length!==nested.tables.length+roots.length||roots.some(root=>{const info=JSON.parse(document.getPageInfo(root.page));return root.x<info.bodyLeft-.5||root.x+root.w>info.bodyRight+.5||root.y<info.marginTop+info.marginHeader-.5||root.y+root.h>info.height-info.marginBottom-info.marginFooter+(nested.partial_rows?4:.5);})){const original=new HwpDocument(bytes);document.free();document=original;nested.unadapted.push({reason:'nested_render_pagination'});nested.tables=[];nested.cell_wraps=[];nested.unadapted_cells=[];nested.remap=r=>r;}
   }
-  let anchors=adaptEmptyFloatingAnchors(document,bytes);
-  if(nested.tables.length&&!nested.refresh(document)){const original=new HwpDocument(bytes);document.free();document=original;nested.unadapted.push({reason:'nested_anchor_pagination'});nested.tables=[];nested.cell_wraps=[];nested.unadapted_cells=[];nested.remap=r=>r;anchors=adaptEmptyFloatingAnchors(document,bytes);}
-  return {document,...anchors,nested_tables:nested.tables,unadapted_tables:nested.unadapted,cell_wraps:nested.cell_wraps??[],unadapted_cells:nested.unadapted_cells??[],remap:nested.remap};
+  let flow_adaptations=adaptEmptyParagraphFlow(document,bytes),anchors=adaptEmptyFloatingAnchors(document,bytes);
+  if(nested.tables.length&&!nested.refresh(document)){const original=new HwpDocument(bytes);document.free();document=original;nested.unadapted.push({reason:'nested_anchor_pagination'});nested.tables=[];nested.cell_wraps=[];nested.unadapted_cells=[];nested.remap=r=>r;flow_adaptations=adaptEmptyParagraphFlow(document,bytes);anchors=adaptEmptyFloatingAnchors(document,bytes);}
+  const fragments=nested.partial_rows?adaptPartialRenderGeometry(HwpDocument,bytes,document,nested.remap):null;if(fragments){document=fragments.document;flow_adaptations.push(...fragments.notes);}else if(nested.partial_rows)nested.unadapted.push({reason:'nested_partial_geometry_profile'});
+  const result={document,...anchors,nested_tables:nested.tables,unadapted_tables:nested.unadapted,cell_wraps:nested.cell_wraps??[],unadapted_cells:nested.unadapted_cells??[],flow_adaptations,remap:(r,page)=>{const value=fragments?r:nested.remap(r,page);return !value.cellPath&&value.parentParaIdx==null&&value.text===' '&&flow_adaptations.some(a=>a.section===value.secIdx&&a.paragraph===value.paraIdx)?{...value,render_only_synthetic:true}:value;}};return adaptFooterRenderView(HwpDocument,bytes,result);
  }catch(e){document.free();throw e;}
 }
 
@@ -87,6 +94,6 @@ export function renderLocalPreview(HwpDocument,bytes,page){
  const api=createEngineApi(HwpDocument),view=openLocalRenderView(HwpDocument,bytes),document=view.document;
  try{
   const preview=api.previewDocument(document,page);
-  return {...preview,render_adaptations:view.anchors,render_unadapted_anchors:view.unadapted,render_nested_tables:view.nested_tables,render_unadapted_tables:view.unadapted_tables,render_cell_wraps:view.cell_wraps,render_unadapted_cells:view.unadapted_cells,render_source:'disposable_view_of_current_bytes',warnings:[...preview.warnings,...(view.cell_wraps.length?['Bounded leaf-cell padding and line breaks use source-bound embedded base advances only in the disposable view; complete native font layout remains unverified.']:[]),...(view.anchors.length?['Empty floating-anchor fixed line heights are materialized only in the disposable render view.']:[]),...(view.nested_tables.length?['Canonical nested-table origins and ancestor alignment are adapted only in the disposable render view; font wrapping and native pagination remain unverified.']:[])]};
+  return {...preview,render_flow_adaptations:view.flow_adaptations??[],render_adaptations:view.anchors,render_unadapted_anchors:view.unadapted,render_nested_tables:view.nested_tables,render_unadapted_tables:view.unadapted_tables,render_cell_wraps:view.cell_wraps,render_unadapted_cells:view.unadapted_cells,render_source:'disposable_view_of_current_bytes',warnings:[...preview.warnings,...(view.cell_wraps.length?['Bounded leaf-cell padding and line breaks use source-bound embedded base advances only in the disposable view; complete native font layout remains unverified.']:[]),...(view.anchors.length?['Empty floating-anchor fixed line heights are materialized only in the disposable render view.']:[]),...(view.nested_tables.length?['Canonical nested-table origins and ancestor alignment are adapted only in the disposable render view; font wrapping and native pagination remain unverified.']:[])]};
  }finally{document.free();}
 }

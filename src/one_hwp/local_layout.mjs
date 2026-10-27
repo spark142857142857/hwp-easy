@@ -11,6 +11,7 @@ import {nestedReferenceLayout} from './local_nested_reference.mjs';
 import {projectNestedAnchor} from './local_nested_anchor.mjs';
 import {GuardError} from '../../probes/sites-runtime/guard/records.mjs';
 import {tablePaginationEnabled} from './local_table_reflow.mjs';
+import {textBoxInsets} from './local_text_box_metrics.mjs';
 function padding(state,table,cell){const v=view(state.recordSets.get(table.section)[cell.start].payload);return (v.getUint32(4,true)&0x10000)?[24,26,28,30].map(at=>v.getUint16(at,true)):['paddingLeft','paddingRight','paddingTop','paddingBottom'].map(k=>table.properties[k]);}
 export function cellContainer(state,block){
  const parent=state.tables.flatMap(t=>t.cells.map(c=>({table:t,cell:c}))).find(({cell})=>cell.blocks.some(b=>b.id===block.id));
@@ -36,7 +37,7 @@ export function textHeight(block,width){
 }
 export function textBoxHeightEstimator(state){
  const defs=[...parseRecords(state.raw.streams.get('DocInfo'))].filter(r=>r.tag===21);
- return box=>{let estimate=0;const rs=state.recordSets.get(box.section);
+ return box=>{const inset=textBoxInsets(state,box);let estimate=inset?inset.top+inset.bottom:0;const rs=state.recordSets.get(box.section);
   for(const paragraph of box.paragraphs){
    const runs=[];for(const token of paragraph.tokens.filter(t=>t.text)){
     const id=paragraph.unit_styles[token.unit],payload=defs[id]?.payload;if(!payload||payload.length<46)fail('TEXT_BOX_FONT_UNVERIFIED');
@@ -44,7 +45,7 @@ export function textBoxHeightEstimator(state){
     else runs.push({start:runs.at(-1)?.end??0,end:(runs.at(-1)?.end??0)+1,properties:{charShapeId:id,fontSize:view(payload).getUint32(42,true),ratios:[...payload.subarray(14,21)],relativeSizes:[...payload.subarray(28,35)]}});
    }
    const props=complexParagraphProperties(state.raw,rs,paragraph);
-   estimate+=textHeight({...paragraph,character_runs:runs,paragraph_properties:props},box.properties.width)+Math.max(0,props.spacingBefore)/2+Math.max(0,props.spacingAfter)/2;
+   estimate+=textHeight({...paragraph,character_runs:runs,paragraph_properties:props},inset?.width??box.properties.width)+Math.max(0,props.spacingBefore)/2+Math.max(0,props.spacingAfter)/2;
   }return Math.ceil(estimate);
  };
 }

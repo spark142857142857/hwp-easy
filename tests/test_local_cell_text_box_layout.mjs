@@ -39,8 +39,8 @@ for(const nested of [false,true])test(`short safe cell edit and shifted host sav
 });
 
 test('paper cell anchor is inconclusive rather than a paragraph-coordinate diagnosis',async t=>{
- const w=workspace(t,{cellRelative:false}),s=await read(w.source),layout=await runLocal({action:'layout',source:w.source,expected_sha256:s.source_sha256});assert.equal(layout.status,'inconclusive');assert.equal(layout.cell_text_boxes.checked_boxes,0);assert.ok(layout.cell_text_boxes.limitations.some(l=>l.code==='CELL_TEXT_BOX_ANCHOR_OR_FRAME_UNVERIFIED'));
- const plan=await runLocal({action:'plan',source:w.source,expected_sha256:s.source_sha256,operations:[splice(s,long)]});assert.ok(plan.layout_diagnostics.new_issues.some(i=>i.code==='CELL_TEXT_BOX_CONTENT_MAY_EXCEED_FRAME_HEIGHT'));assert.equal(plan.layout_diagnostics.issues.some(i=>i.code==='CELL_TEXT_BOX_BODY_TEXT_INTERSECTION'),false);
+ const w=workspace(t,{cellRelative:false}),s=await read(w.source),layout=await runLocal({action:'layout',source:w.source,expected_sha256:s.source_sha256});assert.equal(layout.cell_text_boxes.status,'inconclusive');assert.equal(layout.cell_text_boxes.checked_boxes,1);assert.ok(layout.cell_text_boxes.limitations.some(l=>l.code==='CELL_TEXT_BOX_ABSOLUTE_REFERENCE_RENDER_ONLY'));assert.equal(layout.native_layout_verified,undefined);
+ const plan=await runLocal({action:'plan',source:w.source,expected_sha256:s.source_sha256,operations:[splice(s,long)]});assert.ok(plan.layout_diagnostics.new_issues.some(i=>i.code==='CELL_TEXT_BOX_CONTENT_MAY_EXCEED_FRAME_HEIGHT'));assert.ok(plan.layout_diagnostics.issues.filter(i=>i.code==='CELL_TEXT_BOX_BODY_TEXT_INTERSECTION').every(i=>i.certainty==='engine_render'));assert.ok(plan.layout_diagnostics.cell_text_boxes.limitations.some(l=>l.code==='CELL_TEXT_BOX_ABSOLUTE_REFERENCE_RENDER_ONLY'));
 });
 
 test('ambiguous rendered cells and shapes are never attributed to a selected box',()=>{

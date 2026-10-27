@@ -35,8 +35,8 @@ export function createNaturalTextMeasurer(HwpDocument,source,{prefixProof=false}
     // Resolve actual source properties even when the caller used a fast raw
     // inspection containing only shape IDs and sizes.
     let actual;try{actual=JSON.parse(doc.getCharPropertiesAt(0,0,run.start));}catch{fail('NESTED_PLACEMENT_FONT_UNVERIFIED');}
-    if(actual.charShapeId!==id||actual.fontSize!==p.fontSize||p.fontFamilies===undefined&&p.fontFamily!==undefined&&actual.fontFamily!==p.fontFamily||p.fontFamilies!==undefined&&JSON.stringify(actual.fontFamilies)!==JSON.stringify(p.fontFamilies)||['ratios','relativeSizes'].some(k=>actual[k]?.some(n=>n!==100))||['spacings','charOffsets'].some(k=>actual[k]?.some(n=>n!==0))||actual.subscript||actual.superscript||actual.kerning||['bold','italic'].some(k=>p[k]!==undefined&&p[k]!==actual[k]))fail('NESTED_PLACEMENT_FONT_UNVERIFIED');
-    trusted&&=actual.fontFamilies.every(f=>families.has(f))&&!actual.bold&&!actual.italic;for(let i=run.start;i<run.end;i++)ids.push(id);end=run.end;
+    if(actual.charShapeId!==id||actual.fontSize!==p.fontSize||p.fontFamilies===undefined&&p.fontFamily!==undefined&&actual.fontFamily!==p.fontFamily||p.fontFamilies!==undefined&&JSON.stringify(actual.fontFamilies)!==JSON.stringify(p.fontFamilies)||['ratios','relativeSizes'].some(k=>actual[k]?.some(n=>n<50||n>200))||actual.spacings?.some(n=>n< -20||n>50)||actual.charOffsets?.some(n=>n!==0)||actual.subscript||actual.superscript||actual.kerning||['bold','italic'].some(k=>p[k]!==undefined&&p[k]!==actual[k]))fail('NESTED_PLACEMENT_FONT_UNVERIFIED');
+    trusted&&=['ratios','relativeSizes'].every(k=>actual[k]?.every(n=>n===100))&&actual.spacings?.every(n=>n===0)&&actual.fontFamilies.every(f=>families.has(f))&&!actual.bold&&!actual.italic;for(let i=run.start;i<run.end;i++)ids.push(id);end=run.end;
    }
    if(end!==count)fail('NESTED_PLACEMENT_FONT_UNVERIFIED');
    const pages=doc.pageCount();if(pages>32)fail('NESTED_PLACEMENT_CHECK_LIMIT');const observed=[];
