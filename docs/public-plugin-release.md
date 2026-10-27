@@ -2,6 +2,8 @@
 
 [문서 인덱스](README.md) · [프로젝트 상태](project-status.md) · [보관 패키지](../plugins/archive/README.md)
 
+현재 GitHub 공개 배포는 [0.5.0 릴리스](https://github.com/spark142857142857/hwp-easy/releases/tag/hwp-easy-local-v0.5.0)이며 [설치와 업데이트](distribution.md)를 따릅니다. 이 문서는 OpenAI 디렉터리 심사와 보관한 원격 제출 기록입니다. GitHub 공개 배포와 디렉터리 게시를 구분합니다.
+
 목차: [당시 확인한 상태](#현재-확인한-상태) · [패키지 검사](#준비한-패키지와-검사) · [심사·게시 기록](#심사-제출과-게시-준비)
 
 **보관 기록 · 2026년 10월 12일:** 원격 0.1.9는 보관용으로 전환했다. 현재 메인은 로컬 HWP Easy 0.2.18이며 [프로젝트 상태](project-status.md)와 [실제 Codex 설치 기록](local-plugin-installation.md)을 따른다. 아래 포털·OAuth·Sites 항목은 기존 원격 경로의 기록이다. 이번 정리로 운영 사이트, 저장 문서나 기존 제출 상태를 변경하지 않았다.

@@ -5,7 +5,7 @@
 
 [프로젝트 개요](../README.md) · [문서 인덱스](README.md) · [지원 기능](supported-features.md)
 
-HWP Easy 0.2.19의 스킬 호출, 파일 지정, 편집·저장·복구 절차입니다. 실행 환경에는 Node.js 22 이상과 파일 접근 권한이 필요합니다. 클라이언트별 설치 상태는 [프로젝트 상태](project-status.md)에 기록합니다.
+Codex용 HWP Easy 0.5.0의 스킬 호출, 파일 지정과 편집, 저장과 복구 절차입니다. 먼저 [설치와 업데이트](distribution.md)를 따릅니다. 실행 환경에는 Node.js 22 이상과 파일 접근 권한이 필요합니다. Claude Code와 Cursor는 0.2.19를 유지하며 버전별 지원 범위는 [프로젝트 상태](project-status.md)를 따릅니다.
 
 <a id="1-앱에서-스킬을-호출하세요"></a>
 
@@ -13,7 +13,7 @@ HWP Easy 0.2.19의 스킬 호출, 파일 지정, 편집·저장·복구 절차�
 
 | 클라이언트 | 호출 방법 | 설치 안내 |
 | --- | --- | --- |
-| Codex | 스킬 메뉴에서 **HWP Easy** 선택. CLI에서는 `$` 입력 후 `HWP` 검색 | [Codex 설치](local-plugin-installation.md) |
+| Codex | 스킬 메뉴에서 **HWP Easy** 선택. CLI에서는 `$` 입력 후 `HWP` 검색 | [Codex 설치](distribution.md) |
 | Claude Code | `/hwp-easy` 입력 또는 스킬 선택 | [개인 스킬 설치](agent-client-skills.md) |
 | Cursor | `/hwp-easy` 입력 또는 스킬 선택 | [개인 스킬 설치](agent-client-skills.md) |
 

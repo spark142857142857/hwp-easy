@@ -15,6 +15,8 @@ HWP Easy의 사용, 개발 및 검증 문서입니다. 현재 기능은 지원 �
 
 | 문서 | 내용 |
 | --- | --- |
+| [설치와 업데이트](distribution.md) | GitHub 마켓플레이스, 수동 ZIP, 설치 도우미와 이전 플러그인 복귀 |
+| [0.5.0 배포 검증](distribution-0.5.0.md) | 실제 신규 설치와 업데이트, 실패 복구, 공개 다운로드와 설치본의 HWP 저장 및 복구 |
 | [사용 가이드](quick-start.md) | 스킬 호출, 파일 지정, 편집 요청, 저장과 복구 |
 | [지원 기능과 제한](supported-features.md) | 대상별 편집 범위, 읽기 전용 처리, 미리보기 제한 |
 | [Claude Code·Cursor 설치](agent-client-skills.md) | 개인 스킬 설치 위치, 호출 정책, 실제 호스트 검증 |

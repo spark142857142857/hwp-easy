@@ -4,7 +4,7 @@
 
 [프로젝트 개요](../README.md) · [문서 인덱스](README.md) · [사용 가이드](quick-start.md)
 
-HWP Easy **0.2.19**을 Claude Code와 Cursor에서 설치하고 호출하는 방법입니다. 두 앱은 같은 버전의 Codex용 배포본과 **같은 로컬 엔진**을 사용합니다. 현재 Codex는 0.2.24이며 Claude Code·Cursor는 사용자 요청으로 0.2.19를 유지합니다. 새 기능 범위는 [지원 기능](supported-features.md)의 버전 구분을 따릅니다. HWP Easy 서버·원격 MCP·한글 설치가 필요하지 않으며, 실행 환경에 파일 접근 권한과 Node.js 22 이상이 필요합니다. 에이전트의 로그인과 이용 조건은 해당 앱을 따릅니다.
+HWP Easy **0.2.19**을 Claude Code와 Cursor에서 설치하고 호출하는 방법입니다. 두 앱은 같은 버전의 Codex용 배포본과 **같은 로컬 엔진**을 사용합니다. 현재 Codex 배포와 설치는 0.5.0이며 Claude Code와 Cursor는 사용자 요청으로 0.2.19를 유지합니다. 새 [Codex 설치 도우미](distribution.md)는 이 두 앱을 변경하지 않습니다. 새 기능 범위는 [지원 기능](supported-features.md)의 버전 구분을 따릅니다. HWP Easy 서버·원격 MCP·한글 설치가 필요하지 않으며, 실행 환경에 파일 접근 권한과 Node.js 22 이상이 필요합니다. 에이전트의 로그인과 이용 조건은 해당 앱을 따릅니다.
 
 ## 설치와 호출
 
