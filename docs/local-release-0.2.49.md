@@ -15,7 +15,7 @@ F1 접두부에는 정확한 원본 지표가 확인된 보통 함초롬바탕/�
 ## 검증 결과
 
 - 소스 **574개**: 복잡 개체/렌더 **424개**와 표 흐름/높이 **150개** 통과. 새 글꼴 검사 18개는 원본 폭, 언어 슬롯, 혼합 서식, 잘못된 모양/크기/가족/굵기/범위의 거부, 자원 해제와 선택적 글꼴 추적 실패의 보수적 처리를 검사한다.
-- 격리된 최종 실행기: C2 **8건**과 F1 접두부 **3건**, 기존 혼합/Unicode 표 지표 **8건**, 합계 **19건** 같은 파일 저장·계획 결과 대조·재열기·정확한 복구·독립 원시 판독 통과. 무변경 편집은 새 이력을 만들지 않는다. C2의 저장 내장 썸네일과 명시적 공개 미리보기 이미지도 일치한다.
+- 격리된 최종 실행기: C2 **8건**과 F1 접두부 **3건**, 기존 혼합/Unicode 표 지표 **8건**과 행 높이 축소 **14건**, 합계 **33건** 같은 파일 저장·계획 결과 대조·재열기·정확한 복구·독립 원시 판독 통과. 무변경 편집은 새 이력을 만들지 않는다. C2의 저장 내장 썸네일과 명시적 공개 미리보기 이미지도 일치한다.
 - C2 독립 Python OLE 판독은 요청한 각 UTF-16 글자의 크기·굵기·7개 언어별 글꼴 ID를 별도로 재구성한다. 기존 글꼴/문단 정의·비대상 본문/스트림·원래 CR 서식은 정확히 보존되고, 새 글자 모양은 요청에서 유도된 것만 허용한다. 일회용 렌더의 합성 줄바꿈/서식은 저장되지 않는다.
 - 실제 한글: C2 **24개 상태 파일·24쪽**, F1 **9개·9쪽**. C2 **45줄**의 원래 색 글·캐럿 줄 소속, 표/셀 경계 **98곳**, 패딩·상하/중앙 위치, 원본 복구 **8쪽** 픽셀을 대조했다. 줄별 원래 잉크 상단과 공개 런 y 차이는 글리프 베어링 허용 범위 −4~+8px 안이며 누적 줄 밀림을 검사한다. F1은 개체/셀 경계·본문 잉크 비겹침·비대상 쪽 잉크 불변과 복구 **3쪽** 픽셀을 확인했다. 합계 **33개 상태 파일·33쪽**, 복구 **11쪽** 픽셀 일치.
 - 원래 Codex 0.2.42의 25개 파일은 해당 ZIP과 일치한다. Claude Code·Cursor 0.2.19 각 23개 파일의 전체 트리 해시와 기존 0.2.48 ZIP은 불변이다.
@@ -24,9 +24,17 @@ F1 접두부에는 정확한 원본 지표가 확인된 보통 함초롬바탕/�
 
 주요 기능 묶음의 최종 커밋에 수동 전체 Windows/Linux CI를 실행하고 결과를 아래에 기록한다. 문서만 정리하는 후속 커밋에는 반복하지 않는다. 새 C2 8건은 표 지표 작업에 유지한다. Windows 실측에 따라 기존 B4 정렬 11건은 장문 작업으로, 명시적 행 높이 축소 패키지는 Worker 작업의 여유 시간으로 옮겼다. 기존 전체 18개 OS 작업·검사 명령·시간 예산·제품 요청 한도를 유지한다. Claude Code·Cursor 이름의 기존 CI 검사는 격리된 공통 엔진 QA이며 실제 앱 갱신/호출이 아니다.
 
-기능 커밋 `46b2e29`의 [전체 Windows/Linux 18개 작업](https://github.com/spark142857142857/hwp-easy/actions/runs/40453667518)에서 새 C2 패키지·독립 판독은 두 OS 모두 통과했다. Windows 표 지표/격리 패키지 작업은 각각 8분 상한으로 취소됐다. 전자는 마지막 행 높이 축소 패키지 도중 중단됐고, 후자는 모든 검사 단계가 통과한 뒤 작업 정리 중 시간 상한에 걸렸다. 다른 작업은 진행 중이며 전체 성공으로 표시하지 않는다.
+기능 커밋 `46b2e29`의 [전체 Windows/Linux 18개 작업](https://github.com/spark142857142857/hwp-easy/actions/runs/40453667518)에서 새 C2 패키지·독립 판독은 두 OS 모두 통과했다. Windows 표 지표/격리 패키지 작업은 각각 8분 상한으로 취소됐다. 전자는 마지막 행 높이 축소 패키지 도중 중단됐고, 후자는 모든 검사 단계가 통과한 뒤 작업 정리 중 시간 상한에 걸렸다. 다른 **16개는 모두 통과**했다. 단일 전체 성공으로 표시하지 않는다.
 
-이번 실측 Windows 장문/일반 배치는 578초/1080초, Worker는 383초/900초였다. 기존 정렬 140초와 축소 패키지를 각각 이 여유로 옮기고, `font-balance`로 영향받은 4개 작업의 8개 OS 실행만 재검증한다. 설치·엔진·검증 ZIP은 동일하다.
+이번 실측 Windows 장문/일반 배치는 578초/1080초, Worker는 383초/900초였다. 기존 정렬 140초와 축소 패키지를 각각 이 여유로 옮겼다. 설정 커밋 `9a4a58e`의 [수동 `font-balance` 8개 OS 실행](https://github.com/spark142857142857/hwp-easy/actions/runs/40454892078)은 **8개 모두 통과**했다. 설치·제품 코드·엔진·검증 ZIP은 동일하다. 이미 통과한 나머지 전체 작업은 반복하지 않았다.
+
+| 후속 Windows 작업 | 실제 시간 / 상한 |
+| --- | --- |
+| Claude Code and Cursor skills / windows-latest | 371초 / 480초 |
+| Table text metrics / windows-latest | 281초 / 480초 |
+| Large text and general placement / windows-latest | 340초 / 1080초 |
+| Synthetic Worker / windows-latest | 573초 / 900초 |
+
 
 ## 지원 조건과 남은 작업
 
@@ -48,4 +56,4 @@ C2 1차는 한 구역·한 쪽의 정규화된 깊이 2/3 중첩 표, 단일 문
 | 실행기 SHA-256 | `c949381130b58bdbd78f0514c1b49d75ed19491a65db657875cbd5bc9cedda29` |
 | WASM SHA-256 | `8000e4ce320b7994dca6bcd58be0c862144c7b805576504e523a420439da658b` · @rhwp/core 0.8.6 유지 |
 
-근거는 `outputs/c2-049-20261027/`의 `verified/`, `inline-verified/`, `metrics/`, `complex-tests.log`, `render-final-tests.log`, `mixed-tests.log`, `table-tests.log`, `inline-verified-tests.log`, `archive-verified.json`, `client-audit.json`에 보관한다. computer-use는 **0회**, 실제 한글은 신뢰한 합성 문서에만 사용한 외부 QA다.
+근거는 `outputs/c2-049-20261027/`의 `verified/`, `inline-verified/`, `metrics/`, `compact/`, `complex-tests.log`, `render-final-tests.log`, `mixed-tests.log`, `table-tests.log`, `inline-verified-tests.log`, `archive-verified.json`, `client-audit.json`, `final-audit.json`, `ci-full-verification.json`, `ci-balance-verification.json`, `workflow-balance-audit.json`에 보관한다. computer-use는 **0회**, 실제 한글은 신뢰한 합성 문서에만 사용한 외부 QA다.
