@@ -64,6 +64,8 @@ Windows/Linux 복합 검사는 소스·기본 패키지와 부동 개체 패키�
 
 수동 실행의 기본 `scope: all`은 전체 검사를 실행한다. 표 흐름 CI만 재확인할 때는 `scope: table-flow` 또는 `gh workflow run checks.yml --ref main -f scope=table-flow`로 Windows/Linux 표 작업 2개만 실행한다. 표 사이 글·본문 호스트 검사는 `scope: table-text` 또는 `gh workflow run checks.yml --ref main -f scope=table-text`로 관련 Windows/Linux 2개 작업만 실행한다. 좁은 셀·문자 지표는 `scope: table-metrics` 또는 `gh workflow run checks.yml --ref main -f scope=table-metrics`로 관련 2개 작업만 실행한다. 필드·개체 호스트는 `scope: table-controls` 또는 `gh workflow run checks.yml --ref main -f scope=table-controls`로 기존 글/호스트 작업을 재사용해 관련 2개만 실행한다. 각 부분 실행에는 기존 표 소스 회귀도 포함한다. 부분 실행의 성공은 전체 18개 작업 성공과 구분해 기록한다. 기존 표 작업은 패키지 38건과 Windows 정리 시간을 포함해 10분을 허용하며 개별 편집·미리보기 제한은 유지한다.
 
+0.2.49의 `scope: font-balance`는 격리 패키지·표 지표·장문/일반 배치·Worker의 8개 OS 실행만 선택한다. B4 정렬 패키지는 장문 작업, 명시적 행 높이 축소 패키지는 Worker 작업에서 검사해 8분 작업의 시간 초과를 피한다. C2 원본 글꼴 8건은 표 지표 작업에 유지한다. 전체 18개 OS 작업·기존 검사 명령·작업 상한은 그대로다. [실측과 결과](local-release-0.2.49.md#ci)
+
 문서만 변경했을 때도 아래 링크 검사는 로컬에서 실행합니다.
 
 ```bash

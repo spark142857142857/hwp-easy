@@ -8,7 +8,7 @@ on:
         description: Verification scope (all or a focused table feature)
         type: choice
         default: all
-        options: [all, table-flow, table-text, table-metrics, table-controls, table-floating, table-compact, package-balance, render-view, placement-balance]
+        options: [all, table-flow, table-text, table-metrics, table-controls, table-floating, table-compact, package-balance, render-view, placement-balance, font-balance]
 
 permissions:
   contents: read
@@ -100,7 +100,7 @@ jobs:
         run: python -m pip wheel --no-deps --wheel-dir dist .
 
   agent-clients:
-    if: ${{ inputs.scope == 'all' || inputs.scope == 'package-balance' || inputs.scope == 'render-view' }}
+    if: ${{ inputs.scope == 'all' || inputs.scope == 'package-balance' || inputs.scope == 'render-view' || inputs.scope == 'font-balance' }}
     name: Claude Code and Cursor skills / ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
     timeout-minutes: 8
@@ -144,21 +144,15 @@ jobs:
         run: python scripts/check-installed-plugin.py outputs/agent-client-check/cursor
       # Reuse the short package job; preserve all checks and time budgets.
       - name: Node cell images
-        if: ${{ inputs.scope == 'all' || inputs.scope == 'package-balance' }}
+        if: ${{ inputs.scope == 'all' || inputs.scope == 'package-balance' || inputs.scope == 'font-balance' }}
         run: node scripts/check-local-cell-images.mjs
       - name: Python floating areas
-        if: ${{ inputs.scope == 'all' || inputs.scope == 'package-balance' }}
+        if: ${{ inputs.scope == 'all' || inputs.scope == 'package-balance' || inputs.scope == 'font-balance' }}
         run: python scripts/check-local-floating-areas.py outputs/local-cell-images
       - name: Verify sibling forests, host alignment and complete-row render fragments
         run: node scripts/check-local-nested-forest.mjs
       - name: Independently verify original paths, floating state and recovery
         run: python scripts/check-local-nested-forest.py
-      # Shared engine package QA only; no actual client installation or login.
-      # The previous Windows package job used 292 of its 480 seconds.
-      - name: Verify single-host ancestor alignment save and recovery
-        run: node scripts/check-local-nested-forest.mjs outputs/local-ancestor-alignment alignment
-      - name: Independently verify ancestor alignment raw preservation
-        run: python scripts/check-local-nested-forest.py outputs/local-ancestor-alignment
 
   local-complex:
     if: ${{ inputs.scope == 'all' || inputs.scope == 'render-view' }}
@@ -453,7 +447,7 @@ jobs:
         run: python scripts/check-local-table-floating.py outputs/local-table-compact-floating
 
   local-table-metrics:
-    if: ${{ inputs.scope == 'all' || inputs.scope == 'table-metrics' }}
+    if: ${{ inputs.scope == 'all' || inputs.scope == 'table-metrics' || inputs.scope == 'font-balance' }}
     name: Table text metrics / ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
     timeout-minutes: 8
@@ -485,7 +479,7 @@ jobs:
         if: ${{ inputs.scope == 'table-metrics' }}
         run: node --test --test-concurrency=2 tests/test_local_table_reflow.mjs tests/test_local_table_hosts.mjs tests/test_local_table_text_flow.mjs tests/test_local_table_text_metrics.mjs
       - name: Verify styled text regressions during full checks
-        if: ${{ inputs.scope == 'all' }}
+        if: ${{ inputs.scope == 'all' || inputs.scope == 'font-balance' }}
         run: node --test --test-concurrency=2 tests/test_local_table_text_metrics.mjs tests/test_local_table_compact.mjs
       - name: Build isolated local plugin
         run: node scripts/package_local_plugin.mjs
@@ -501,15 +495,9 @@ jobs:
       - name: Independently verify source font definitions and requested styles
         run: python scripts/check-local-source-fonts.py outputs/local-source-fonts
 
-      - name: Verify content-fit rows during full checks
-        if: ${{ inputs.scope == 'all' }}
-        run: node scripts/check-local-table-compact.mjs
-      - name: Independently verify compact rows and recovery
-        if: ${{ inputs.scope == 'all' }}
-        run: python scripts/check-local-table-compact.py
 
   local-large-text:
-    if: ${{ inputs.scope == 'all' || inputs.scope == 'render-view' || inputs.scope == 'placement-balance' }}
+    if: ${{ inputs.scope == 'all' || inputs.scope == 'render-view' || inputs.scope == 'placement-balance' || inputs.scope == 'font-balance' }}
     name: Large text and general placement / ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
     # Both checks finished near the old 12-minute boundary; allow runner cleanup.
@@ -566,8 +554,15 @@ jobs:
       - name: Python general placement
         run: python scripts/check-local-placement.py
 
+      # Windows used 578 of 1080 seconds before adding this 140-second suite.
+      # Shared engine QA only; no actual client install or login.
+      - name: Verify single-host ancestor alignment save and recovery
+        run: node scripts/check-local-nested-forest.mjs outputs/local-ancestor-alignment alignment
+      - name: Independently verify ancestor alignment raw preservation
+        run: python scripts/check-local-nested-forest.py outputs/local-ancestor-alignment
+
   worker-runtime:
-    if: ${{ inputs.scope == 'all' }}
+    if: ${{ inputs.scope == 'all' || inputs.scope == 'font-balance' }}
     name: Synthetic Worker / ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
     timeout-minutes: ${{ matrix.timeout_minutes }}
@@ -639,3 +634,23 @@ jobs:
         run: node scripts/check-hosted-workload.mjs
       - name: Verify parallel full reads, competing saves, replay and restore at hosted text boundary
         run: node scripts/check-concurrent-workload.mjs --memory
+      # Full Windows Worker checks used 383 of 900 seconds. Run local
+      # compact tables in this spare budget, retaining all existing checks.
+      - name: Set up independent local table reader
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7
+        with:
+          python-version: '3.12'
+      - name: Install independent local OLE reader
+        run: python -m pip install olefile==0.47
+      - name: Install exact local execution dependencies
+        working-directory: ${{ github.workspace }}
+        run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Build isolated local compact-table package
+        working-directory: ${{ github.workspace }}
+        run: node scripts/package_local_plugin.mjs
+      - name: Verify content-fit rows during full checks
+        working-directory: ${{ github.workspace }}
+        run: node scripts/check-local-table-compact.mjs
+      - name: Independently verify compact rows and recovery
+        working-directory: ${{ github.workspace }}
+        run: python scripts/check-local-table-compact.py
