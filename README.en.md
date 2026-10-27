@@ -2,7 +2,7 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
-HWP Easy is a local tool that lets an agent read and edit HWP documents, save changes in place and restore previous contents. The Codex plugin includes the runner, document engine and required resources.
+HWP Easy is a local tool for reading and editing HWP documents in Codex, Claude Code and Cursor. It saves changes in place and retains previous contents for recovery. Each client package includes the runner, document engine and required resources.
 
 Files are processed in the agent's filesystem. No HWP Easy server or account is required. The runner and an engine based on [`@rhwp/core`](https://github.com/edwardkim/rhwp) perform document operations; `SKILL.md` describes the workflow for the agent.
 
@@ -21,22 +21,27 @@ Support depends on document structure. Unverified structures may be read-only or
 
 ## Installation
 
-The current Codex distribution is **0.5.0**. With a Codex CLI that supports plugin commands and Git installed:
+The current Codex distribution is **0.5.0**. Install Node.js 22+, run Codex once and ensure its CLI supports plugin commands.
 
 ```bash
-codex plugin marketplace add spark142857142857/hwp-easy --ref distribution
-codex plugin add hwp-easy@hwp-easy
+npx hwp-easy@0.5.0 install
 ```
 
-The execution environment needs Node.js 22+. Restart Codex and explicitly select **HWP Easy** from the skill menu. For an existing installation, follow the [update instructions](docs/distribution.md#업데이트와-복귀).
+Restart Codex and explicitly select **HWP Easy** from the skill menu. For an existing installation, use `update` instead of `install`. Installing the public package does not require an npm account or 2FA.
 
-The [0.5.0 release](https://github.com/spark142857142857/hwp-easy/releases/tag/hwp-easy-local-v0.5.0) includes a marketplace ZIP, an npm installer tarball and SHA-256 checksums. **npm registry publication is awaiting publisher authentication**; the downloaded tarball can already run the installer. See [installation and updates](docs/distribution.md). OpenAI public-directory publication is separate and has not occurred.
+| Client | Current distribution | Installation |
+| --- | --- | --- |
+| Codex | **0.5.0** | npm command above, or [GitHub marketplace and ZIP](docs/distribution.md) |
+| Claude Code | **0.2.19** | [Personal skill package](docs/agent-client-skills.md#설치와-호출) |
+| Cursor | **0.2.19** | [Personal skill package](docs/agent-client-skills.md#설치와-호출) |
 
-Claude Code and Cursor packages and installations remain on **0.2.19** with updates deferred. This installer does not modify them. See the [existing client guide](docs/agent-client-skills.md).
+**The npm installer currently targets Codex.** Claude Code and Cursor remain usable through their existing packages; their 0.5.0 updates are deferred. Packages built at the same version share one engine, but the currently distributed versions have different feature scopes.
+
+The [npm package](https://www.npmjs.com/package/hwp-easy) and [GitHub 0.5.0 release](https://github.com/spark142857142857/hwp-easy/releases/tag/hwp-easy-local-v0.5.0) are public. See [installation and updates](docs/distribution.md) for rollback and alternative installation paths. OpenAI public-directory publication is separate and has not occurred.
 
 ## Usage
 
-Explicitly select HWP Easy, then provide the path and requested changes. The skill applies only to the invoked task.
+In Codex, explicitly select HWP Easy and provide the path and requested changes. In Claude Code and Cursor, invoke `/hwp-easy` before the request. The skill applies only to the invoked task.
 
 ```text
 Read C:\Documents\application.hwp and summarize its questions and answer cells. Do not modify the file.

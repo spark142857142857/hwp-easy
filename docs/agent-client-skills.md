@@ -6,6 +6,8 @@
 
 HWP Easy **0.2.19**을 Claude Code와 Cursor에서 설치하고 호출하는 방법입니다. 두 앱은 같은 버전의 Codex용 배포본과 **같은 로컬 엔진**을 사용합니다. 현재 Codex 배포와 설치는 0.5.0이며 Claude Code와 Cursor는 사용자 요청으로 0.2.19를 유지합니다. 새 [Codex 설치 도우미](distribution.md)는 이 두 앱을 변경하지 않습니다. 새 기능 범위는 [지원 기능](supported-features.md)의 버전 구분을 따릅니다. HWP Easy 서버·원격 MCP·한글 설치가 필요하지 않으며, 실행 환경에 파일 접근 권한과 Node.js 22 이상이 필요합니다. 에이전트의 로그인과 이용 조건은 해당 앱을 따릅니다.
 
+Codex만 지원하는 도구는 아닙니다. Claude Code와 Cursor는 이 문서의 개인 스킬 패키지로 실행합니다. `npx hwp-easy@0.5.0 install`은 Codex용 설치 명령이며 두 앱을 설치하거나 갱신하지 않습니다.
+
 ## 설치와 호출
 
 1. [0.2.19 릴리스](https://github.com/spark142857142857/hwp-easy/releases/tag/hwp-easy-local-v0.2.19)에서 앱에 맞는 ZIP을 내려받습니다. 함께 제공하는 SHA-256으로 파일을 확인할 수 있습니다. 소스 빌드는 [개발 안내](developer-guide.md#클라이언트-패키지-생성과-검증)를 따릅니다.

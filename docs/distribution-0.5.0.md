@@ -11,7 +11,7 @@
 | GitHub 배포 브랜치 | `distribution`, 커밋 `05680a808b83b10213e3f947c2228cf3d421bc84` 공개 |
 | 고정 릴리스 | [HWP Easy 0.5.0](https://github.com/spark142857142857/hwp-easy/releases/tag/hwp-easy-local-v0.5.0), 같은 배포 커밋을 태그로 고정 |
 | 다운로드 | 플러그인 ZIP, 마켓플레이스 ZIP, 설치 도우미 TGZ와 명세, SHA256SUMS 제공 |
-| npm 레지스트리 | 패키지 생성과 실제 설치 검사 완료. 최초 게시 요청은 게시자 2FA 필요 오류로 거부됐으며 본인 인증 대기 |
+| npm 레지스트리 | **[0.5.0 게시 완료](https://www.npmjs.com/package/hwp-easy)**. 게시자 인증 후 레지스트리에서 실제 패키지 다운로드와 npx 설치 확인 |
 | OpenAI 공개 디렉터리 | 기존 스킬 전용 접수 제한과 별도. 새 심사 신청이나 게시 없음 |
 
 로그인 없이 GitHub 배포 파일 4개를 다시 내려받아 해시를 대조했습니다. 다운로드 파일에 개인 HWP, 인증 정보나 사용자 설정은 포함하지 않았습니다.
@@ -28,6 +28,7 @@
 | 설정 보존 | 검사 환경의 무관한 Codex 설정 유지. 현재 사용 중인 Codex 설정과 설치본은 변경하지 않음 |
 | npm TGZ 검사 | 33개 파일과 모든 바이트 대조. TGZ를 풀어 같은 실제 CLI 설치 검사를 다시 통과 |
 | npm 캐시와 분리 | 설치 후 npm 패키지 원본을 사용할 수 없게 한 상태에서도 영구 등록과 설치 파일 유지 |
+| 실제 레지스트리 npx 설치 | 새 npm 캐시와 비어 있는 사용자 npm 설정으로 공개 0.5.0 설치. 설치본의 HWP 편집과 같은 파일 저장, 정확한 복구 및 독립 판독 확인 |
 | 실제 npm exec | 인증 없이 받은 공개 TGZ를 npm 10.9.2로 실행해 별도 Codex 환경에 설치하고 HWP 저장, 복구와 독립 판독 확인 |
 | GitHub 마켓플레이스 | 공개 `distribution` 브랜치를 실제 Codex CLI로 등록, 설치와 갱신. 캐시의 25개 파일 해시 일치 |
 | 공개 ZIP 수동 설치 | 공개 마켓플레이스 ZIP을 다시 받아 풀고 별도 Codex 환경에 설치. 캐시의 25개 파일 해시 일치 |
@@ -50,9 +51,25 @@
 
 이번 검사는 유지관리자 Windows의 별도 설정 폴더에서 수행했습니다. 다른 PC, 새 사용자 계정이나 Linux 및 macOS의 실제 설치 성공으로 기록하지 않습니다. 새 채팅의 모델 호출과 외부 HWP 프로그램의 쪽 배치를 다시 검사하지 않았습니다. 엔진이 같다는 해시 근거와 [기존 I3 배치 검증](local-release-0.5.0-dev.1.md)을 유지합니다.
 
-Claude Code와 Cursor는 0.2.19 그대로이며 사용자 요청 전까지 갱신하지 않습니다. 원격 0.1.9도 보관합니다. GitHub Actions, computer-use와 새 채팅 생성은 이번 작업에서 실행하지 않았습니다.
+Claude Code와 Cursor는 0.2.19 그대로이며 사용자 요청 전까지 갱신하지 않습니다. 원격 0.1.9도 보관합니다. 앞선 GitHub 배포 검사에서는 GitHub Actions, computer-use와 새 채팅 생성을 실행하지 않았습니다. 후속 npm 확인에서는 CLI에 나타나지 않는 게시 상태를 확인하기 위해 브라우저의 Staged Packages와 Packages 목록만 조회했습니다. 인증 설정과 게시 승인에는 개입하지 않았으며 Actions와 새 채팅 생성도 실행하지 않았습니다.
 
 실제 npm 실행 중 PowerShell의 `npm.ps1`이 추가 도우미 옵션을 소비하는 경우를 확인해 Windows 추가 옵션 예시는 `npm.cmd`로 안내합니다. 존재하지 않는 `CODEX_HOME`은 Codex CLI가 거부하므로 별도 검사 폴더를 먼저 생성했습니다. 기본 설치는 초기 실행한 Codex의 환경을 사용합니다. 두 실패를 성공으로 합산하지 않았으며 조건을 맞춘 재검사의 결과를 위에 기록합니다.
+
+## npm 게시 후 확인
+
+게시자가 2FA 인증과 `npm publish`를 완료한 뒤 실제 공개 레지스트리를 확인했습니다. 초기에는 `0.0.0-stage` 임시 버전만 조회되고 0.5.0 요청은 404였으며, 이후 0.5.0이 정상 조회됐습니다. CLI와 브라우저의 승인 대기 목록은 비어 있었고, 추가 게시나 승인 명령은 실행하지 않았습니다.
+
+인증 없이 레지스트리 TGZ를 내려받아 SHA-256과 전체 33개 파일을 기존 GitHub TGZ와 대조했습니다. 무결성 값도 기존 명세와 같습니다.
+
+```text
+npm package: hwp-easy@0.5.0
+SHA-256: 092430046f3202f7f4c740b4588209b212dbb8e2db1353c348afcf323fc7ab49
+npm integrity: sha512-SCxHRpHMgD9d2epoqAMYadgXKgChw3M34nUOV5OuUhTmXDb7nvLIEEKz4x0LZ3oARB96EdAa+bpDhrC3i25G7A==
+```
+
+그다음 새 캐시에서 `npx.cmd hwp-easy@0.5.0 install`을 실행해 격리 Codex 환경에 설치했습니다. 설치된 실행기로 본문과 여러 줄 셀 편집, 같은 파일 저장과 재읽기, 충돌 거부, 무변경 무저장, 원본 복구와 편집본 재복구를 확인했습니다. 별도 Python 판독도 통과했습니다. Windows의 실제 npm 버전은 10.9.2, Node는 22.17.0입니다.
+
+새 결과는 ignored `outputs/npm-release-0.5.0-20261027/registry.json`과 `installed-document/verification.json`에 보관합니다. 현재 사용 중인 Codex 설치와 Claude Code 및 Cursor는 변경하지 않았습니다. npm 설치 도우미가 Codex용이라는 범위도 유지합니다.
 
 ## 개발자 재현
 

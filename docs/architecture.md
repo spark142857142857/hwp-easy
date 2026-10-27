@@ -43,7 +43,7 @@ flowchart LR
 
 ## 배포와 설치
 
-소스는 `main`, 실행 자원을 포함한 완성된 플러그인은 `distribution` 브랜치에서 관리합니다. GitHub 마켓플레이스는 배포 브랜치의 `.agents/plugins/marketplace.json`에서 `plugins/hwp-easy`를 찾습니다. npm 패키지도 같은 25개 플러그인 파일을 포함하며 엔진을 별도로 구현하지 않습니다.
+소스는 `main`, 실행 자원을 포함한 완성된 플러그인은 `distribution` 브랜치에서 관리합니다. GitHub 마켓플레이스는 배포 브랜치의 `.agents/plugins/marketplace.json`에서 `plugins/hwp-easy`를 찾습니다. npm 패키지도 같은 25개 플러그인 파일을 포함하며 엔진을 별도로 구현하지 않습니다. npm 0.5.0 설치 도우미는 Codex용이며 Claude Code와 Cursor는 기존 0.2.19 개인 스킬 패키지로 사용합니다.
 
 `packages/hwp-easy/`의 설치 도우미는 패키지를 영구 폴더에 복사하고 Codex의 공식 플러그인 명령으로 등록합니다. 업데이트 전 설치는 발견 경로 밖에 보관하며 실패 시 복원합니다. 설치 복귀와 HWP 내용 복구는 별개입니다. 설치 도우미는 문서를 읽거나 편집하지 않습니다. npm 레지스트리 게시 상태와 실제 명령은 [설치 안내](distribution.md)를 따릅니다.
 

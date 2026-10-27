@@ -2,7 +2,7 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
-HWP Easy는 에이전트가 HWP 파일을 읽고 편집하도록 돕는 로컬 도구입니다. 변경 사항은 같은 파일에 저장하고 이전 내용은 복구용으로 보관합니다. Codex 플러그인에 실행기와 문서 엔진을 함께 배포합니다.
+HWP Easy는 Codex, Claude Code와 Cursor에서 HWP 파일을 읽고 편집하는 로컬 도구입니다. 변경 사항은 같은 파일에 저장하고 이전 내용은 복구용으로 보관합니다. 각 클라이언트의 패키지에 실행기와 문서 엔진을 함께 배포합니다.
 
 문서 처리는 에이전트의 파일 환경에서 이루어집니다. 별도 HWP Easy 서버나 계정이 필요하지 않습니다. 실제 HWP 처리는 [`@rhwp/core`](https://github.com/edwardkim/rhwp) 기반 엔진과 로컬 실행기가 수행하며 `SKILL.md`는 에이전트의 작업 절차를 안내합니다.
 
@@ -21,22 +21,27 @@ HWP Easy는 에이전트가 HWP 파일을 읽고 편집하도록 돕는 로컬 �
 
 ## 설치
 
-현재 Codex 배포 버전은 **0.5.0**입니다. 플러그인 명령을 지원하는 Codex CLI와 Git이 있으면 다음으로 설치합니다. 실행 환경에는 Node.js 22 이상이 필요합니다.
+Codex용 현재 배포 버전은 **0.5.0**입니다. Node.js 22 이상과 초기 실행을 마친 Codex, 플러그인 명령을 지원하는 Codex CLI가 필요합니다.
 
 ```bash
-codex plugin marketplace add spark142857142857/hwp-easy --ref distribution
-codex plugin add hwp-easy@hwp-easy
+npx hwp-easy@0.5.0 install
 ```
 
-설치 후 Codex를 다시 열고 스킬 메뉴에서 **HWP Easy**를 선택합니다. 이미 HWP Easy가 설치돼 있다면 [업데이트 절차](docs/distribution.md#업데이트와-복귀)를 먼저 확인합니다.
+설치 후 Codex를 다시 열고 스킬 메뉴에서 **HWP Easy**를 선택합니다. 이미 설치했다면 `install` 대신 `update`를 사용합니다. 공개 패키지를 설치할 때 npm 계정이나 2FA 설정은 필요하지 않습니다.
 
-[0.5.0 릴리스](https://github.com/spark142857142857/hwp-easy/releases/tag/hwp-easy-local-v0.5.0)에는 마켓플레이스 ZIP과 npm 설치 도우미 TGZ, SHA-256을 제공합니다. **npm 레지스트리 게시는 게시자 인증 대기 중**이며, TGZ를 내려받아 설치 도우미를 실행할 수 있습니다. [설치와 업데이트](docs/distribution.md)에서 각 경로를 설명합니다. OpenAI 공개 디렉터리 게시는 별도 절차이며 아직 완료하지 않았습니다.
+| 클라이언트 | 현재 배포 버전 | 설치 방법 |
+| --- | --- | --- |
+| Codex | **0.5.0** | 위 npm 명령 또는 [GitHub 마켓플레이스와 ZIP](docs/distribution.md) |
+| Claude Code | **0.2.19** | [개인 스킬 패키지 설치](docs/agent-client-skills.md#설치와-호출) |
+| Cursor | **0.2.19** | [개인 스킬 패키지 설치](docs/agent-client-skills.md#설치와-호출) |
 
-Claude Code와 Cursor의 공개 패키지와 설치본은 **0.2.19**를 유지합니다. 두 앱의 최신 버전 갱신은 보류하며 이번 설치 도우미에서도 변경하지 않습니다. [기존 앱별 설치 안내](docs/agent-client-skills.md)
+**이번 npm 설치 도우미는 Codex용입니다.** Claude Code와 Cursor도 기존 패키지로 사용할 수 있으며, 두 앱의 0.5.0 갱신은 보류 중입니다. 같은 버전의 패키지는 공통 엔진을 사용하지만 현재 배포 버전의 기능 범위는 서로 다릅니다.
+
+[npm 패키지](https://www.npmjs.com/package/hwp-easy)와 [GitHub 0.5.0 릴리스](https://github.com/spark142857142857/hwp-easy/releases/tag/hwp-easy-local-v0.5.0)를 공개했습니다. 자세한 업데이트와 이전 버전 복귀는 [설치 안내](docs/distribution.md)를 따릅니다. OpenAI 공개 디렉터리 게시는 별도 절차이며 아직 완료하지 않았습니다.
 
 ## 사용법
 
-HWP Easy를 명시적으로 선택한 뒤 파일 경로와 바꿀 내용을 요청합니다. 스킬은 호출한 작업에만 적용됩니다.
+Codex에서는 HWP Easy를 선택한 뒤 파일 경로와 바꿀 내용을 요청합니다. Claude Code와 Cursor에서는 `/hwp-easy`를 명시적으로 호출하고 요청을 덧붙입니다. 스킬은 호출한 작업에만 적용됩니다.
 
 ```text
 C:\문서\지원서.hwp를 읽고 질문과 작성할 칸을 정리해줘. 파일은 수정하지 마.

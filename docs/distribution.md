@@ -42,37 +42,41 @@ Windows에서 다운로드 해시는 `Get-FileHash '<내려받은 ZIP 경로>' -
 
 ## 설치 도우미
 
-설치 도우미는 Node/WASM 엔진을 포함한 npm 패키지입니다. 현재 npm 레지스트리 게시는 게시자 2FA 인증을 기다리고 있습니다. 게시 전에는 아래 **GitHub에서 받은 TGZ 경로**를 사용합니다.
-
-릴리스에서 `hwp-easy-0.5.0.tgz`를 내려받고 터미널을 다운로드 폴더에서 엽니다.
-
-```bash
-npm exec --yes --ignore-scripts --package ./hwp-easy-0.5.0.tgz -- hwp-easy install
-```
-
-플러그인은 npm 임시 캐시에서 별도 영구 폴더로 복사한 뒤 등록합니다. npm 캐시가 삭제돼도 설치한 플러그인은 유지됩니다. 도우미에는 외부 npm 의존성이나 자동 설치 스크립트가 없습니다.
-
-npm 레지스트리 게시가 확인되면 다음 짧은 명령도 사용할 수 있습니다. 게시 전에는 아직 사용할 수 없습니다.
+설치 도우미는 Node/WASM 엔진을 포함한 **Codex용 npm 패키지**입니다. [npm 레지스트리](https://www.npmjs.com/package/hwp-easy)에 게시한 0.5.0을 다음으로 설치합니다.
 
 ```bash
 npx hwp-easy@0.5.0 install
 ```
 
-## 업데이트와 복귀
+공개 패키지 설치에는 npm 로그인이나 2FA 설정이 필요하지 않습니다. 플러그인은 npm 임시 캐시에서 별도 영구 폴더로 복사한 뒤 등록합니다. npm 캐시가 삭제돼도 설치한 플러그인은 유지됩니다. 외부 npm 의존성이나 자동 설치 스크립트는 없습니다.
 
-HWP 편집을 마친 뒤 업데이트합니다. TGZ로 실행할 때는 다음을 사용합니다.
+Claude Code와 Cursor는 [별도 개인 스킬 패키지](agent-client-skills.md)를 사용합니다. 현재 두 앱의 배포 버전은 0.2.19이며 위 명령은 해당 설치를 갱신하지 않습니다.
+
+### GitHub에서 받은 TGZ
+
+릴리스에서 `hwp-easy-0.5.0.tgz`를 직접 내려받아 실행할 수도 있습니다. 터미널을 다운로드 폴더에서 엽니다.
 
 ```bash
-npm exec --yes --ignore-scripts --package ./hwp-easy-0.5.0.tgz -- hwp-easy status
-npm exec --yes --ignore-scripts --package ./hwp-easy-0.5.0.tgz -- hwp-easy update
-npm exec --yes --ignore-scripts --package ./hwp-easy-0.5.0.tgz -- hwp-easy rollback
+npm exec --yes --ignore-scripts --package ./hwp-easy-0.5.0.tgz -- hwp-easy install
 ```
+
+## 업데이트와 복귀
+
+HWP 편집을 마친 뒤 업데이트합니다.
+
+```bash
+npx hwp-easy@0.5.0 status
+npx hwp-easy@0.5.0 update
+npx hwp-easy@0.5.0 rollback
+```
+
+TGZ로 실행한다면 위의 `npm exec` 명령에서 마지막 `install`을 원하는 명령으로 바꿉니다.
 
 `update`는 기존 플러그인을 별도 폴더에 보관하고 검증한 새 배포본을 설치합니다. 버전을 낮추는 업데이트는 거부하며, 설치가 실패하면 이전 플러그인으로 복귀합니다. `rollback`은 보관한 직전 **플러그인 버전**으로 돌아갑니다. HWP 문서 복구 명령은 아니며, 문서를 되돌릴 때는 스킬에 요청합니다.
 
 보관 경로는 Windows의 `%LOCALAPPDATA%\HWP Easy\installer`, 다른 환경의 `~/.local/share/HWP Easy/installer`입니다. `--data-dir`로 바꿨다면 이후 업데이트와 복귀에도 같은 경로를 지정합니다. `--codex-home`으로 이미 생성한 다른 Codex 환경을 지정할 수 있으며 일반 설치에는 필요하지 않습니다. Codex 실행 파일을 자동으로 찾지 못하면 `--codex '<실행 파일 경로>'`를 지정합니다.
 
-Windows PowerShell에서 도우미의 `--codex-home`, `--data-dir`, `--json` 같은 추가 옵션을 넘길 때는 `npm` 대신 `npm.cmd`를 사용합니다. `npm.ps1`이 옵션을 npm 쪽에서 처리해 도우미에 전달하지 않는 경우를 실제 검사에서 확인했습니다. 일반 `install`, `update`, `rollback` 명령에는 해당 추가 옵션이 필요하지 않습니다.
+Windows PowerShell에서 도우미의 `--codex-home`, `--data-dir`, `--json` 같은 추가 옵션을 넘길 때는 `npx` 대신 `npx.cmd`, `npm exec`에서는 `npm` 대신 `npm.cmd`를 사용합니다. `npm.ps1`이 옵션을 npm 쪽에서 처리해 도우미에 전달하지 않는 경우를 실제 검사에서 확인했습니다. 일반 `install`, `update`, `rollback` 명령에는 해당 추가 옵션이 필요하지 않습니다.
 
 GitHub 마켓플레이스를 직접 등록한 사용자는 다음으로 배포 목록을 갱신한 뒤 새 버전을 설치할 수도 있습니다. 이 직접 명령에는 설치 도우미의 이전 버전 보관과 자동 복귀가 포함되지 않습니다.
 

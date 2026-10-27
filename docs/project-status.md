@@ -14,7 +14,7 @@
 | 공통 엔진 | Node 실행기와 @rhwp/core 0.8.6 WASM. GitHub와 npm 설치 도우미는 같은 플러그인 25개 파일을 포함 |
 | 현재 PC Codex | **0.5.0 설치 유지**. 이전 설치 검증과 이번 별도 환경 배포 검증을 구분 |
 | GitHub 배포 | `distribution` 브랜치와 [0.5.0 릴리스](https://github.com/spark142857142857/hwp-easy/releases/tag/hwp-easy-local-v0.5.0) 공개. ZIP과 TGZ, SHA-256 제공 |
-| npm 설치 도우미 | 구현과 TGZ 공개, 실제 설치 검사 완료. npm 레지스트리는 게시자 2FA 인증 대기 |
+| npm 설치 도우미 | **[0.5.0 게시 완료](https://www.npmjs.com/package/hwp-easy)**. 레지스트리 TGZ의 33개 파일과 해시 일치, 새 캐시의 실제 npx 설치와 HWP 저장 및 복구 확인. Codex용 도우미 |
 | 호출 정책 | 명시적으로 선택하거나 호출한 작업에만 적용. 자동 적용 금지 |
 | Claude Code와 Cursor | **0.2.19 유지, 갱신 보류**. Codex 설치 도우미에서도 변경하지 않음 |
 | OpenAI 디렉터리 | 기존 로컬 0.5.0 초안의 스킬 전용 접수 제한. 심사 신청과 디렉터리 게시 미실행. 포털은 이번에 다시 조회하지 않음 |
@@ -72,7 +72,7 @@
 
 ## 남은 작업
 
-**[남은 작업](remaining-work.md)**에서 완료와 대기, 보류를 구분합니다. F1부터 F4와 I3의 확정 범위는 마감했고 GitHub 0.5.0 배포도 완료했습니다. 남은 출시 항목은 npm 게시자 인증과 레지스트리 게시, OpenAI 접수 제한 해소 후 사용자 검토 및 심사입니다. 다른 PC 검증은 사용자 요청으로 생략했으며 Claude Code와 Cursor는 계속 보류합니다.
+**[남은 작업](remaining-work.md)**에서 완료와 대기, 보류를 구분합니다. F1부터 F4와 I3의 확정 범위는 마감했고 GitHub 0.5.0 배포도 완료했습니다. npm 게시와 실제 레지스트리 설치도 완료했습니다. 남은 출시 항목은 OpenAI 접수 제한 해소 후 사용자 검토 및 심사입니다. 다른 PC 검증은 사용자 요청으로 생략했으며 Claude Code와 Cursor는 계속 보류합니다.
 
 이번 배포에서 GitHub Actions와 computer-use는 사용하지 않았습니다. 기존 CI 성공을 새 배포 검증으로 대체하지 않습니다.
 
