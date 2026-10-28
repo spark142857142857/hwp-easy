@@ -4,7 +4,11 @@ import {packLocalBodyRewrite} from './local_body_write.mjs';
 export const fail=code=>{throw new GuardError(code);};
 export const view=b=>new DataView(b.buffer,b.byteOffset,b.byteLength);
 export const equalBytes=(a,b)=>a.length===b.length&&a.every((v,i)=>v===b[i]);
-export const equal=(a,b)=>JSON.stringify(a)===JSON.stringify(b);
+// JSON objects have no member order; arrays (cells, records, children) do.
+// Preserve the existing JSON value comparison while normalizing object keys.
+const comparableJson=value=>JSON.stringify(value,(_key,item)=>item&&typeof item==='object'&&!Array.isArray(item)
+ ?Object.fromEntries(Object.keys(item).sort().map(key=>[key,item[key]])):item);
+export const equal=(a,b)=>comparableJson(a)===comparableJson(b);
 export function encodeRecords(records){
  return Buffer.concat(records.map(r=>{const wide=r.payload.length>=4095,b=Buffer.alloc((wide?8:4)+r.payload.length);
   b.writeUInt32LE((r.tag|(r.level<<10)|((wide?4095:r.payload.length)<<20))>>>0);if(wide)b.writeUInt32LE(r.payload.length,4);Buffer.from(r.payload).copy(b,wide?8:4);return b;}));

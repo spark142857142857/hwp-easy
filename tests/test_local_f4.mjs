@@ -6,7 +6,7 @@ import {digest} from '../src/one_hwp/local_file.mjs';
 import {f4GroupFixture,f4CellFixture,f4NestedBoxFixture,f4FieldFixture,f4Inspect,f4Target,f4Patch} from './local_f4_fixtures.mjs';
 import {fieldFixture} from './local_complex_fixtures.mjs';
 import {readHwp} from '../probes/sites-runtime/guard/container.mjs';
-import {view,encodeRecords} from '../src/one_hwp/local_complex_records.mjs';
+import {view,encodeRecords,equal} from '../src/one_hwp/local_complex_records.mjs';
 initializeLocal(fs.readFileSync(new URL('../node_modules/@rhwp/core/rhwp_bg.wasm',import.meta.url)));
 const edit=(bytes,ops)=>editLocalBatch(HwpDocument,bytes,digest(bytes),ops);
 const op=(p,bytes,type,rest={})=>({type,target_id:f4Target(p.id,digest(bytes)),expected_old:p.text??p.value,...rest});
@@ -29,12 +29,50 @@ for(const kind of ['hyperlink','bookmark','date','docdate','path','mailmerge','c
 });
 for(const kind of ['memo','privateinfo','toc','unknown'])test(`F4 unsafe field stays read-only: ${kind}`,async()=>{const bytes=f4FieldFixture(kind),f=f4Inspect(bytes).additional_fields[0];assert.equal(f.editable,false);await assert.rejects(edit(bytes,[op(f,bytes,'set_field',{new_text:'NO'})]),/FIELD_TARGET_REQUIRED/);});
 test('F4 existing body ClickHere exposes editable metadata without changing its value',async t=>{let bytes=fieldFixture();const source=workspace(t,bytes),s=await runLocal({action:'read',source}),f=s.fields[0];assert.equal(typeof f.command,'string');assert.equal(Object.hasOwn(f,'record_index'),false);const r=await runLocal({action:'edit',source,expected_sha256:s.source_sha256,operations:[{type:'update_field',target_id:f.target_id,expected_old:f.value,expected_metadata:{name:f.name,guide:f.guide,command:f.command},props:{name:'변경한 이름',guide:'새 안내'}}]});const a=await runLocal({action:'read',source});assert.equal(a.fields[0].name,'변경한 이름');assert.equal(a.fields[0].value,f.value);await runLocal({action:'restore',source,expected_sha256:a.source_sha256,backup_id:r.backup_id});assert.deepEqual(fs.readFileSync(source),Buffer.from(bytes));});
+
+test('F4 field metadata key order does not change plan, same-file save, no-op or exact recovery',async t=>{
+ const orders=[['name','guide','command'],['name','command','guide'],['guide','name','command'],['guide','command','name'],['command','name','guide'],['command','guide','name']];
+ for(const bytes of [fieldFixture(),f4GroupFixture({nested:true,field:true})]) {
+  const source=workspace(t,bytes),before=await runLocal({action:'read',source}),field=before.fields[0];
+  const operation=order=>({type:'update_field',target_id:field.target_id,expected_old:field.value,expected_metadata:Object.fromEntries(order.map(k=>[k,field[k]])),props:{name:'순서와 무관한 이름',guide:'새 입력 안내'}});
+  let candidate;
+  for(const order of orders) {
+   const plan=await runLocal({action:'plan',source,expected_sha256:before.source_sha256,operations:[operation(order)]});
+   assert.equal(plan.saved,false);candidate??=plan.verified_edit_sha256;assert.equal(plan.verified_edit_sha256,candidate);
+   assert.deepEqual(fs.readFileSync(source),Buffer.from(bytes));
+  }
+  const saved=await runLocal({action:'edit',source,expected_sha256:before.source_sha256,operations:[operation(orders[5])]});
+  assert.equal(saved.saved_path,source);assert.equal(saved.verified_edit_sha256,candidate);
+  const after=await runLocal({action:'read',source}),now=after.fields[0];assert.equal(now.name,'순서와 무관한 이름');assert.equal(now.guide,'새 입력 안내');assert.equal(now.value,field.value);
+  const metadata=Object.fromEntries(orders[2].map(k=>[k,now[k]]));
+  const noop=await runLocal({action:'edit',source,expected_sha256:after.source_sha256,operations:[{type:'update_field',target_id:now.target_id,expected_old:now.value,expected_metadata:metadata,props:{name:now.name,guide:now.guide}}]});
+  assert.equal(noop.saved,false);
+  for(const expected_metadata of [{...metadata,name:field.name},{...metadata,extra:'unexpected'},{guide:now.guide,name:now.name},null,['name','guide','command']]) {
+   await assert.rejects(runLocal({action:'edit',source,expected_sha256:after.source_sha256,operations:[{type:'update_field',target_id:now.target_id,expected_old:now.value,expected_metadata,props:{name:'MUST NOT SAVE'}}]}),/EXPECTED_FIELD_METADATA_MISMATCH/);
+   assert.equal(digest(fs.readFileSync(source)),after.source_sha256);
+  }
+  assert.equal((await runLocal({action:'history',source,expected_sha256:after.source_sha256})).entries.length,1);
+  await runLocal({action:'restore',source,expected_sha256:after.source_sha256,backup_id:saved.backup_id});
+  assert.deepEqual(fs.readFileSync(source),Buffer.from(bytes));
+ }
+});
 for(const kind of ['clickhere','hyperlink','bookmark'])test(`F4 create/read/edit metadata/delete wrapper retains visible text: ${kind}`,async()=>{
  let bytes=f4GroupFixture();let s=f4Inspect(bytes),p=s.text_boxes[0].paragraphs[0];bytes=(await edit(bytes,[op(p,bytes,'insert_field',{offset:2,name:'동일 이름',guide:kind==='clickhere'?'입력 안내':'',value:'새 값😀',...(kind==='clickhere'?{}:{field_type:kind,command:kind==='hyperlink'?'https://example.org/':'target'})})])).bytes;s=f4Inspect(bytes);let f=s.object_fields[0];assert.equal(f.field_type,kind);bytes=(await edit(bytes,[op(f,bytes,'update_field',{expected_metadata:{name:f.name,guide:f.guide,command:f.command},props:{name:'새 이름',...(kind==='clickhere'?{guide:'새 안내'}:{command:'새 명령 문자열'})}})])).bytes;s=f4Inspect(bytes);f=s.object_fields[0];assert.equal(f.name,'새 이름');const old=s.text_boxes[0].paragraphs[0].text;bytes=(await edit(bytes,[op(f,bytes,'delete_field')])).bytes;s=f4Inspect(bytes);assert.equal(s.object_fields.length,0);assert.equal(s.text_boxes[0].paragraphs[0].text,old);
 });
 test('F4 subgroup composed move/resize/rotation changes only selected subtree components',async()=>{
  const bytes=f4GroupFixture({nested:true}),s=f4Inspect(bytes),node=s.drawing_tree.groups.find(n=>n.parent_id),host=s.blocks.find(b=>b.id===node.block_id),r=await edit(bytes,[op(host,bytes,'transform_drawing_group',{target_id:f4Target(node.id,digest(bytes)),expected_properties:node.properties,expected_rotation_angle:0,props:{width:16000,height:5000,horzOffset:2000,vertOffset:2000,rotationAngle:10}})]),a=f4Inspect(r.bytes),now=a.drawing_tree.groups.find(n=>n.id===node.id);assert.equal(now.rotationAngle,10);assert.ok(Math.abs(now.frame_size.width-16000)<.001);const before=s.recordSets.get(0),after=a.recordSets.get(0);assert.equal(after.length,before.length);for(let i=0;i<before.length;i++)if(before[i].tag!==76&&i!==s.drawing_tree.groups[0].record_index)assert.deepEqual(after[i].payload,before[i].payload);assert.ok(r.drawing_frame_normalization);const root=s.drawing_tree.groups[0],rootAfter=a.drawing_tree.groups[0];for(const sibling of s.drawing_tree.nodes.filter(n=>n.shape_record>=node.records_end)){const now=a.drawing_tree.nodes.find(n=>n.id===sibling.id);assert.ok(Math.abs(root.properties.vertOffset+sibling.geometry.combined[5]-rootAfter.properties.vertOffset-now.geometry.combined[5])<.001);}assert.deepEqual(a.text_boxes.map(b=>b.paragraphs.map(p=>p.text)),s.text_boxes.map(b=>b.paragraphs.map(p=>p.text)));
 });
+test('F4 reordered group properties preserve object equality while array order remains significant',async()=>{
+ const bytes=f4GroupFixture({nested:true}),state=f4Inspect(bytes),group=state.drawing_tree.groups.find(g=>g.parent_id),host=state.blocks.find(b=>b.id===group.block_id);
+ const expected=Object.fromEntries(Object.entries(group.properties).reverse());
+ const operation=op(host,bytes,'transform_drawing_group',{target_id:f4Target(group.id,digest(bytes)),expected_properties:expected,expected_rotation_angle:group.rotationAngle,props:{width:16000,height:5000,rotationAngle:10,horzOffset:2000,vertOffset:2000}});
+ const changed=await edit(bytes,[operation]);assert.equal(f4Inspect(changed.bytes).drawing_tree.groups.find(g=>g.id===group.id).rotationAngle,10);
+ assert.equal(equal({outer:{name:'field',props:{x:1,y:2}},rows:[{a:1,b:2},'tail']},{rows:[{b:2,a:1},'tail'],outer:{props:{y:2,x:1},name:'field'}}),true);
+ assert.equal(equal([{a:1},'tail'],['tail',{a:1}]),false);
+ assert.equal(equal({name:'field'},{name:'field',extra:'value'}),false);
+ assert.equal(equal({name:'field'},{name:'different'}),false);
+});
+
 test('F4 stale, out-of-parent and field-crossing changes are rejected before save',async t=>{
  const bytes=f4GroupFixture({nested:true,field:true}),source=workspace(t,bytes),s=await runLocal({action:'read',source}),g=s.drawing_groups.find(g=>g.parent_id),host=s.blocks.find(b=>b.id===g.block_id),p=s.text_boxes[0].paragraphs[0],f=p.fields[0];
  const bad=[{type:'transform_drawing_group',target_id:g.target_id,expected_old:host.text,expected_properties:g.properties,expected_rotation_angle:0,props:{horzOffset:99999}},{type:'split_paragraph',target_id:p.target_id,expected_old:p.text,offset:3},{type:'set_field',target_id:f.target_id,expected_old:'STALE',new_text:'NO'}];for(const operation of bad)await assert.rejects(runLocal({action:'edit',source,expected_sha256:s.source_sha256,operations:[{type:'replace_text',target_id:s.blocks[0].target_id,expected_old:s.blocks[0].text,new_text:'TEMP'},operation]}),/DRAWING_OUTSIDE_PARENT|PARAGRAPH_BOUNDARY_CROSSES_FIELD|EXPECTED_OLD_MISMATCH/);assert.deepEqual(fs.readFileSync(source),Buffer.from(bytes));assert.equal((await runLocal({action:'history',source,expected_sha256:s.source_sha256})).entries.length,0);

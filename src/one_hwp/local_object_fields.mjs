@@ -14,7 +14,10 @@ export function prepareObjectField(state,rs,p,field,op){
  if(!p.text_range_editable||field&&!field.editable)fail('FIELD_TARGET_REQUIRED');
  if(op.type==='update_field'){
   if(!field||!equal(Object.keys(op).sort(),['type','target_id','expected_old','expected_metadata','props'].sort()))fail('INVALID_OPERATION');
-  const old={name:field.name,guide:field.guide,command:field.command};if(!equal(op.expected_metadata,old))fail('EXPECTED_FIELD_METADATA_MISMATCH');
+  const old={name:field.name,guide:field.guide,command:field.command},expected=op.expected_metadata;
+  // JSON member order is not part of a field's identity. Keep the exact key
+  // set and values checked so stale or incomplete metadata still cannot save.
+  if(!expected||typeof expected!=='object'||!equal(Object.keys(expected).sort(),Object.keys(old).sort())||Object.keys(old).some(k=>expected[k]!==old[k]))fail('EXPECTED_FIELD_METADATA_MISMATCH');
   if(!op.props||!Object.keys(op.props).length||Object.keys(op.props).some(k=>!['name','guide','command'].includes(k))||field.field_type==='clickhere'&&Object.hasOwn(op.props,'command')||field.field_type!=='clickhere'&&Object.hasOwn(op.props,'guide'))fail('INVALID_FIELD_METADATA');
   const wanted={...old,...op.props};Object.values(wanted).forEach(s=>text(s));if(equal(wanted,old))return {unchanged:true};
   let command=wanted.command;if(field.field_type==='clickhere'&&wanted.guide!==old.guide){const match=/Direction:wstring:(\d+):/.exec(command);if(!match||!/^Clickhere:set:\d+:Direction:wstring:\d+:/.test(command))fail('FIELD_DEFINITION_UNVERIFIED');const start=match.index+match[0].length,n=Number(match[1]);if(start+n>command.length)fail('FIELD_DEFINITION_UNVERIFIED');command=command.slice(0,match.index)+`Direction:wstring:${wanted.guide.length}:`+wanted.guide+command.slice(start+n);const inner=command.indexOf(':',command.indexOf(':')+1);const innerStart=command.indexOf(':',inner+1)+1;if(!command.startsWith('Clickhere:set:')||innerStart<=0)fail('FIELD_DEFINITION_UNVERIFIED');const payload=command.slice(innerStart);command=`Clickhere:set:${payload.length-1}:${payload}`;}

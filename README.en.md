@@ -83,6 +83,8 @@ Source lives on `main`; the complete distribution lives on `distribution`. See t
 
 Checks on 0.5.1 cover installation for all three clients, updates from older versions, recovery from injected failures and installation rollback. Installed runners passed synthetic HWP editing, same-file saves and byte-exact restoration. Actual Claude Code and Cursor CLI model calls were also checked. The [unified release report](docs/unified-release-0.5.1.md) records the evidence and unverified environments.
 
+A subsequent fresh Codex chat exposed false edit refusals caused by JSON object member order. The source fix is tested but has not been released or installed. See the [conditional results and fix verification](docs/local-install-0.5.1.md); distributing the patch is the next task.
+
 OpenAI directory submission is blocked by the skills-only intake restriction. Remote 0.1.9 and the Windows COM prototype remain [archived implementations](docs/README.md#보관-자료). See [remaining work](docs/remaining-work.md).
 
 ## License
