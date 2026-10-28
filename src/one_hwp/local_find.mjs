@@ -1,5 +1,5 @@
 /** Exact, read-only search over fully assembled supported body/cell blocks. */
-import {GuardError} from '../../probes/sites-runtime/guard/records.mjs';
+import {GuardError} from './guard/records.mjs';
 import {digest} from './local_file.mjs';
 const fail=code=>{throw new GuardError(code);};
 const positionKeys=['kind','section','paragraph','control','cell','cell_paragraph','row','column','row_span','column_span','cell_path','list_id','text_box_id','object_path'];

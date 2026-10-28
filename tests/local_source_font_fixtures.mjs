@@ -3,7 +3,7 @@ import {HwpDocument} from '@rhwp/core';
 import {cellWrapRenderFixture,cellWrapBefore} from './local_cell_wrap_render_fixtures.mjs';
 import {inspectLocalComplex,editLocalComplex} from '../src/one_hwp/local_complex.mjs';
 import {view,encodeRecords} from '../src/one_hwp/local_complex_records.mjs';
-import {parseRecords} from '../probes/sites-runtime/guard/records.mjs';
+import {parseRecords} from '../src/one_hwp/guard/records.mjs';
 import {fontFaceRecord} from '../src/one_hwp/local_format.mjs';
 import {publishVerifiedPatch} from '../src/one_hwp/local_verified_patch.mjs';
 import {tableReflowContexts,reflowTableLocal} from '../src/one_hwp/local_table_reflow.mjs';

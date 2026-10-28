@@ -1,7 +1,7 @@
 /** Pictures in mapped complex paragraphs; opaque controls are never serialized. */
 import {deflateRawSync} from 'node:zlib';
-import {parseRecords} from '../../probes/sites-runtime/guard/records.mjs';
-import {inflateBoundedRaw} from '../../probes/sites-runtime/guard/container.mjs';
+import {parseRecords} from './guard/records.mjs';
+import {inflateBoundedRaw} from './guard/container.mjs';
 import {readImageLocal} from './local_file.mjs';
 import {imageSize} from './local_image.mjs';
 import {patchLocalPackedStreams} from './local_container_write.mjs';

@@ -1,8 +1,8 @@
 import test from 'node:test';import assert from 'node:assert/strict';import fs from 'node:fs';import os from 'node:os';import path from 'node:path';
-import {fixture} from './rhwp_fixtures.mjs';import {runLocal} from '../src/one_hwp/local_runner.mjs';import {readCfb} from '../probes/sites-runtime/guard/container.mjs';import {bitmap24,localPreviewText} from '../src/one_hwp/local_preview_cache.mjs';import {digest} from '../src/one_hwp/local_file.mjs';
+import {fixture} from './rhwp_fixtures.mjs';import {runLocal} from '../src/one_hwp/local_runner.mjs';import {readCfb} from '../src/one_hwp/guard/container.mjs';import {bitmap24,localPreviewText} from '../src/one_hwp/local_preview_cache.mjs';import {digest} from '../src/one_hwp/local_file.mjs';
 import childProcess from 'node:child_process';import {syncBuiltinESMExports} from 'node:module';
 import {patchLocalPackedStreams} from '../src/one_hwp/local_container_write.mjs';
-import {assertPlannedEdit} from '../scripts/local-plan-proof.mjs';
+import {assertPlannedEdit} from '../scripts/lib/local-plan-proof.mjs';
 
 test('empty CFB streams remain valid across a subsequent allocation rewrite',()=>{
  const original=fixture(),empty=patchLocalPackedStreams(original,new Map([['PrvImage',Buffer.alloc(0)],['PrvText',Buffer.alloc(0)]]));

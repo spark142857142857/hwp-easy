@@ -1,5 +1,5 @@
 /** Change one mapped paragraph's shape; retain shared definitions and controls. */
-import {parseRecords} from '../../probes/sites-runtime/guard/records.mjs';
+import {parseRecords} from './guard/records.mjs';
 import {validateFormatProperties} from './local_format.mjs';
 import {definitionBytes} from './local_complex_format.mjs';
 import {fail,view,equalBytes} from './local_complex_records.mjs';

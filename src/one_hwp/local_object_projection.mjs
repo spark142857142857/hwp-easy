@@ -1,6 +1,6 @@
 /** Verify a raw object's paragraph list in a disposable body, without flattening a save. */
 import {deflateRawSync} from 'node:zlib';
-import {parseRecords} from '../../probes/sites-runtime/guard/records.mjs';
+import {parseRecords} from './guard/records.mjs';
 import {view,textTokens,encodeRecords} from './local_complex_records.mjs';
 import {patchLocalPackedStreams} from './local_container_write.mjs';
 export function verifyObjectParagraphs(HwpDocument,bytes,raw,records,paragraphs){

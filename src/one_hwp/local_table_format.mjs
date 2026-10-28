@@ -1,7 +1,7 @@
 /** Table geometry and cell layout through exact, bounded raw metadata patches. */
 import {createLocalEngineApi as createEngineApi} from './local_api.mjs';
-import {readHwp} from '../../probes/sites-runtime/guard/container.mjs';
-import {GuardError} from '../../probes/sites-runtime/guard/records.mjs';
+import {readHwp} from './guard/container.mjs';
+import {GuardError} from './guard/records.mjs';
 import {packLocalBodyRewrite} from './local_body_write.mjs';
 import {recordsByBlock,preservableStructuralProfile,verifyListCounts} from './local_structure.mjs';
 const fail=code=>{throw new GuardError(code);},equal=(a,b)=>JSON.stringify(a)===JSON.stringify(b);

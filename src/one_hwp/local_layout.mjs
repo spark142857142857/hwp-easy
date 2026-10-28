@@ -1,7 +1,7 @@
 /** Bounded geometry checks. Font estimates are warnings, never a pagination certificate. */
 import {createHash} from 'node:crypto';
 import {fail,view} from './local_complex_records.mjs';
-import {parseRecords} from '../../probes/sites-runtime/guard/records.mjs';
+import {parseRecords} from './guard/records.mjs';
 import {complexParagraphProperties} from './local_complex_paragraph.mjs';
 import {layoutObjectIdentity} from './local_layout_identity.mjs';
 import {diagnoseCellTextBoxes} from './local_cell_text_box_layout.mjs';
@@ -9,7 +9,7 @@ import {captureRenderedLayout} from './local_rendered_layout.mjs';
 import {nestedFloatingObject} from './local_nested_object.mjs';
 import {nestedReferenceLayout} from './local_nested_reference.mjs';
 import {projectNestedAnchor} from './local_nested_anchor.mjs';
-import {GuardError} from '../../probes/sites-runtime/guard/records.mjs';
+import {GuardError} from './guard/records.mjs';
 import {tablePaginationEnabled} from './local_table_reflow.mjs';
 import {textBoxInsets} from './local_text_box_metrics.mjs';
 function padding(state,table,cell){const v=view(state.recordSets.get(table.section)[cell.start].payload);return (v.getUint32(4,true)&0x10000)?[24,26,28,30].map(at=>v.getUint16(at,true)):['paddingLeft','paddingRight','paddingTop','paddingBottom'].map(k=>table.properties[k]);}

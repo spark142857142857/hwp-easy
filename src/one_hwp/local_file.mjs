@@ -2,7 +2,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { createHash, randomUUID } from 'node:crypto';
-import { GuardError } from '../../probes/sites-runtime/guard/records.mjs';
+import { GuardError } from './guard/records.mjs';
 import {acquireLocalLock} from './local_lock.mjs';
 const fail = code => { throw new GuardError(code); };
 export const digest = data => createHash('sha256').update(data).digest('hex');

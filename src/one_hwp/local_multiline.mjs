@@ -1,6 +1,6 @@
 /** Insert actual paragraph breaks into a plain mixed-style text range. */
-import {GuardError} from '../../probes/sites-runtime/guard/records.mjs';
-import {canonicalRecord,textControlBytes} from '../../probes/sites-runtime/guard/preservation.mjs';
+import {GuardError} from './guard/records.mjs';
+import {canonicalRecord,textControlBytes} from './guard/preservation.mjs';
 import {verifyPlainCharacterRuns} from './local_text.mjs';
 import {modelCharacterIds,verifyModelCharacterIds} from './local_character_runs.mjs';
 const fail=code=>{throw new GuardError(code);},equal=(a,b)=>JSON.stringify(a)===JSON.stringify(b);

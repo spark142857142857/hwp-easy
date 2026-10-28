@@ -7,7 +7,7 @@ import tempfile
 import unittest
 import zipfile
 
-spec = importlib.util.spec_from_file_location("local_marketplace", Path(__file__).resolve().parents[1] / "scripts/prepare_local_marketplace.py")
+spec = importlib.util.spec_from_file_location("local_marketplace", Path(__file__).resolve().parents[1] / "scripts/build/prepare_local_marketplace.py")
 module = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(module)
 

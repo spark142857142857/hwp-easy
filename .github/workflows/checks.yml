@@ -49,46 +49,45 @@ jobs:
       - name: Install exact engine runtime without lifecycle scripts
         run: npm ci --ignore-scripts --no-audit --no-fund
       - name: Check document links and private/generated file exclusions
-        run: node scripts/check-repository.mjs
+        run: node scripts/check/check-repository.mjs
+      - name: Verify local runtime dependency boundaries
+        run: node --test tests/test_repository_structure.mjs
       - name: Test real HWP WASM engine without Hancom
         run: npm run test:engine
-      - name: Install exact browser guard test dependencies
-        working-directory: probes/sites-runtime
-        run: npm ci --ignore-scripts --no-audit --no-fund
       - name: Compare browser guard with independent Python reader and canonical checks
-        run: node probes/sites-runtime/scripts/check-python-guard.mjs
+        run: node scripts/check/independent/check-python-guard.mjs
       - name: Verify local same-file edits, structural changes and isolated plugin runtime
         run: node --test --test-concurrency=2 tests/test_local_runner.mjs tests/test_local_structure.mjs tests/test_local_advanced.mjs tests/test_local_extended.mjs tests/test_local_pictures.mjs tests/test_local_text.mjs tests/test_local_table_format.mjs tests/test_local_batch.mjs tests/test_local_move.mjs tests/test_local_style.mjs tests/test_local_history.mjs tests/test_local_find.mjs
       - name: Node package local plugin
-        run: node scripts/package_local_plugin.mjs
+        run: node scripts/build/package_local_plugin.mjs
       - name: Python archive local plugin
-        run: python scripts/archive_local_plugin.py
+        run: python scripts/build/archive_local_plugin.py
       - name: Node check local plugin
-        run: node scripts/check-local-plugin.mjs
+        run: node scripts/check/install/check-local-plugin.mjs
       - name: Python check local structure
-        run: python scripts/check-local-structure.py
+        run: python scripts/check/independent/check-local-structure.py
       - name: Python check local advanced
-        run: python scripts/check-local-advanced.py
+        run: python scripts/check/independent/check-local-advanced.py
       - name: Node check local pictures
-        run: node scripts/check-local-pictures.mjs
+        run: node scripts/check/runtime/check-local-pictures.mjs
       - name: Python check local pictures
-        run: python scripts/check-local-pictures.py
+        run: python scripts/check/independent/check-local-pictures.py
       - name: Node check local text
-        run: node scripts/check-local-text.mjs
+        run: node scripts/check/runtime/check-local-text.mjs
       - name: Python check local text
-        run: python scripts/check-local-text.py
+        run: python scripts/check/independent/check-local-text.py
       - name: Node check local table format
-        run: node scripts/check-local-table-format.mjs
+        run: node scripts/check/runtime/check-local-table-format.mjs
       - name: Python check local table format
-        run: python scripts/check-local-table-format.py
+        run: python scripts/check/independent/check-local-table-format.py
       - name: Node check local batch
-        run: node scripts/check-local-batch.mjs
+        run: node scripts/check/runtime/check-local-batch.mjs
       - name: Python check local batch
-        run: python scripts/check-local-batch.py
+        run: python scripts/check/independent/check-local-batch.py
       - name: Node check local move
-        run: node scripts/check-local-move.mjs
+        run: node scripts/check/runtime/check-local-move.mjs
       - name: Python check local move
-        run: python scripts/check-local-move.py
+        run: python scripts/check/independent/check-local-move.py
       - name: Run regressions and real HWP MCP flows without Hancom
         env:
           HWP_EASY_NATIVE_TESTS: '1'
@@ -123,36 +122,33 @@ jobs:
           python-version: '3.12'
       - name: Install exact engine runtime
         run: npm ci --ignore-scripts --no-audit --no-fund
-      - name: Install exact package builder
-        working-directory: probes/sites-runtime
-        run: npm ci --ignore-scripts --no-audit --no-fund
       - name: Install independent OLE reader
         run: python -m pip install olefile==0.47
       - name: Verify explicit-only installation, shared engine and same-file recovery
         run: node --test tests/test_agent_skill_install.mjs tests/test_distribution_install.mjs tests/test_unified_install.mjs
       - name: Node package local plugin
-        run: node scripts/package_local_plugin.mjs
+        run: node scripts/build/package_local_plugin.mjs
       - name: Node package agent skills
-        run: node scripts/package_agent_skills.mjs
+        run: node scripts/build/package_agent_skills.mjs
       - name: Python archive agent skills
-        run: python scripts/archive_agent_skills.py
+        run: python scripts/build/archive_agent_skills.py
       - name: Node check agent packages
-        run: node scripts/check-agent-packages.mjs
+        run: node scripts/check/install/check-agent-packages.mjs
       - name: Python check installed plugin
-        run: python scripts/check-installed-plugin.py outputs/agent-client-check/claude-code
+        run: python scripts/check/install/check-installed-plugin.py outputs/agent-client-check/claude-code
       - name: Python check installed plugin
-        run: python scripts/check-installed-plugin.py outputs/agent-client-check/cursor
+        run: python scripts/check/install/check-installed-plugin.py outputs/agent-client-check/cursor
       # Reuse the short package job; preserve all checks and time budgets.
       - name: Node cell images
         if: ${{ inputs.scope == 'all' || inputs.scope == 'package-balance' || inputs.scope == 'font-balance' }}
-        run: node scripts/check-local-cell-images.mjs
+        run: node scripts/check/runtime/check-local-cell-images.mjs
       - name: Python floating areas
         if: ${{ inputs.scope == 'all' || inputs.scope == 'package-balance' || inputs.scope == 'font-balance' }}
-        run: python scripts/check-local-floating-areas.py outputs/local-cell-images
+        run: python scripts/check/independent/check-local-floating-areas.py outputs/local-cell-images
       - name: Verify sibling forests, host alignment and complete-row render fragments
-        run: node scripts/check-local-nested-forest.mjs
+        run: node scripts/check/runtime/check-local-nested-forest.mjs
       - name: Independently verify original paths, floating state and recovery
-        run: python scripts/check-local-nested-forest.py
+        run: python scripts/check/independent/check-local-nested-forest.py
 
   local-complex:
     if: ${{ inputs.scope == 'all' || inputs.scope == 'render-view' }}
@@ -183,9 +179,6 @@ jobs:
           python-version: '3.12'
       - name: Install exact engine runtime
         run: npm ci --ignore-scripts --no-audit --no-fund
-      - name: Install exact package builder
-        working-directory: probes/sites-runtime
-        run: npm ci --ignore-scripts --no-audit --no-fund
       - name: Install independent OLE reader
         run: python -m pip install olefile==0.47
       - name: Node Complex source regressions
@@ -198,39 +191,39 @@ jobs:
         if: ${{ inputs.scope == 'render-view' }}
         run: node --test tests/test_local_nested_mixed_render.mjs
       - name: Node package local plugin
-        run: node scripts/package_local_plugin.mjs
+        run: node scripts/build/package_local_plugin.mjs
       - name: Node nested render origins and alignment
-        run: node scripts/check-local-nested-render.mjs
+        run: node scripts/check/runtime/check-local-nested-render.mjs
       - name: Python nested render preservation
-        run: python scripts/check-local-nested-render.py
+        run: python scripts/check/independent/check-local-nested-render.py
       - name: Verify packaged narrow-cell save and recovery
-        run: node scripts/check-local-nested-forest.mjs outputs/local-cell-wrap wrap
+        run: node scripts/check/runtime/check-local-nested-forest.mjs outputs/local-cell-wrap wrap
       - name: Independently verify narrow-cell raw preservation
-        run: python scripts/check-local-nested-forest.py outputs/local-cell-wrap
+        run: python scripts/check/independent/check-local-nested-forest.py outputs/local-cell-wrap
       - name: Node complex
-        run: node scripts/check-local-complex.mjs
+        run: node scripts/check/runtime/check-local-complex.mjs
       - name: Python complex
-        run: python scripts/check-local-complex.py
+        run: python scripts/check/independent/check-local-complex.py
       - name: Node complex format
-        run: node scripts/check-local-complex-format.mjs
+        run: node scripts/check/runtime/check-local-complex-format.mjs
       - name: Python complex format
-        run: python scripts/check-local-complex-format.py
+        run: python scripts/check/independent/check-local-complex-format.py
       - name: Node complex editing
-        run: node scripts/check-local-complex-editing.mjs
+        run: node scripts/check/runtime/check-local-complex-editing.mjs
       - name: Python complex editing
-        run: python scripts/check-local-complex-editing.py outputs/local-complex-editing-check
+        run: python scripts/check/independent/check-local-complex-editing.py outputs/local-complex-editing-check
       - name: Node flexible tables
-        run: node scripts/check-local-flexible-tables.mjs
+        run: node scripts/check/runtime/check-local-flexible-tables.mjs
       - name: Python flexible tables
-        run: python scripts/check-local-flexible-tables.py outputs/local-flexible-tables-check
+        run: python scripts/check/independent/check-local-flexible-tables.py outputs/local-flexible-tables-check
       - name: Node freedom
-        run: node scripts/check-local-freedom.mjs
+        run: node scripts/check/runtime/check-local-freedom.mjs
       - name: Python freedom
-        run: python scripts/check-local-freedom.py
+        run: python scripts/check/independent/check-local-freedom.py
       - name: Node reflow
-        run: node scripts/check-local-reflow.mjs
+        run: node scripts/check/runtime/check-local-reflow.mjs
       - name: Python reflow
-        run: python scripts/check-local-reflow.py
+        run: python scripts/check/independent/check-local-reflow.py
 
   local-floating:
     if: ${{ inputs.scope == 'all' || inputs.scope == 'table-floating' || inputs.scope == 'render-view' || inputs.scope == 'windows-layout' }}
@@ -258,57 +251,54 @@ jobs:
           python-version: '3.12'
       - name: Install exact engine runtime
         run: npm ci --ignore-scripts --no-audit --no-fund
-      - name: Install exact package builder
-        working-directory: probes/sites-runtime
-        run: npm ci --ignore-scripts --no-audit --no-fund
       - name: Install independent OLE reader
         run: python -m pip install olefile==0.47
       - name: Node package local plugin
-        run: node scripts/package_local_plugin.mjs
+        run: node scripts/build/package_local_plugin.mjs
       - name: Node floating areas
         if: ${{ inputs.scope == 'all' }}
-        run: node scripts/check-local-floating-areas.mjs
+        run: node scripts/check/runtime/check-local-floating-areas.mjs
       - name: Python floating areas
         if: ${{ inputs.scope == 'all' }}
-        run: python scripts/check-local-floating-areas.py
+        run: python scripts/check/independent/check-local-floating-areas.py
       - name: Node nested floating
         if: ${{ inputs.scope == 'all' }}
-        run: node scripts/check-local-nested-floating.mjs
+        run: node scripts/check/runtime/check-local-nested-floating.mjs
       - name: Python floating areas
         if: ${{ inputs.scope == 'all' }}
-        run: python scripts/check-local-floating-areas.py outputs/local-nested-floating
+        run: python scripts/check/independent/check-local-floating-areas.py outputs/local-nested-floating
       - name: Node floating transfer
         if: ${{ inputs.scope == 'all' }}
-        run: node scripts/check-local-floating-transfer.mjs
+        run: node scripts/check/runtime/check-local-floating-transfer.mjs
       - name: Python floating areas
         if: ${{ inputs.scope == 'all' }}
-        run: python scripts/check-local-floating-areas.py outputs/local-floating-transfer
+        run: python scripts/check/independent/check-local-floating-areas.py outputs/local-floating-transfer
       - name: Node cell text boxes
         if: ${{ inputs.scope == 'all' }}
-        run: node scripts/check-local-cell-text-boxes.mjs
+        run: node scripts/check/runtime/check-local-cell-text-boxes.mjs
       - name: Python placement
         if: ${{ inputs.scope == 'all' }}
-        run: python scripts/check-local-placement.py outputs/local-cell-text-boxes
+        run: python scripts/check/independent/check-local-placement.py outputs/local-cell-text-boxes
       - name: Node review fixes
         if: ${{ inputs.scope == 'all' }}
-        run: node scripts/check-local-review-fixes.mjs
+        run: node scripts/check/runtime/check-local-review-fixes.mjs
       - name: Python review fixes
         if: ${{ inputs.scope == 'all' }}
-        run: python scripts/check-local-review-fixes.py outputs/local-review-fixes
+        run: python scripts/check/independent/check-local-review-fixes.py outputs/local-review-fixes
 
       - name: Verify floating table-flow source regressions
         if: ${{ inputs.scope == 'all' }}
         run: node --test tests/test_local_table_floating.mjs
       - name: Verify independent floating table flow through package
-        run: node scripts/check-local-table-floating.mjs
+        run: node scripts/check/runtime/check-local-table-floating.mjs
       - name: Independently verify floating table flow and recovery
-        run: python scripts/check-local-table-floating.py
+        run: python scripts/check/independent/check-local-table-floating.py
 
       # Keep this corpus outside the near-full text/control job.
       - name: Verify mixed host and column render save/recovery through package
-        run: node scripts/check-local-nested-forest.mjs outputs/local-nested-mixed mixed
+        run: node scripts/check/runtime/check-local-nested-forest.mjs outputs/local-nested-mixed mixed
       - name: Independently verify mixed/column source preservation
-        run: python scripts/check-local-nested-forest.py outputs/local-nested-mixed
+        run: python scripts/check/independent/check-local-nested-forest.py outputs/local-nested-mixed
 
       - name: Verify all table source regressions during floating checks
         if: ${{ inputs.scope == 'table-floating' }}
@@ -344,31 +334,28 @@ jobs:
           python-version: '3.12'
       - name: Install exact engine runtime
         run: npm ci --ignore-scripts --no-audit --no-fund
-      - name: Install exact package builder
-        working-directory: probes/sites-runtime
-        run: npm ci --ignore-scripts --no-audit --no-fund
       - name: Install independent OLE reader
         run: python -m pip install olefile==0.47
       - name: Verify root-tree growth, line splitting, atomic saves and recovery
         run: node --test tests/test_local_table_reflow.mjs tests/test_local_table_hosts.mjs
       - name: Node package local plugin
-        run: node scripts/package_local_plugin.mjs
+        run: node scripts/build/package_local_plugin.mjs
       - name: Node check local table reflow
-        run: node scripts/check-local-table-reflow.mjs
+        run: node scripts/check/runtime/check-local-table-reflow.mjs
       - name: Python check local table reflow
-        run: python scripts/check-local-table-reflow.py
+        run: python scripts/check/independent/check-local-table-reflow.py
       - name: Node check local table sync
-        run: node scripts/check-local-table-sync.mjs
+        run: node scripts/check/runtime/check-local-table-sync.mjs
       - name: Python check local table sync
-        run: python scripts/check-local-table-sync.py
+        run: python scripts/check/independent/check-local-table-sync.py
       - name: Verify aligned cells and multiple host tables through the package
-        run: node scripts/check-local-table-hosts.mjs
+        run: node scripts/check/runtime/check-local-table-hosts.mjs
       - name: Independently verify host text, alignment, control order and recovery
-        run: python scripts/check-local-table-sync.py outputs/local-table-hosts
+        run: python scripts/check/independent/check-local-table-sync.py outputs/local-table-hosts
       - name: Node disposable render view
-        run: node scripts/check-local-render-view.mjs
+        run: node scripts/check/runtime/check-local-render-view.mjs
       - name: Python disposable render view
-        run: python scripts/check-local-render-view.py
+        run: python scripts/check/independent/check-local-render-view.py
 
   local-table-text:
     if: ${{ inputs.scope == 'all' || inputs.scope == 'table-text' || inputs.scope == 'table-controls' || inputs.scope == 'table-compact' }}
@@ -394,9 +381,6 @@ jobs:
           python-version: '3.12'
       - name: Install exact engine runtime
         run: npm ci --ignore-scripts --no-audit --no-fund
-      - name: Install exact package builder
-        working-directory: probes/sites-runtime
-        run: npm ci --ignore-scripts --no-audit --no-fund
       - name: Install independent OLE reader
         run: python -m pip install olefile==0.47
       - name: Verify all table source regressions during scoped checks
@@ -412,34 +396,34 @@ jobs:
         if: ${{ inputs.scope == 'all' || inputs.scope == 'table-controls' || inputs.scope == 'table-text' }}
         run: node --test tests/test_local_nested_mixed_render.mjs
       - name: Build isolated local plugin
-        run: node scripts/package_local_plugin.mjs
+        run: node scripts/build/package_local_plugin.mjs
       - name: Verify interleaved text and multiple body roots through package
         if: ${{ inputs.scope != 'table-controls' && inputs.scope != 'table-floating' && inputs.scope != 'table-compact' }}
-        run: node scripts/check-local-table-text-flow.mjs
+        run: node scripts/check/runtime/check-local-table-text-flow.mjs
       - name: Independently verify logical order, UTF-16 styles and recovery
         if: ${{ inputs.scope != 'table-controls' && inputs.scope != 'table-floating' && inputs.scope != 'table-compact' }}
-        run: python scripts/check-local-table-text-flow.py
+        run: python scripts/check/independent/check-local-table-text-flow.py
 
       - name: Verify fields and inline host objects through package
         if: ${{ inputs.scope == 'all' || inputs.scope == 'table-controls' }}
-        run: node scripts/check-local-table-controls.mjs
+        run: node scripts/check/runtime/check-local-table-controls.mjs
       - name: Independently verify field ranges, inline objects and recovery
         if: ${{ inputs.scope == 'all' || inputs.scope == 'table-controls' }}
-        run: python scripts/check-local-table-text-flow.py outputs/local-table-controls
+        run: python scripts/check/independent/check-local-table-text-flow.py outputs/local-table-controls
 
 
       - name: Verify explicit content-fit rows through package
         if: ${{ inputs.scope == 'table-compact' }}
-        run: node scripts/check-local-table-compact.mjs
+        run: node scripts/check/runtime/check-local-table-compact.mjs
       - name: Independently verify compact rows, non-target bytes and recovery
         if: ${{ inputs.scope == 'table-compact' }}
-        run: python scripts/check-local-table-compact.py
+        run: python scripts/check/independent/check-local-table-compact.py
       - name: Verify compact rows with floating space through package
         if: ${{ inputs.scope == 'table-compact' }}
-        run: node scripts/check-local-table-floating.mjs outputs/local-table-compact-floating compact
+        run: node scripts/check/runtime/check-local-table-floating.mjs outputs/local-table-compact-floating compact
       - name: Independently verify floating state and exact recovery
         if: ${{ inputs.scope == 'table-compact' }}
-        run: python scripts/check-local-table-floating.py outputs/local-table-compact-floating
+        run: python scripts/check/independent/check-local-table-floating.py outputs/local-table-compact-floating
 
   local-table-metrics:
     if: ${{ inputs.scope == 'all' || inputs.scope == 'table-metrics' || inputs.scope == 'font-balance' }}
@@ -465,9 +449,6 @@ jobs:
           python-version: '3.12'
       - name: Install exact engine runtime
         run: npm ci --ignore-scripts --no-audit --no-fund
-      - name: Install exact package builder
-        working-directory: probes/sites-runtime
-        run: npm ci --ignore-scripts --no-audit --no-fund
       - name: Install independent OLE reader
         run: python -m pip install olefile==0.47
       - name: Verify all table source regressions during scoped checks
@@ -477,18 +458,18 @@ jobs:
         if: ${{ inputs.scope == 'all' || inputs.scope == 'font-balance' }}
         run: node --test --test-concurrency=2 tests/test_local_table_text_metrics.mjs tests/test_local_table_compact.mjs
       - name: Build isolated local plugin
-        run: node scripts/package_local_plugin.mjs
+        run: node scripts/build/package_local_plugin.mjs
       - name: Verify narrow and mixed-size Unicode text through package
-        run: node scripts/check-local-table-metrics.mjs
+        run: node scripts/check/runtime/check-local-table-metrics.mjs
       - name: Independently verify logical order, UTF-16 styles and recovery
-        run: python scripts/check-local-table-text-flow.py outputs/local-table-metrics
+        run: python scripts/check/independent/check-local-table-text-flow.py outputs/local-table-metrics
 
       # C2 eight-case package check takes about one minute locally. Keep it
       # with source metrics, outside the near-full floating job.
       - name: Verify source fonts and mixed sizes through isolated package
-        run: node scripts/check-local-nested-forest.mjs outputs/local-source-fonts fonts
+        run: node scripts/check/runtime/check-local-nested-forest.mjs outputs/local-source-fonts fonts
       - name: Independently verify source font definitions and requested styles
-        run: python scripts/check-local-source-fonts.py outputs/local-source-fonts
+        run: python scripts/check/independent/check-local-source-fonts.py outputs/local-source-fonts
 
 
   local-large-text:
@@ -518,39 +499,36 @@ jobs:
           node-version: '22'
       - name: Install exact engine runtime
         run: npm ci --ignore-scripts --no-audit --no-fund
-      - name: Install exact package builder dependencies
-        working-directory: probes/sites-runtime
-        run: npm ci --ignore-scripts --no-audit --no-fund
       - name: Verify full raw-run proofs and exact search ranges
         if: ${{ inputs.scope == 'all' }}
         run: node --test tests/test_local_style.mjs tests/test_local_find.mjs
       - name: Build isolated local execution package
-        run: node scripts/package_local_plugin.mjs
+        run: node scripts/build/package_local_plugin.mjs
       - name: Verify long text, retained mixed styles and exact recovery
         if: ${{ inputs.scope == 'all' }}
-        run: node scripts/check-local-long-text.mjs
+        run: node scripts/check/runtime/check-local-long-text.mjs
       - name: Python check local long text
         if: ${{ inputs.scope == 'all' }}
-        run: python scripts/check-local-long-text.py
+        run: python scripts/check/independent/check-local-long-text.py
       - name: Verify search pagination and same-file range edits
         if: ${{ inputs.scope == 'all' }}
-        run: node scripts/check-local-find.mjs
+        run: node scripts/check/runtime/check-local-find.mjs
       - name: Python check local text
         if: ${{ inputs.scope == 'all' }}
-        run: python scripts/check-local-text.py outputs/local-find-20261011
+        run: python scripts/check/independent/check-local-text.py outputs/local-find-20261011
       # The previous Windows large-text job used 765 of 1080 seconds.
       # General placement did not fit the floating job's 22-minute bound.
       - name: Node general placement
-        run: node scripts/check-local-placement.mjs
+        run: node scripts/check/runtime/check-local-placement.mjs
       - name: Python general placement
-        run: python scripts/check-local-placement.py
+        run: python scripts/check/independent/check-local-placement.py
 
       # Windows used 578 of 1080 seconds before adding this 140-second suite.
       # Shared engine QA only; no actual client install or login.
       - name: Verify single-host ancestor alignment save and recovery
-        run: node scripts/check-local-nested-forest.mjs outputs/local-ancestor-alignment alignment
+        run: node scripts/check/runtime/check-local-nested-forest.mjs outputs/local-ancestor-alignment alignment
       - name: Independently verify ancestor alignment raw preservation
-        run: python scripts/check-local-nested-forest.py outputs/local-ancestor-alignment
+        run: python scripts/check/independent/check-local-nested-forest.py outputs/local-ancestor-alignment
 
   worker-runtime:
     if: ${{ inputs.scope == 'all' || inputs.scope == 'font-balance' }}
@@ -569,7 +547,7 @@ jobs:
             timeout_minutes: 15
     defaults:
       run:
-        working-directory: probes/sites-runtime
+        working-directory: legacy/sites-runtime
     steps:
       - name: Check out source
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
@@ -579,6 +557,9 @@ jobs:
         uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: '22'
+      - name: Install shared runtime dependencies
+        working-directory: ${{ github.workspace }}
+        run: npm ci --ignore-scripts --no-audit --no-fund
       - name: Install exact synthetic probe dependencies
         run: npm ci --ignore-scripts --no-audit --no-fund
       - name: Verify independent byte record and container guards
@@ -638,10 +619,10 @@ jobs:
         run: npm ci --ignore-scripts --no-audit --no-fund
       - name: Build isolated local compact-table package
         working-directory: ${{ github.workspace }}
-        run: node scripts/package_local_plugin.mjs
+        run: node scripts/build/package_local_plugin.mjs
       - name: Verify content-fit rows during full checks
         working-directory: ${{ github.workspace }}
-        run: node scripts/check-local-table-compact.mjs
+        run: node scripts/check/runtime/check-local-table-compact.mjs
       - name: Independently verify compact rows and recovery
         working-directory: ${{ github.workspace }}
-        run: python scripts/check-local-table-compact.py
+        run: python scripts/check/independent/check-local-table-compact.py

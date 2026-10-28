@@ -5,10 +5,10 @@ import { HwpDocument } from '@rhwp/core';
 import { fixture } from './rhwp_fixtures.mjs';
 import { openDocument, inspectDocument } from '../src/one_hwp/rhwp_bridge.mjs';
 import { structuralEdit } from '../src/one_hwp/local_structure.mjs';
-import CFB from '../probes/sites-runtime/node_modules/cfb/cfb.js';
-import { rewriteSyntheticBody, withPageNumber } from '../probes/sites-runtime/tests/page-number-fixtures.mjs';
-import { readHwp } from '../probes/sites-runtime/guard/container.mjs';
-import { parseRecords } from '../probes/sites-runtime/guard/records.mjs';
+import CFB from 'cfb';
+import { rewriteSyntheticBody, withPageNumber } from './fixtures/page-number-fixtures.mjs';
+import { readHwp } from '../src/one_hwp/guard/container.mjs';
+import { parseRecords } from '../src/one_hwp/guard/records.mjs';
 const inspect = bytes => { const doc=openDocument(bytes); try{return inspectDocument(doc);}finally{doc.free();} };
 const target = (bytes,block) => `hwp5:${createHash('sha256').update(bytes).digest('hex')}:${Buffer.from(block.id).toString('base64url')}`;
 function edit(bytes,block,operation) {

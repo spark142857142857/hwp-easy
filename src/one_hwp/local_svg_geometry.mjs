@@ -1,5 +1,5 @@
 /** Bounded coordinate projection of trusted SVG emitted by the pinned engine. */
-import {GuardError} from '../../probes/sites-runtime/guard/records.mjs';
+import {GuardError} from './guard/records.mjs';
 export const svgInner=svg=>/^<svg\b[^>]*>([\s\S]*)<\/svg>\s*$/.exec(svg)?.[1];
 export const svgNamespace=(s,prefix)=>s.replace(/\bid="([^"]+)"/g,(_,id)=>`id="${prefix}${id}"`).replace(/url\(#([^\)]+)\)/g,(_,id)=>`url(#${prefix}${id})`).replace(/((?:xlink:)?href=")#([^"]+)"/g,(_,a,id)=>`${a}#${prefix}${id}"`);
 const get=(s,key)=>Number(new RegExp(`\\b${key}="([^"]+)"`).exec(s)?.[1]);

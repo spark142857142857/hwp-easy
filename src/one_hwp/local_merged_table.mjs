@@ -1,7 +1,7 @@
 /** Split/merge existing cells without discarding their paragraphs or opaque headers. */
-import {GuardError,parseRecords} from '../../probes/sites-runtime/guard/records.mjs';
-import {textControlBytes} from '../../probes/sites-runtime/guard/preservation.mjs';
-import {packStructuralBodyRepairs} from '../../probes/sites-runtime/engine/structural-body-repair.mjs';
+import {GuardError,parseRecords} from './guard/records.mjs';
+import {textControlBytes} from './guard/preservation.mjs';
+import {packStructuralBodyRepairs} from './engine/structural-body-repair.mjs';
 const fail=code=>{throw new GuardError(code);};
 const equal=(a,b)=>JSON.stringify(a)===JSON.stringify(b);
 const view=b=>new DataView(b.buffer,b.byteOffset,b.byteLength);

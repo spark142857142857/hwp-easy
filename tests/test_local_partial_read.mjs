@@ -6,9 +6,9 @@ import path from 'node:path';
 import {HwpDocument} from '@rhwp/core';
 import {initializeLocal,runLocal} from '../src/one_hwp/local_runner.mjs';
 import {fieldFixture,checkedExport} from './local_complex_fixtures.mjs';
-import {readHwp} from '../probes/sites-runtime/guard/container.mjs';
-import {parseRecords} from '../probes/sites-runtime/guard/records.mjs';
-import {packLocalBodyRewrite} from '../probes/sites-runtime/engine/structural-body-repair.mjs';
+import {readHwp} from '../src/one_hwp/guard/container.mjs';
+import {parseRecords} from '../src/one_hwp/guard/records.mjs';
+import {packLocalBodyRewrite} from '../src/one_hwp/engine/structural-body-repair.mjs';
 import {encodeRecords,view} from '../src/one_hwp/local_complex_records.mjs';
 initializeLocal(fs.readFileSync(new URL('../node_modules/@rhwp/core/rhwp_bg.wasm',import.meta.url)));
 function headerFixture(){

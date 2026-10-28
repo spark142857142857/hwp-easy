@@ -6,8 +6,8 @@ import os from 'node:os';
 import { fixture } from './rhwp_fixtures.mjs';
 import { initializeLocal, runLocal } from '../src/one_hwp/local_runner.mjs';
 import { readLocal, saveLocal, digest } from '../src/one_hwp/local_file.mjs';
-import { withPageNumber } from '../probes/sites-runtime/tests/page-number-fixtures.mjs';
-import {readCfb} from '../probes/sites-runtime/guard/container.mjs';
+import { withPageNumber } from './fixtures/page-number-fixtures.mjs';
+import {readCfb} from '../src/one_hwp/guard/container.mjs';
 initializeLocal(fs.readFileSync(new URL('../node_modules/@rhwp/core/rhwp_bg.wasm',import.meta.url)));
 function workspace(t) {
  const dir=fs.mkdtempSync(path.join(os.tmpdir(),'hwp-easy-local-test-'));

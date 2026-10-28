@@ -1,4 +1,4 @@
-import {assertPlannedEdit} from '../scripts/local-plan-proof.mjs';
+import {assertPlannedEdit} from '../scripts/lib/local-plan-proof.mjs';
 import test from 'node:test';import assert from 'node:assert/strict';import fs from 'node:fs';import path from 'node:path';import os from 'node:os';import {HwpDocument} from '@rhwp/core';
 import {inspectLocalComplex} from '../src/one_hwp/local_complex.mjs';import {view} from '../src/one_hwp/local_complex_records.mjs';
 import {initializeLocal,runLocal} from '../src/one_hwp/local_runner.mjs';import {transferFixture,transferProfiles,transferDestination} from './local_floating_transfer_fixtures.mjs';import {floatingAreaFixture,intentionalOverlapFixture} from './local_floating_fixtures.mjs';import {captureRenderedLayout} from '../src/one_hwp/local_rendered_layout.mjs';

@@ -1,7 +1,7 @@
 /** Selected group leaves: replace their image or rotate within the parent frame. */
 import {fail,view,equal,equalBytes} from './local_complex_records.mjs';
 import {addComplexImage} from './local_complex_picture.mjs';
-import {inflateBoundedRaw} from '../../probes/sites-runtime/guard/container.mjs';
+import {inflateBoundedRaw} from './guard/container.mjs';
 import {imageSize} from './local_image.mjs';
 const compose=(a,b)=>[a[0]*b[0]+a[1]*b[3],a[0]*b[1]+a[1]*b[4],a[0]*b[2]+a[1]*b[5]+a[2],a[3]*b[0]+a[4]*b[3],a[3]*b[1]+a[4]*b[4],a[3]*b[2]+a[4]*b[5]+a[5]];
 const invertAffine=m=>{const [a,b,x,c,d,y]=m,det=a*d-b*c;if(!Number.isFinite(det)||Math.abs(det)<1e-9)fail('GROUP_TRANSFORM_PROFILE_UNSUPPORTED');return [d/det,-b/det,(b*y-d*x)/det,-c/det,a/det,(c*x-a*y)/det];};

@@ -1,7 +1,7 @@
 /** Bounded raw inline flow. Rendered nested table origins are not native origins. */
 import {view,equal,fail} from './local_complex_records.mjs';
 import {trackPositions} from './local_complex_table.mjs';
-import {parseRecords} from '../../probes/sites-runtime/guard/records.mjs';
+import {parseRecords} from './guard/records.mjs';
 
 export const cellPads=(rs,t,c)=>(view(rs[c.start].payload).getUint32(4,true)&0x10000)?[24,26,28,30].map(at=>view(rs[c.start].payload).getUint16(at,true)/75):['Left','Right','Top','Bottom'].map(k=>t.properties['padding'+k]/75);
 export function inlineTableFlow(r){

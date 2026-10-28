@@ -1,6 +1,6 @@
 import test from 'node:test';import assert from 'node:assert/strict';import fs from 'node:fs';import os from 'node:os';import path from 'node:path';
 import {HwpDocument} from '@rhwp/core';import {initializeLocal,runLocal} from '../src/one_hwp/local_runner.mjs';import {tableTextFlowFixture} from './local_table_text_flow_fixtures.mjs';import {tableAnswer} from './local_table_reflow_fixtures.mjs';
-import {inspectLocalComplex} from '../src/one_hwp/local_complex.mjs';import {assertPlannedEdit} from '../scripts/local-plan-proof.mjs';
+import {inspectLocalComplex} from '../src/one_hwp/local_complex.mjs';import {assertPlannedEdit} from '../scripts/lib/local-plan-proof.mjs';
 import {standardBlockId} from '../src/one_hwp/local_complex_table.mjs';
 import {view} from '../src/one_hwp/local_complex_records.mjs';import {publishVerifiedPatch} from '../src/one_hwp/local_verified_patch.mjs';
 initializeLocal(fs.readFileSync(new URL('../node_modules/@rhwp/core/rhwp_bg.wasm',import.meta.url)));

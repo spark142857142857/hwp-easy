@@ -1,5 +1,5 @@
 /** Conservative single-page budget; unknown pagination never becomes a guess. */
-import {GuardError} from '../../probes/sites-runtime/guard/records.mjs';
+import {GuardError} from './guard/records.mjs';
 import {view} from './local_complex_records.mjs';
 import {tableHostParagraphHeight} from './local_table_host_controls.mjs';
 

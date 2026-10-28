@@ -2,8 +2,8 @@ import test from 'node:test';import assert from 'node:assert/strict';import fs f
 import {initializeLocal,runLocal} from '../src/one_hwp/local_runner.mjs';
 import {fieldFixture,nestedFixture} from './local_complex_fixtures.mjs';
 import {progressiveJpeg} from './local_image_fixtures.mjs';
-import {readHwp,readCfb} from '../probes/sites-runtime/guard/container.mjs';
-import {parseRecords} from '../probes/sites-runtime/guard/records.mjs';
+import {readHwp,readCfb} from '../src/one_hwp/guard/container.mjs';
+import {parseRecords} from '../src/one_hwp/guard/records.mjs';
 import {digest} from '../src/one_hwp/local_file.mjs';
 initializeLocal(fs.readFileSync(new URL('../node_modules/@rhwp/core/rhwp_bg.wasm',import.meta.url)));
 const png=Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=','base64');

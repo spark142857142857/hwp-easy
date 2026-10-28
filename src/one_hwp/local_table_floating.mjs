@@ -1,6 +1,6 @@
 /** Whole-body flow for independent, bounded floating pictures/plain boxes. */
 import {fail,view,equalBytes} from './local_complex_records.mjs';
-import {parseRecords} from '../../probes/sites-runtime/guard/records.mjs';
+import {parseRecords} from './guard/records.mjs';
 import {definitionBytes} from './local_complex_format.mjs';
 import {inlineTableHostObject} from './local_table_host_controls.mjs';
 import {tablePageSpace} from './local_table_page_space.mjs';

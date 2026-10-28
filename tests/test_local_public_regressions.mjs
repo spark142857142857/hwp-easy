@@ -1,10 +1,10 @@
-import {assertPlannedEdit} from '../scripts/local-plan-proof.mjs';
+import {assertPlannedEdit} from '../scripts/lib/local-plan-proof.mjs';
 import test from 'node:test';import assert from 'node:assert/strict';import fs from 'node:fs';import os from 'node:os';import path from 'node:path';
 import {HwpDocument} from '@rhwp/core';
 import {initializeLocal,runLocal} from '../src/one_hwp/local_runner.mjs';
 import {cellBoxFixture,placementFixture,opaqueGroupFixture} from './local_placement_fixtures.mjs';import {nestedFixture} from './local_complex_fixtures.mjs';
 import {fixture} from './rhwp_fixtures.mjs';import {checkedExport} from './local_complex_fixtures.mjs';
-import {readHwp} from '../probes/sites-runtime/guard/container.mjs';import {parseRecords} from '../probes/sites-runtime/guard/records.mjs';
+import {readHwp} from '../src/one_hwp/guard/container.mjs';import {parseRecords} from '../src/one_hwp/guard/records.mjs';
 import {view,encodeRecords} from '../src/one_hwp/local_complex_records.mjs';
 import {patchLocalPackedStreams} from '../src/one_hwp/local_container_write.mjs';
 import {deflateRawSync} from 'node:zlib';

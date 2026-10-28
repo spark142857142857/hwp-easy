@@ -2,7 +2,7 @@
 import {fail,view} from './local_complex_records.mjs';
 import {textBoxGeometry} from './local_text_box_geometry.mjs';
 import {complexParagraphProperties} from './local_complex_paragraph.mjs';
-import {parseRecords} from '../../probes/sites-runtime/guard/records.mjs';
+import {parseRecords} from './guard/records.mjs';
 import {groupGeometry} from './local_complex_group.mjs';
 
 export function tableHostFields(state,b){

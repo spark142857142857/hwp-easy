@@ -2,7 +2,7 @@ import test from 'node:test';import assert from 'node:assert/strict';
 import fs from 'node:fs';import os from 'node:os';import path from 'node:path';
 import {fixture} from './rhwp_fixtures.mjs';
 import {initializeLocal,runLocal} from '../src/one_hwp/local_runner.mjs';
-import {readHwp} from '../probes/sites-runtime/guard/container.mjs';
+import {readHwp} from '../src/one_hwp/guard/container.mjs';
 import {digest} from '../src/one_hwp/local_file.mjs';
 initializeLocal(fs.readFileSync(new URL('../node_modules/@rhwp/core/rhwp_bg.wasm',import.meta.url)));
 function workspace(t,bytes=fixture({table:false,paragraphs:['시작','둘 😀','셋','넷','끝']})){

@@ -4,4 +4,4 @@
 
 기본 설치에는 포함하지 않는다. 원격 운영 사이트, 저장 문서와 이전 버전, 인증 설정, 기존 심사 제출은 이번 소스 정리로 변경하지 않는다. 서버 종료, 문서 삭제나 심사 철회는 별도 작업이다.
 
-원격 기록은 [기존 출시 준비](https://github.com/spark142857142857/hwp-easy/blob/baad6d4513b9918bd718bb5f1f3beb5027d43edb/docs/public-plugin-release.md), 메인 패키지는 [HWP Easy](../hwp-easy/plugin.json)를 참고한다. 보관본 ZIP을 재생성할 때는 `scripts/package_public_plugin.py`를 사용한다.
+원격 기록은 [기존 출시 준비](https://github.com/spark142857142857/hwp-easy/blob/baad6d4513b9918bd718bb5f1f3beb5027d43edb/docs/public-plugin-release.md), 메인 패키지는 [HWP Easy](../hwp-easy/plugin.json)를 참고한다. 보관본 ZIP을 재생성할 때는 `scripts/build/package_public_plugin.py`를 사용한다.

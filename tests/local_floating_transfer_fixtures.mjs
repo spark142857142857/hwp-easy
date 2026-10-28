@@ -9,8 +9,8 @@ import {inspectLocalComplex} from '../src/one_hwp/local_complex.mjs';
 import {reanchorFloating} from '../src/one_hwp/local_floating_anchor.mjs';
 import {publishVerifiedSections} from '../src/one_hwp/local_verified_patch.mjs';
 import {patchLocalPackedStreams} from '../src/one_hwp/local_container_write.mjs';
-import {readHwp} from '../probes/sites-runtime/guard/container.mjs';
-import {parseRecords} from '../probes/sites-runtime/guard/records.mjs';
+import {readHwp} from '../src/one_hwp/guard/container.mjs';
+import {parseRecords} from '../src/one_hwp/guard/records.mjs';
 import {view,encodeRecords,spliceRawParagraph} from '../src/one_hwp/local_complex_records.mjs';
 
 export function transferFixture({bodySource=false,sections=false,ordinary=false,cachedBodySource=false,emptyDestination=false,destination='nested'}={}){

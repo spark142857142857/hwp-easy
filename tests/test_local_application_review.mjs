@@ -10,13 +10,13 @@ import {digest} from '../src/one_hwp/local_file.mjs';
 import {view} from '../src/one_hwp/local_complex_records.mjs';
 import {f4GroupFixture,f4Inspect,f4Target,f4Patch} from './local_f4_fixtures.mjs';
 import {fieldFixture} from './local_complex_fixtures.mjs';
-import {checkApplication} from '../scripts/check-local-application.mjs';
+import {checkApplication} from '../scripts/check/runtime/check-local-application.mjs';
 import {applicationFixture} from './local_application_fixture.mjs';
 import {checkedExport} from './local_complex_fixtures.mjs';
 import {prepareSetupFontRender} from '../src/one_hwp/local_setup_font_render.mjs';
 import {openLocalRenderView} from '../src/one_hwp/local_render_view.mjs';
-import {readHwp} from '../probes/sites-runtime/guard/container.mjs';
-import {parseRecords} from '../probes/sites-runtime/guard/records.mjs';
+import {readHwp} from '../src/one_hwp/guard/container.mjs';
+import {parseRecords} from '../src/one_hwp/guard/records.mjs';
 initializeLocal(fs.readFileSync(new URL('../node_modules/@rhwp/core/rhwp_bg.wasm',import.meta.url)));
 
 function workspace(t){const dir=fs.mkdtempSync(path.join(os.tmpdir(),'hwp-application-review-'));t.after(()=>{assert.equal(path.dirname(dir),os.tmpdir());assert.ok(path.basename(dir).startsWith('hwp-application-review-'));fs.rmSync(dir,{recursive:true,force:true});});return dir;}

@@ -1,6 +1,6 @@
 /** Structurally addressed drawing components and their text lists. */
 import {createHash} from 'node:crypto';
-import {GuardError} from '../../probes/sites-runtime/guard/records.mjs';
+import {GuardError} from './guard/records.mjs';
 import {view,textTokens,rawShapes,encodeRecords,fail} from './local_complex_records.mjs';
 import {groupGeometry,groupFrame} from './local_complex_group.mjs';
 import {objectFlow,validObjectHeader} from './local_flow_records.mjs';

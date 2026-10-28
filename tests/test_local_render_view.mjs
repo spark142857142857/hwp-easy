@@ -3,7 +3,7 @@ import {HwpDocument} from '@rhwp/core';import {initializeLocal,runLocal} from '.
 import {renderViewFixture,renderViewProfiles} from './local_render_view_fixtures.mjs';import {floatingFixture} from './local_reflow_fixtures.mjs';
 import {captureRenderedLayout,analyzeRenderedLayout,intersects} from '../src/one_hwp/local_rendered_layout.mjs';
 import {renderLocalPreview,adaptEmptyFloatingAnchors} from '../src/one_hwp/local_render_view.mjs';
-import {inspectLocalComplex} from '../src/one_hwp/local_complex.mjs';import {view} from '../src/one_hwp/local_complex_records.mjs';import {publishVerifiedPatch} from '../src/one_hwp/local_verified_patch.mjs';import {digest} from '../src/one_hwp/local_file.mjs';import {assertPlannedEdit} from '../scripts/local-plan-proof.mjs';
+import {inspectLocalComplex} from '../src/one_hwp/local_complex.mjs';import {view} from '../src/one_hwp/local_complex_records.mjs';import {publishVerifiedPatch} from '../src/one_hwp/local_verified_patch.mjs';import {digest} from '../src/one_hwp/local_file.mjs';import {assertPlannedEdit} from '../scripts/lib/local-plan-proof.mjs';
 initializeLocal(fs.readFileSync(new URL('../node_modules/@rhwp/core/rhwp_bg.wasm',import.meta.url)));
 for(const profile of renderViewProfiles)test(`private render view honors empty floating anchor heights: ${profile.name}`,()=>{
  const bytes=renderViewFixture(profile),before=Buffer.from(bytes),raw=new HwpDocument(bytes);try{const first=JSON.parse(raw.getPageControlLayout(0)).controls.filter(c=>['image','shape'].includes(c.type));if(first.length>1)assert.ok(intersects(first[0],first[1]));}finally{raw.free();}

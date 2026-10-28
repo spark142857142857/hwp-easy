@@ -1,6 +1,6 @@
 /** Plain paragraph boundaries that retain mixed character runs. */
-import {GuardError} from '../../probes/sites-runtime/guard/records.mjs';
-import {canonicalRecord,textControlBytes} from '../../probes/sites-runtime/guard/preservation.mjs';
+import {GuardError} from './guard/records.mjs';
+import {canonicalRecord,textControlBytes} from './guard/preservation.mjs';
 import {verifyPlainCharacterRuns} from './local_text.mjs';
 import {MAX_MIXED_STYLE_RUNS} from './mixed_style.mjs';
 import {modelCharacterIds,verifyModelCharacterIds} from './local_character_runs.mjs';

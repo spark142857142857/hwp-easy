@@ -3,7 +3,7 @@ import fs from 'node:fs';import path from 'node:path';import os from 'node:os';
 import {fixture} from './rhwp_fixtures.mjs';
 import {initializeLocal,runLocal} from '../src/one_hwp/local_runner.mjs';
 import {digest} from '../src/one_hwp/local_file.mjs';
-import {readHwp} from '../probes/sites-runtime/guard/container.mjs';
+import {readHwp} from '../src/one_hwp/guard/container.mjs';
 initializeLocal(fs.readFileSync(new URL('../node_modules/@rhwp/core/rhwp_bg.wasm',import.meta.url)));
 function workspace(t,bytes=fixture()){
  const dir=fs.mkdtempSync(path.join(os.tmpdir(),'hwp-easy-batch-'));

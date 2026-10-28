@@ -1,7 +1,7 @@
 /** Verified in-memory operation sequence; the caller publishes only the final bytes. */
-import {GuardError,parseRecords} from '../../probes/sites-runtime/guard/records.mjs';
-import {readHwp} from '../../probes/sites-runtime/guard/container.mjs';
-import {createDocumentEngine} from '../../probes/sites-runtime/engine/document.mjs';
+import {GuardError,parseRecords} from './guard/records.mjs';
+import {readHwp} from './guard/container.mjs';
+import {createDocumentEngine} from './engine/document.mjs';
 import {digest} from './local_file.mjs';
 import {structuralEdit} from './local_structure.mjs';
 import {pictureEdit} from './local_picture.mjs';

@@ -1,7 +1,7 @@
 /** ClickHere wrappers: borrow one engine-generated control, retain the raw host. */
-import {readHwp} from '../../probes/sites-runtime/guard/container.mjs';
+import {readHwp} from './guard/container.mjs';
 import {HwpDocument as TemplateDocument} from '@rhwp/core';
-import {parseRecords} from '../../probes/sites-runtime/guard/records.mjs';
+import {parseRecords} from './guard/records.mjs';
 import {fail,view,equal,textTokens} from './local_complex_records.mjs';
 const controlId=r=>Buffer.from(r.payload.subarray(0,4)).toString('ascii');
 const anchor=code=>Buffer.from([code,0,107,108,99,37,0,0,0,0,0,0,0,0,code,0]);

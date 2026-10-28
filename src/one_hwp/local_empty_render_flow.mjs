@@ -1,6 +1,6 @@
 /** Materialize native blank-paragraph advances only in a disposable instance. */
-import {readHwp} from '../../probes/sites-runtime/guard/container.mjs';
-import {parseRecords} from '../../probes/sites-runtime/guard/records.mjs';
+import {readHwp} from './guard/container.mjs';
+import {parseRecords} from './guard/records.mjs';
 import {view,fail} from './local_complex_records.mjs';
 
 export function adaptEmptyParagraphFlow(document,bytes){

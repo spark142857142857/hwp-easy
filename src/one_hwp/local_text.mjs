@@ -1,6 +1,6 @@
 /** Range insertion/deletion with explicit preservation of every retained style. */
-import {GuardError} from '../../probes/sites-runtime/guard/records.mjs';
-import {canonicalRecord,textControlBytes} from '../../probes/sites-runtime/guard/preservation.mjs';
+import {GuardError} from './guard/records.mjs';
+import {canonicalRecord,textControlBytes} from './guard/preservation.mjs';
 import {modelCharacterIds,verifyModelCharacterIds} from './local_character_runs.mjs';
 const fail=code=>{throw new GuardError(code);};
 const equal=(a,b)=>JSON.stringify(a)===JSON.stringify(b);

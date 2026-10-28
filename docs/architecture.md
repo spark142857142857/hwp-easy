@@ -26,14 +26,15 @@ flowchart LR
 | --- | --- |
 | HWP 엔진 | `@rhwp/core` 0.8.6. HWP 모델과 읽기 및 쓰기 |
 | 로컬 실행기 | `src/one_hwp/local_runner.mjs`, `local_*.mjs`. 읽기, 계획, 편집과 복구 |
-| 독립 보존 검사 | `probes/sites-runtime/guard/`. 컨테이너와 원시 레코드 및 비대상 비교 |
+| 공통 엔진 계약 | `src/one_hwp/engine/`. 대상 식별과 편집 및 보존 계약 |
+| 독립 보존 검사 | `src/one_hwp/guard/`. 컨테이너와 원시 레코드 및 비대상 비교 |
 | 표와 개체 편집 | `local_complex_*.mjs`, `local_object_*.mjs`, `local_reflow.mjs`와 관련 모듈 |
 | 미리보기 | `local_render_view.mjs`와 관련 뷰. 원본과 분리된 표시 보정 |
 | 파일 저장 | `local_file.mjs`. 충돌 검사, 이전 바이트 보관과 같은 파일 저장 |
 | 공통 지침 | `plugins/hwp-easy/skills/edit-local-hwp/`. 스킬과 요청 계약 |
 | 설치 도우미 | `packages/hwp-easy/`. 앱 선택, 검증 설치와 업데이트 및 복귀 |
 
-`probes/sites-runtime/guard`와 일부 빌드 도구는 이전 원격 실험의 경로를 재사용하는 공통 코드입니다. 현재 로컬 실행과 검사에도 필요합니다. 이 경로를 번들에 포함하는 것이 서버 연결을 뜻하지 않습니다.
+`src/one_hwp/guard/`와 `engine/`는 로컬과 이전 원격 구현이 공유하는 코드입니다. 현재 실행기와 빌드는 `legacy/`를 참조하지 않습니다. 의존성은 루트의 잠금 파일로 관리하고 빌드에서 서버 코드가 섞이지 않는지 검사합니다. 개발 도구는 [scripts 안내](../scripts/README.md), 이전 서버는 [legacy 안내](../legacy/README.md)를 따릅니다.
 
 ## 미리보기의 경계
 

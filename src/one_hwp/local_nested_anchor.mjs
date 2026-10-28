@@ -3,7 +3,7 @@ import {view,equal,fail} from './local_complex_records.mjs';
 import {locateCell} from './local_cell_frame.mjs';
 import {contains} from './local_rendered_layout.mjs';
 import {trackPositions} from './local_complex_table.mjs';
-import {parseRecords} from '../../probes/sites-runtime/guard/records.mjs';
+import {parseRecords} from './guard/records.mjs';
 import {needsComposedCellFlow,composeCellTables,cellPads} from './local_inline_cell_flow.mjs';
 
 const plain=p=>p&&['left','justify'].includes(p.alignment)&&['marginLeft','marginRight','indent','spacingBefore','spacingAfter'].every(k=>p[k]===0)&&p.lineSpacingType===0&&p.lineSpacing>=100&&!p.pageBreakBefore;

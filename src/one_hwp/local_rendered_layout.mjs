@@ -1,8 +1,8 @@
 import {createNaturalTextMeasurer} from './local_font_measure.mjs';
 /** Bounded WASM observations. Pagination disagreement is not native clipping proof. */
 import {fail} from './local_complex_records.mjs';
-import {readHwp} from '../../probes/sites-runtime/guard/container.mjs';
-import {parseRecords} from '../../probes/sites-runtime/guard/records.mjs';
+import {readHwp} from './guard/container.mjs';
+import {parseRecords} from './guard/records.mjs';
 import {view} from './local_complex_records.mjs';
 import {openLocalRenderView} from './local_render_view.mjs';
 export const intersects=(a,b,gap=0)=>Math.min(a.x+a.w+gap,b.x+b.w)-Math.max(a.x-gap,b.x)>.5&&Math.min(a.y+a.h+gap,b.y+b.h)-Math.max(a.y-gap,b.y)>.5;

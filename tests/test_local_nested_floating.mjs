@@ -1,7 +1,7 @@
-import {assertPlannedEdit} from '../scripts/local-plan-proof.mjs';
+import {assertPlannedEdit} from '../scripts/lib/local-plan-proof.mjs';
 import test from 'node:test';import assert from 'node:assert/strict';import fs from 'node:fs';import path from 'node:path';import os from 'node:os';
 import {HwpDocument} from '@rhwp/core';import {initializeLocal,runLocal} from '../src/one_hwp/local_runner.mjs';import {nestedFloatingFixture,nestedFloatingProfiles,extendedNestedProfiles,alignedAncestorProfiles,siblingNestedFloatingFixture,ambiguousNestedFloatingFixture} from './local_nested_floating_fixtures.mjs';
-import {readHwp} from '../probes/sites-runtime/guard/container.mjs';import {parseRecords} from '../probes/sites-runtime/guard/records.mjs';import {inspectLocalComplex} from '../src/one_hwp/local_complex.mjs';import {view,encodeRecords} from '../src/one_hwp/local_complex_records.mjs';import {packLocalBodyRewrite} from '../src/one_hwp/local_body_write.mjs';
+import {readHwp} from '../src/one_hwp/guard/container.mjs';import {parseRecords} from '../src/one_hwp/guard/records.mjs';import {inspectLocalComplex} from '../src/one_hwp/local_complex.mjs';import {view,encodeRecords} from '../src/one_hwp/local_complex_records.mjs';import {packLocalBodyRewrite} from '../src/one_hwp/local_body_write.mjs';
 initializeLocal(fs.readFileSync(new URL('../node_modules/@rhwp/core/rhwp_bg.wasm',import.meta.url)));
 const read=source=>runLocal({action:'read',source,max_chars:64000,max_blocks:128});
 function workspace(t,bytes){const dir=fs.mkdtempSync(path.join(os.tmpdir(),'hwp-nested-floating-'));t.after(()=>{assert.equal(path.dirname(dir),os.tmpdir());assert.ok(path.basename(dir).startsWith('hwp-nested-floating-'));fs.rmSync(dir,{recursive:true,force:true});});const source=path.join(dir,'중첩 셀.hwp');fs.writeFileSync(source,bytes);return {source,bytes};}

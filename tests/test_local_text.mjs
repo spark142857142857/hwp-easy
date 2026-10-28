@@ -7,7 +7,7 @@ import {createEngineApi} from '../src/one_hwp/rhwp_api.mjs';
 import {structuralEdit} from '../src/one_hwp/local_structure.mjs';
 import {runLocal} from '../src/one_hwp/local_runner.mjs';
 import {digest} from '../src/one_hwp/local_file.mjs';
-import {rewriteSyntheticBody} from '../probes/sites-runtime/tests/page-number-fixtures.mjs';
+import {rewriteSyntheticBody} from './fixtures/page-number-fixtures.mjs';
 const api=createEngineApi(HwpDocument,{mixedStyleSameLength:true});
 const inspect=bytes=>{const d=api.openDocument(bytes);try{return api.inspectDocument(d,bytes);}finally{d.free();}};
 const edit=(bytes,b,op)=>structuralEdit(HwpDocument,bytes,digest(bytes),{target_id:`hwp5:${digest(bytes)}:${Buffer.from(b.id).toString('base64url')}`,expected_old:b.text,...op});

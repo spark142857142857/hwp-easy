@@ -1,5 +1,5 @@
 /** Move only a newly inserted floating picture into the explicitly selected cell. */
-import {GuardError,parseRecords} from '../../probes/sites-runtime/guard/records.mjs';
+import {GuardError,parseRecords} from './guard/records.mjs';
 import {packLocalBodyRewrite} from './local_body_write.mjs';
 const fail=code=>{throw new GuardError(code);},view=b=>new DataView(b.buffer,b.byteOffset,b.byteLength);
 function encode(records){const parts=records.map(r=>{const wide=r.payload.length>=4095,b=new Uint8Array((wide?8:4)+r.payload.length);view(b).setUint32(0,r.tag|(r.level<<10)|((wide?4095:r.payload.length)<<20),true);if(wide)view(b).setUint32(4,r.payload.length,true);b.set(r.payload,wide?8:4);return b;});const b=new Uint8Array(parts.reduce((n,p)=>n+p.length,0));let offset=0;for(const p of parts){b.set(p,offset);offset+=p.length;}return b;}

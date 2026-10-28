@@ -1,6 +1,6 @@
 /** First-row nested cells with explicit minimum room; synthetic HWP only. */
 import {HwpDocument} from '@rhwp/core';
-import {parseRecords} from '../probes/sites-runtime/guard/records.mjs';
+import {parseRecords} from '../src/one_hwp/guard/records.mjs';
 import {publishVerifiedPatch} from '../src/one_hwp/local_verified_patch.mjs';
 import {nestedFixture} from './local_complex_fixtures.mjs';
 import {cellBoxFixture} from './local_placement_fixtures.mjs';

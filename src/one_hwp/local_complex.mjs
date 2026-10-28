@@ -1,13 +1,13 @@
 /** Local-only fields, recursive table text and grouped-picture preservation. */
-import {readHwp,inflateBoundedRaw} from '../../probes/sites-runtime/guard/container.mjs';
+import {readHwp,inflateBoundedRaw} from './guard/container.mjs';
 import {inspectTextBoxes,publicTextBoxes} from './local_text_boxes.mjs';
 import {inspectDrawingTree,publicDrawingGroups} from './local_drawing_tree.mjs';
 import {fieldKinds,inspectParagraphFields,ambiguousFieldIds} from './local_field_records.mjs';
 import {sectionPages} from './local_page_state.mjs';
 import {objectFlow} from './local_flow_records.mjs';
 import {inspectOpaqueDrawings,publicOpaqueDrawings} from './local_opaque_drawings.mjs';
-import {parseRecords,GuardError} from '../../probes/sites-runtime/guard/records.mjs';
-import {enforceRawTextBudget} from '../../probes/sites-runtime/guard/text-budget.mjs';
+import {parseRecords,GuardError} from './guard/records.mjs';
+import {enforceRawTextBudget} from './guard/text-budget.mjs';
 import {imageSize} from './local_image.mjs';
 import {fail,view,equal,equalBytes,textTokens,rawShapes,spliceRawParagraph,publishRawBody,verifyRawOutput} from './local_complex_records.mjs';
 import {prepareComplexCharacterFormat,publishComplexCharacterFormat,verifyComplexCharacterFormat} from './local_complex_format.mjs';

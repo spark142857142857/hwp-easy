@@ -1,7 +1,7 @@
 /** Rebuild local CFB allocations with exact packed-stream preservation proofs. */
-import CFB from '../../probes/sites-runtime/node_modules/cfb/cfb.js';
-import {readCfb} from '../../probes/sites-runtime/guard/container.mjs';
-import {GuardError} from '../../probes/sites-runtime/guard/records.mjs';
+import CFB from 'cfb';
+import {readCfb} from './guard/container.mjs';
+import {GuardError} from './guard/records.mjs';
 const fail=code=>{throw new GuardError(code);},equalBytes=(a,b)=>a.length===b.length&&a.every((v,i)=>v===b[i]);
 
 function placeholder(tree){const magic='\u0001Sh33tJ5';if(!CFB.find(tree,'/'+magic)){tree.FullPaths.push(tree.FullPaths[0]+magic);tree.FileIndex.push({name:magic,type:0});}}

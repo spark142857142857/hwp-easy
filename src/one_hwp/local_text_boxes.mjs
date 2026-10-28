@@ -1,6 +1,6 @@
 /** Bounded body rectangle text lists. Unknown controls remain opaque. */
 import {createHash} from 'node:crypto';
-import {GuardError} from '../../probes/sites-runtime/guard/records.mjs';
+import {GuardError} from './guard/records.mjs';
 import {fail,view,textTokens,rawShapes,encodeRecords,spliceRawParagraph,equal} from './local_complex_records.mjs';
 import {objectFlow,validObjectHeader} from './local_flow_records.mjs';
 import {publishVerifiedPatch} from './local_verified_patch.mjs';

@@ -2,8 +2,8 @@
  * The pinned renderer derives the first line's advance from the setup run.
  * Native HWP instead uses the visible text. Authoring bytes are never changed.
  */
-import {readHwp} from '../../probes/sites-runtime/guard/container.mjs';
-import {parseRecords} from '../../probes/sites-runtime/guard/records.mjs';
+import {readHwp} from './guard/container.mjs';
+import {parseRecords} from './guard/records.mjs';
 import {view,textTokens,encodeRecords} from './local_complex_records.mjs';
 import {packLocalBodyRewrite} from './local_body_write.mjs';
 

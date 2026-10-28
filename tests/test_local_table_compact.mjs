@@ -1,7 +1,7 @@
 import test from 'node:test';import assert from 'node:assert/strict';import fs from 'node:fs';import os from 'node:os';import path from 'node:path';
 import {HwpDocument} from '@rhwp/core';import {initializeLocal,runLocal} from '../src/one_hwp/local_runner.mjs';
 import {compactProfiles,compactFixture} from './local_table_compact_fixtures.mjs';import {tableAnswer} from './local_table_reflow_fixtures.mjs';import {tableFloatingFixture} from './local_table_floating_fixtures.mjs';
-import {inspectLocalComplex} from '../src/one_hwp/local_complex.mjs';import {trackPositions} from '../src/one_hwp/local_complex_table.mjs';import {contentFitRows} from '../src/one_hwp/local_table_row_heights.mjs';import {assertPlannedEdit} from '../scripts/local-plan-proof.mjs';
+import {inspectLocalComplex} from '../src/one_hwp/local_complex.mjs';import {trackPositions} from '../src/one_hwp/local_complex_table.mjs';import {contentFitRows} from '../src/one_hwp/local_table_row_heights.mjs';import {assertPlannedEdit} from '../scripts/lib/local-plan-proof.mjs';
 initializeLocal(fs.readFileSync(new URL('../node_modules/@rhwp/core/rhwp_bg.wasm',import.meta.url)));
 const read=source=>runLocal({action:'read',source,max_chars:64000,max_blocks:128}),flow=s=>({type:'reflow_table',...Object.fromEntries(['target_id','expected_old','expected_tables'].map(k=>[k,s.table_reflow[0][k]]))});
 function workspace(t,bytes){const dir=fs.mkdtempSync(path.join(os.tmpdir(),'hwp-table-compact-'));t.after(()=>{assert.equal(path.dirname(dir),os.tmpdir());assert.ok(path.basename(dir).startsWith('hwp-table-compact-'));fs.rmSync(dir,{recursive:true,force:true});});const source=path.join(dir,'selected.hwp');fs.writeFileSync(source,bytes);return source;}

@@ -8,7 +8,7 @@ import {prepareComplexBoundary} from '../src/one_hwp/local_complex_boundary.mjs'
 import {reanchorFloating} from '../src/one_hwp/local_floating_anchor.mjs';
 import {publishVerifiedPatch} from '../src/one_hwp/local_verified_patch.mjs';
 import {invalidateSectionLayout} from '../src/one_hwp/local_layout_cache.mjs';
-import {parseRecords} from '../probes/sites-runtime/guard/records.mjs';
+import {parseRecords} from '../src/one_hwp/guard/records.mjs';
 
 export const inlineCellProfiles=[
  {duplicate:true,selected:0},{duplicate:true,selected:1},{duplicate:true,selected:1,ancestorAlignment:[1]},{duplicate:true,selected:1,ancestorAlignment:[2]},

@@ -1,6 +1,6 @@
 /** Bounded PNG and baseline/progressive JPEG envelopes; exact bytes stay embedded. */
 import path from 'node:path';
-import {GuardError} from '../../probes/sites-runtime/guard/records.mjs';
+import {GuardError} from './guard/records.mjs';
 const fail=code=>{throw new GuardError(code);};
 export function imageSize(bytes,source) {
  const b=Buffer.from(bytes.buffer,bytes.byteOffset,bytes.byteLength);let width,height,extension;

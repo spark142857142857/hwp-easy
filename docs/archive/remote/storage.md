@@ -8,7 +8,7 @@
 
 2026년 10월 7일 기준, 내부 D1/R2 저장 서비스와 인증한 사용자별 개발용 문서 도구, 바이너리 전송 경로를 구현했다. 업로드는 기본 비활성화이며 사용자가 요청한 소유자 전용 비공개 배포에서만 파일 가져오기와 브라우저 업로드를 열었다. 실제 검증에는 합성 HWP만 사용했고 일반 개인 문서나 운영 편집 지원을 선언하지 않는다.
 
-로컬 실제 workerd에서 저장, 재시작, 복구와 합성 파일 왕복을, 한 사용자의 실제 Desktop, Cloud, 브라우저에서 제한된 문서 흐름을 검증했다. [파일 전달 계약](documents.md), [원격 실행 기록](../../../probes/sites-runtime/README.md), [MVP 진행 상태](https://github.com/spark142857142857/hwp-easy/blob/baad6d4513b9918bd718bb5f1f3beb5027d43edb/docs/mvp-status.md)에 검증 범위를 구분한다.
+로컬 실제 workerd에서 저장, 재시작, 복구와 합성 파일 왕복을, 한 사용자의 실제 Desktop, Cloud, 브라우저에서 제한된 문서 흐름을 검증했다. [파일 전달 계약](documents.md), [원격 실행 기록](../../../legacy/sites-runtime/README.md), [MVP 진행 상태](https://github.com/spark142857142857/hwp-easy/blob/baad6d4513b9918bd718bb5f1f3beb5027d43edb/docs/mvp-status.md)에 검증 범위를 구분한다.
 
 ## 문서와 버전
 
@@ -64,7 +64,7 @@ R2 읽기와 해시 확인이 끝난 뒤에는 선택 버전이 여전히 해당
 
 실제 OAuth, 운영 장애, 미게시 바이트 GC 인증은 아니다. **10월 9일 운영 버전 50에 반영했다.** 같은 계정의 합성 문서에서 수정, 복구 각각의 정확 재시도는 같은 버전을 반환했고 원본, 수정, 복구 세 버전을 유지했다. 실제 운영 실패 주입이나 삭제 실행은 하지 않았다.
 
-`probes/sites-runtime`에서 `npm test`를 실행한다. 실제 workerd의 D1/R2를 임시 디렉터리에 저장한 뒤 runtime을 폐기, 재생성해 현재, 이전 버전과 재시도 결과를 확인한다. DB 응답 유실, 영수증 조회 실패, R2 저장 실패는 명시적으로 주입한 실패이며 실제 장애나 사용자 인증 시험으로 표시하지 않는다. 실제 저장 바이트를 손상시키는 실패 검사도 포함한다.
+`legacy/sites-runtime`에서 `npm test`를 실행한다. 실제 workerd의 D1/R2를 임시 디렉터리에 저장한 뒤 runtime을 폐기, 재생성해 현재, 이전 버전과 재시도 결과를 확인한다. DB 응답 유실, 영수증 조회 실패, R2 저장 실패는 명시적으로 주입한 실패이며 실제 장애나 사용자 인증 시험으로 표시하지 않는다. 실제 저장 바이트를 손상시키는 실패 검사도 포함한다.
 
 고정 `/storage-probe`는 소유자 전용 Site 접근 경계에서만 사용할 개발용 POST 진단이다. 입력 본문과 query를 받지 않고 개인 문서를 열지 않는다. 합성 문서의 저장, 조회, 편집, 복구, 동시 저장, 재시도, 서로 다른 합성 소유자의 접근 거부를 시험한 뒤 생성한 데이터만 정리한다. 기존 읽기 전용 MCP 도구에 저장 작업을 숨겨 넣지 않는다.
 
@@ -93,7 +93,7 @@ R2 읽기와 해시 확인이 끝난 뒤에는 선택 버전이 여전히 해당
 
 ## 독립 로컬 저장소의 합성 복구 시험
 
-2026년 10월 9일 [check-recovery.mjs](../../../probes/sites-runtime/scripts/check-recovery.mjs)를 추가했다. 실제 로컬 workerd의 D1/R2에서 모의 두 소유자의 합성 문서 2개, 불변 버전 4개와 완료된 삭제 영수증 1개를 준비한다.
+2026년 10월 9일 [check-recovery.mjs](../../../legacy/sites-runtime/scripts/check-recovery.mjs)를 추가했다. 실제 로컬 workerd의 D1/R2에서 모의 두 소유자의 합성 문서 2개, 불변 버전 4개와 완료된 삭제 영수증 1개를 준비한다.
 
 쓰기가 끝난 시험 환경에서 D1의 네 테이블을 한 batch로 읽고, 기록된 버전의 정확한 R2 키, 크기, SHA-256을 확인해 복구 파일에 함께 보관한다. 원래 runtime을 닫고 원본 바이트 Map을 비운 뒤 파일을 다시 열어 별도 새 저장 위치에 합성 데이터만 복사한다. 복구 runtime을 다시 시작해 모든 HWP의 재열기와 이전/현재 버전, revision, 표시 이름, 이름 변경 번호를 확인한다.
 
@@ -101,7 +101,7 @@ R2 읽기와 해시 확인이 끝난 뒤에는 선택 버전이 여전히 해당
 
 최초 생성, 편집, 복구, 이름 변경의 정확한 재시도와 오래된 버전 저장 차단도 복구 후 확인한다. 완료된 삭제 문서의 보기, 다운로드, 과거 생성 요청 재시도는 계속 거부한다. 같은 이메일, 같은 요청 ID를 가진 모의 소유자 둘을 분리하고 compiled Worker의 다운로드, 미리보기, 타인 접근 거부도 검사한다. 실제 OAuth 사용자 격리나 플랫폼 백업 복원의 성공으로 간주하지 않는다. 임의 개인 파일이나 운영 자격을 받지 않으며 검사를 마친 자기 임시 저장소만 정리한다.
 
-[recovery-audit.mjs](../../../probes/sites-runtime/scripts/recovery-audit.mjs)는 별도의 읽기 전용 개발 helper다. 스키마, 소유자, 현재 포인터, 버전 수, revision, 요청 영수증, 삭제 영수증의 연결과 모든 기록된 HWP 바이트의 크기, 해시를 검사한다. 잘못된 키, 메타데이터는 바이트 조회 전에 거부하고, 누락, 손상, 조회 실패는 고정 오류로 반환한다. 결과에는 수량과 검증 경계만 넣고 이름, 본문, 소유자, 객체 키, 예외 원문을 출력하지 않는다. 복원은 수행하지 않으며 `restored`는 항상 거짓이다. 배포 Worker, HTTP, MCP에는 연결하지 않았다.
+[recovery-audit.mjs](../../../legacy/sites-runtime/scripts/recovery-audit.mjs)는 별도의 읽기 전용 개발 helper다. 스키마, 소유자, 현재 포인터, 버전 수, revision, 요청 영수증, 삭제 영수증의 연결과 모든 기록된 HWP 바이트의 크기, 해시를 검사한다. 잘못된 키, 메타데이터는 바이트 조회 전에 거부하고, 누락, 손상, 조회 실패는 고정 오류로 반환한다. 결과에는 수량과 검증 경계만 넣고 이름, 본문, 소유자, 객체 키, 예외 원문을 출력하지 않는다. 복원은 수행하지 않으며 `restored`는 항상 거짓이다. 배포 Worker, HTTP, MCP에는 연결하지 않았다.
 
 삭제 원장은 복구 지점과 독립적으로 확보한 최신 전체 기록을 필수 인수로 받는다. 나중에 삭제된 문서가 예전 자료에 남거나 삭제 영수증이 다르면 `RECOVERY_DELETION_LEDGER_MISMATCH`, 삭제가 진행 중이면 `RECOVERY_DELETION_PENDING`으로 거부한다. 완료된 삭제에서도 버전 수만큼 과거 요청 영수증과 마지막 현재 버전의 요청 기록이 남아 있어야 한다.
 
@@ -109,7 +109,7 @@ R2 읽기와 해시 확인이 끝난 뒤에는 선택 버전이 여전히 해당
 
 helper의 처리 예산은 테이블당 10,000행, 메타데이터 문자열 합계 2,097,152 UTF-16 단위, 버전당 4 MiB와 기록된 바이트 합계 64 MiB다. 이는 오프라인 검사 예산이며 운영 문서의 본문 한도, 보관 정책 변경이 아니다. 메타데이터는 복사 전에 한도를 검사한다. 미게시 R2 객체는 이 복구 집합에서 제외하며 전체 객체 백업, 정리를 인증하지 않는다.
 
-선택적인 `listBlobPage` 인수로 [storage-inventory-audit.mjs](../../../probes/sites-runtime/scripts/storage-inventory-audit.mjs)의 읽기 전용 객체 목록 점검을 함께 실행할 수 있다. 기록된 모든 버전의 스키마, 소유자, 키, 바이트 검사를 통과한 뒤 정규화된 전체 객체 목록을 페이지별로 받아 기록된 키와 크기를 대조한다.
+선택적인 `listBlobPage` 인수로 [storage-inventory-audit.mjs](../../../legacy/sites-runtime/scripts/storage-inventory-audit.mjs)의 읽기 전용 객체 목록 점검을 함께 실행할 수 있다. 기록된 모든 버전의 스키마, 소유자, 키, 바이트 검사를 통과한 뒤 정규화된 전체 객체 목록을 페이지별로 받아 기록된 키와 크기를 대조한다.
 
 기록에 연결되지 않은 HWP 형태의 객체와 그 외 객체는 개수, 바이트 합계만 보고한다. 기록된 객체 누락, 크기 불일치, 중복 키, 반복 cursor, 진행 없는 페이지, 조회 실패는 고정 오류로 거부하며 일부 목록을 성공으로 반환하지 않는다. 반환값에 본문, 이름, 소유자, 키, cursor, 예외 원문을 넣지 않는다.
 
@@ -119,7 +119,7 @@ helper의 처리 예산은 테이블당 10,000행, 메타데이터 문자열 합
 
 `atomic_snapshot_verified`, `listing_completeness_independently_verified`, `unreferenced_objects_deletable`, `cleaned`, `production_GC_verified`는 항상 거짓이다. 운영 점검에는 권한 있는 운영자가 확보한 일관된 전체 메타데이터, 객체 목록과 별도의 저장, 삭제 경합 확인이 필요하며 운영 GC 완료로 간주하지 않는다.
 
-개발자용 실행 위치는 `probes/sites-runtime`이다.
+개발자용 실행 위치는 `legacy/sites-runtime`이다.
 
 ```sh
 npm run test:recovery
@@ -129,7 +129,7 @@ npm run test:recovery
 
 ## 오프라인 복구 파일과 공개 검증 문서의 로컬 복원
 
-[recovery-bundle.mjs](../../../probes/sites-runtime/scripts/recovery-bundle.mjs)는 검사한 네 테이블과 기록된 불변 HWP 바이트를 단일 `.hwpbak` 파일로 묶고 다시 읽는 개발자용 라이브러리다. 기존 메타데이터 연결, 삭제 원장, 크기, 해시 검사를 통과한 자료만 반환한다. 메타데이터는 비동기 조회 전에 복사하고 각 HWP도 수신 시 복사한다. 재읽기에서는 입력 파일을 복사해 검사하고 바이트를 꺼낼 때도 새 복사본을 반환한다. 호출자의 이후 수정으로 검사한 바이트가 바뀌지 않는다. 배포 Worker, HTTP, MCP와 일반 사용자 흐름에는 연결하지 않았다.
+[recovery-bundle.mjs](../../../legacy/sites-runtime/scripts/recovery-bundle.mjs)는 검사한 네 테이블과 기록된 불변 HWP 바이트를 단일 `.hwpbak` 파일로 묶고 다시 읽는 개발자용 라이브러리다. 기존 메타데이터 연결, 삭제 원장, 크기, 해시 검사를 통과한 자료만 반환한다. 메타데이터는 비동기 조회 전에 복사하고 각 HWP도 수신 시 복사한다. 재읽기에서는 입력 파일을 복사해 검사하고 바이트를 꺼낼 때도 새 복사본을 반환한다. 호출자의 이후 수정으로 검사한 바이트가 바뀌지 않는다. 배포 Worker, HTTP, MCP와 일반 사용자 흐름에는 연결하지 않았다.
 
 파일 구조는 `HWPEBK01` 8바이트, big-endian uint32 메타데이터 길이, 버전 수, UTF-8 JSON 메타데이터, 메타데이터 버전 순서의 SHA-256 32바이트, uint32 바이트 수, HWP 바이트, 앞선 전체 payload의 SHA-256 32바이트다. 메타데이터 파일 인코딩은 최대 16 MiB이며 기존 행, 문자열, HWP 예산도 함께 적용한다. 누락, 손상, 초과, 추가 payload와 잘못된 객체 키를 거부하며 파일에 든 경로로 디스크 파일을 쓰거나 저장소를 복원하지 않는다.
 
@@ -137,7 +137,7 @@ npm run test:recovery
 
 ### 복구 파일의 선택적 암호화와 변조 확인
 
-10월 10일 [encrypted-recovery-bundle.mjs](../../../probes/sites-runtime/scripts/encrypted-recovery-bundle.mjs)를 추가했다.
+10월 10일 [encrypted-recovery-bundle.mjs](../../../legacy/sites-runtime/scripts/encrypted-recovery-bundle.mjs)를 추가했다.
 
 `createEncryptedRecoveryBundle`은 기존 검사에 통과한 복구 자료를 AES-256-GCM으로 암호화하며 `readEncryptedRecoveryBundle`은 전체 인증 태그를 검증한 뒤에만 내부 메타데이터를 읽고 기존 삭제 원장, 바이트 검사를 실행한다.
 
@@ -167,7 +167,7 @@ Node 전체 514개와 복구 전용 40개 검사를 통과했다. 별도의 Web 
 
 ### 복원 전 모든 HWP 버전의 재열기 검사
 
-10월 10일 [recovery-hwp-preflight.mjs](../../../probes/sites-runtime/scripts/recovery-hwp-preflight.mjs)의 `preflightRecoveryHwp`를 추가했다. 파일의 암호화 인증, 메타데이터, 바이트 해시가 맞아도 내용이 HWP로 열리는지는 별개다.
+10월 10일 [recovery-hwp-preflight.mjs](../../../legacy/sites-runtime/scripts/recovery-hwp-preflight.mjs)의 `preflightRecoveryHwp`를 추가했다. 파일의 암호화 인증, 메타데이터, 바이트 해시가 맞아도 내용이 HWP로 열리는지는 별개다.
 
 평문 또는 암호화 reader에서 받은 자료와 별도 최신 삭제 원장을 다시 검사하고, **모든 버전의 raw 본문 예산을 검사한 뒤** 신뢰할 수 있는 호스트가 초기화한 기존 HWP 엔진으로 각 버전을 끝까지 읽는다. 복원 자료를 반환하기 전에 어느 한 버전이라도 열기, 이어 읽기에 실패하면 전체 요청을 거부한다. 파일 경로, 복원 콜백, DB/R2 쓰기는 받지 않고 운영 Worker, HTTP, MCP에 추가하지 않았다.
 

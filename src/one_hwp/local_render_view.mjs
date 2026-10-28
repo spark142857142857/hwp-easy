@@ -1,8 +1,8 @@
 /** Disposable render-only adaptation for WASM's collapsed empty float anchors.
  * Never pass this document to editing, export, target selection or saving.
  */
-import {readHwp} from '../../probes/sites-runtime/guard/container.mjs';
-import {parseRecords} from '../../probes/sites-runtime/guard/records.mjs';
+import {readHwp} from './guard/container.mjs';
+import {parseRecords} from './guard/records.mjs';
 import {fail,view} from './local_complex_records.mjs';
 import {validObjectHeader,objectFlow} from './local_flow_records.mjs';
 import {createEngineApi} from './rhwp_api.mjs';

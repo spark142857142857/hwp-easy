@@ -29,7 +29,7 @@ Windows의 메모리 측정 실행 1회에서 다음을 관찰했다. 시간은 
 
 따라서 이 합계를 **개별 요청, 개별 isolate의 JS/WASM RAM이나 Sites 운영 메모리로 설명하거나 서비스 isolate 한도와 직접 비교하지 않는다**. 클라이언트의 병렬 제출은 실제 서버 실행의 겹침이나 cache hit를 독립적으로 증명하지 않는다. 운영 메모리, 일반 부하, 지연 백분위, 실제 OAuth, 시각 배치와 인증 자동 갱신은 계속 미검증이다.
 
-재현은 `probes/sites-runtime`에서 `npm run test:concurrency`로 정확성만 검사하거나 `npm run profile:concurrency`로 Linux/Windows OS 메모리 표본을 추가한다. 임의 파일, 출력 경로, 인증 정보를 받지 않으며 새 임시 합성 저장소만 사용한다. 측정에 실패하면 고정 오류를 기록하고 런타임 표본 없이 메모리 검사 성공을 보고하지 않는다.
+재현은 `legacy/sites-runtime`에서 `npm run test:concurrency`로 정확성만 검사하거나 `npm run profile:concurrency`로 Linux/Windows OS 메모리 표본을 추가한다. 임의 파일, 출력 경로, 인증 정보를 받지 않으며 새 임시 합성 저장소만 사용한다. 측정에 실패하면 고정 오류를 기록하고 런타임 표본 없이 메모리 검사 성공을 보고하지 않는다.
 
 CI에도 같은 합성 흐름과 메모리 측정을 등록했으며 시간, RSS 상한은 통과 조건으로 두지 않는다. 실행 기록은 ignored `outputs/concurrent-workload-20261009-memory.json`과 `docs/local/2026-10-09/concurrent-workload.json`에 보관한다.
 
@@ -73,7 +73,7 @@ CI에도 같은 합성 흐름과 메모리 측정을 등록했으며 시간, RSS
 
 같은 400,000단위 파일을 실제 로컬 compiled Worker/D1/R2로 업로드해 7회 전체 읽기, 무저장 계획, 새 버전 저장, 정확한 재시도, 보호된 다운로드, 원본 복구를 확인했다. 최초, 수정, 복구 3개 버전을 유지했고, 다른 모의 owner의 접근 거부 뒤 저장 상태도 같았다. 별도 Python/olefile는 WASM 없이 9개 CFB 스트림, 6개 raw 문단의 원문/결과 400,000단위와 요청한 한 문단 외 레코드, DocInfo 보존을 비교했으며 복구본은 원본 바이트 전체와 같았다.
 
-합성 본문과 표 셀의 이모지/결합 문자, 기존 20종 모델 일치, 혼합 서식 fallback, 증명 불일치와 예산 유지도 검사한다. `node --test tests/uniform-style.test.mjs`와 `node scripts/check-uniform-style.mjs`를 `probes/sites-runtime`에서 실행하며 Windows, Ubuntu CI에 등록했다.
+합성 본문과 표 셀의 이모지/결합 문자, 기존 20종 모델 일치, 혼합 서식 fallback, 증명 불일치와 예산 유지도 검사한다. `node --test tests/uniform-style.test.mjs`와 `node scripts/check-uniform-style.mjs`를 `legacy/sites-runtime`에서 실행하며 Windows, Ubuntu CI에 등록했다.
 
 측정은 이 고정 입력의 로컬 wall-clock 관측값이다. 모든 문서의 지연, 전체 isolate RAM, 동시 처리, 외부 HWP 시각 배치나 인증 갱신의 성공을 보장하지 않는다. **10월 9일 운영 버전 47에 반영했으며 120만 자 입력은 계속 거부한다.** 수치 기록은 ignored `outputs/improvement-loop-20261009/style-distribution-after-uniform-proof.json`, Worker 회수 바이트와 독립 비교는 `outputs/uniform-style-check/`에 둔다. 실제 Sites 검사는 다음 절로 구분하며 아래의 느린 로컬 수치는 최적화 전 기준선이다.
 
@@ -154,7 +154,7 @@ PR 검증 보강에서는 변경한 작업량, 브라우저 안내, 오류 안�
 
 큰 원본으로 복구는 거부되고, 큰 현재 버전에서 한도 이내의 이전 원본으로 명시적 복구는 성공하며 4개 이력이 남았다. 신원, 파일 전달, DOM은 모의다. 기존 전체 검증은 새 변경과 관련 없는 부분을 반복 실행하지 않았고, 추가 검사는 전체 테스트와 Windows/Linux CI에 등록했다.
 
-반복 가능한 검사 명령은 `probes/sites-runtime`에서 `node --test tests/hosted-workload.test.mjs tests/text-budget.test.mjs tests/browser-upload.test.mjs tests/error-feedback.test.mjs tests/public-errors.test.mjs`, `npm run test:workload`, `npm run test:limits`, `npm test`이며, 저장소 루트에서 `node probes/sites-runtime/scripts/check-python-guard.mjs`로 독립 `olefile` 비교를 수행한다.
+반복 가능한 검사 명령은 `legacy/sites-runtime`에서 `node --test tests/hosted-workload.test.mjs tests/text-budget.test.mjs tests/browser-upload.test.mjs tests/error-feedback.test.mjs tests/public-errors.test.mjs`, `npm run test:workload`, `npm run test:limits`, `npm test`이며, 저장소 루트에서 `node scripts/check/independent/check-python-guard.mjs`로 독립 `olefile` 비교를 수행한다.
 
 합성 입력, 세부 수치의 로컬 기록은 ignored `outputs/cpu-investigation/`에 보관한다.
 
@@ -196,7 +196,7 @@ PR 검증 보강에서는 변경한 작업량, 브라우저 안내, 오류 안�
 
 ## 재현 방법
 
-개발 환경의 `probes/sites-runtime`에서 실행한다. 사용자용 설치 명령이나 제품 CLI가 아니다.
+개발 환경의 `legacy/sites-runtime`에서 실행한다. 사용자용 설치 명령이나 제품 CLI가 아니다.
 
 ```sh
 npm run test:limits

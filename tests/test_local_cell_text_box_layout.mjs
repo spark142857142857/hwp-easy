@@ -1,4 +1,4 @@
-import {assertPlannedEdit} from '../scripts/local-plan-proof.mjs';
+import {assertPlannedEdit} from '../scripts/lib/local-plan-proof.mjs';
 import test from 'node:test';import assert from 'node:assert/strict';import fs from 'node:fs';import os from 'node:os';import path from 'node:path';
 import {HwpDocument} from '@rhwp/core';import {initializeLocal,runLocal} from '../src/one_hwp/local_runner.mjs';
 import {cellBoxFixture} from './local_placement_fixtures.mjs';import {inspectLocalComplex} from '../src/one_hwp/local_complex.mjs';

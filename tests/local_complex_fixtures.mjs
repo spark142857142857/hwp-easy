@@ -2,9 +2,9 @@
 import {HwpDocument} from '@rhwp/core';
 import {fixture} from './rhwp_fixtures.mjs';
 import {progressiveJpeg} from './local_image_fixtures.mjs';
-import {readHwp,readCfb} from '../probes/sites-runtime/guard/container.mjs';
-import {parseRecords} from '../probes/sites-runtime/guard/records.mjs';
-import CFB from '../probes/sites-runtime/node_modules/cfb/cfb.js';
+import {readHwp,readCfb} from '../src/one_hwp/guard/container.mjs';
+import {parseRecords} from '../src/one_hwp/guard/records.mjs';
+import CFB from 'cfb';
 import {deflateRawSync} from 'node:zlib';
 import {encodeRecords,view} from '../src/one_hwp/local_complex_records.mjs';
 export function checkedExport(doc){const e=doc.exportHwpWithReport();try{if(JSON.parse(e.contentLoss()).count)throw new Error('Fixture export loss');return new Uint8Array(e.takeBytes());}finally{e.free();}}

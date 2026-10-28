@@ -91,7 +91,7 @@ MCP의 보기 링크에서 수정된 SVG를 표시하고 이전, 현재 HWP를 �
 
 ## 공통 엔진과 저장 계층
 
-`src/one_hwp/rhwp_api.mjs`는 경로, Node 파일 API 없이 문서 모델을 읽고 수정한다. Node JSON bridge와 browser ESM이 이 코드를 함께 사용한다. `probes/sites-runtime/engine/document.mjs`는 browser ESM에서 바이트 snapshot, SHA-256 기반 대상, 이어 읽기, 계획, 편집, 미리보기 계약을 제공한다.
+`src/one_hwp/rhwp_api.mjs`는 경로, Node 파일 API 없이 문서 모델을 읽고 수정한다. Node JSON bridge와 browser ESM이 이 코드를 함께 사용한다. `src/one_hwp/engine/document.mjs`는 browser ESM에서 바이트 snapshot, SHA-256 기반 대상, 이어 읽기, 계획, 편집, 미리보기 계약을 제공한다.
 
 메모리 내 snapshot은 caller의 입력 변경과 조회 결과 변경에 영향을 받지 않는다. 수정은 새 HWP 바이트와 검사 결과를 반환하고 `saved: false`를 표시한다. 이 기능만으로 같은 파일 저장, 원격 사용자 격리, 지속 버전과 복구가 구현된 것은 아니다. 파일 연결층이 사용자와 문서를 확인하고 기대 현재 버전과 실제 저장소 버전이 일치할 때만 결과를 저장해야 한다.
 

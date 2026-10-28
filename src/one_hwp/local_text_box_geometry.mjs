@@ -1,5 +1,5 @@
 /** Explicit geometry edits for verified, unrotated plain rectangle text boxes. */
-import {GuardError} from '../../probes/sites-runtime/guard/records.mjs';
+import {GuardError} from './guard/records.mjs';
 import {fail,view,equal} from './local_complex_records.mjs';
 import {groupGeometry} from './local_complex_group.mjs';
 import {sameProperties} from './local_page_state.mjs';

@@ -2,9 +2,9 @@ import test from 'node:test';import assert from 'node:assert/strict';import fs f
 import {HwpDocument} from '@rhwp/core';import {fixture,corpus} from './rhwp_fixtures.mjs';
 import {createEngineApi} from '../src/one_hwp/rhwp_api.mjs';import {createLocalEngineApi,localPlainStyleProofs} from '../src/one_hwp/local_api.mjs';
 import {structuralEdit} from '../src/one_hwp/local_structure.mjs';import {digest} from '../src/one_hwp/local_file.mjs';
-import {readHwp} from '../probes/sites-runtime/guard/container.mjs';import {parseRecords} from '../probes/sites-runtime/guard/records.mjs';
-import {createDocumentEngine,mapRawTargets} from '../probes/sites-runtime/engine/document.mjs';import {rawPlainStyleProofs} from '../probes/sites-runtime/engine/plain-style.mjs';
-import {encodeRecords} from '../probes/sites-runtime/tests/page-number-fixtures.mjs';import {profileSyntheticEngine} from '../probes/sites-runtime/scripts/synthetic-engine-profile.mjs';
+import {readHwp} from '../src/one_hwp/guard/container.mjs';import {parseRecords} from '../src/one_hwp/guard/records.mjs';
+import {createDocumentEngine,mapRawTargets} from '../src/one_hwp/engine/document.mjs';import {rawPlainStyleProofs} from '../src/one_hwp/engine/plain-style.mjs';
+import {encodeRecords} from './fixtures/page-number-fixtures.mjs';import {profileSyntheticEngine} from './fixtures/synthetic-engine-profile.mjs';
 const inspect=(api,bytes)=>{const d=api.openDocument(bytes);try{return api.inspectDocument(d,bytes);}finally{d.free();}},full=createEngineApi(HwpDocument,{mixedStyleSameLength:true}),fast=createLocalEngineApi(HwpDocument,{mixedStyleSameLength:true});
 function mixed(){const bytes=fixture({paragraphs:['시작','가😀e\u0301'.repeat(1200),'끝'],cells:[['A','가😀e\u0301'.repeat(1200)]]}),m=inspect(full,bytes);let output=bytes;
  for(const b of m.blocks.filter(b=>b.text.length>2048)){const operation={type:'format_text',target_id:`hwp5:${digest(output)}:${Buffer.from(b.id).toString('base64url')}`,expected_old:b.text,start:17,end:1300,props:{bold:true,textColor:'#AA2255'}};output=structuralEdit(HwpDocument,output,digest(output),operation).bytes;}return output;

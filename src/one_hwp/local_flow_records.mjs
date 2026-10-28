@@ -1,6 +1,6 @@
 /** HWP5 common-object flags, table 70 of Hancom revision 1.2. */
 import {view,fail} from './local_complex_records.mjs';
-import {parseRecords} from '../../probes/sites-runtime/guard/records.mjs';
+import {parseRecords} from './guard/records.mjs';
 export function nextObjectInstanceId(raw){
  const ids=new Set();for(const [name,bytes] of raw.streams){if(!/^BodyText\/Section\d+$/.test(name))continue;for(const r of parseRecords(bytes))if(r.tag===71&&r.payload.length>=40&&[' osg',' lbt'].includes(Buffer.from(r.payload.subarray(0,4)).toString()))ids.add(view(r.payload).getUint32(36,true));}
  let instance=1;while(ids.has(instance))instance++;if(instance>0xffffffff)fail('PICTURE_INSTANCE_LIMIT');return instance;

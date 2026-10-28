@@ -15,9 +15,9 @@ Cloud 환경에서 이 저장소를 선택해 게시한 뒤 새 작업을 시작
 Node 22 이상과 저장소의 고정 의존성을 준비한다. 원격 문서 검사만 수행할 때 Python, 한글, COM, GUI는 필요 없다. 저장소 루트에서:
 
 ```sh
-npm ci --prefix probes/sites-runtime --ignore-scripts --no-audit --no-fund
-node --test probes/sites-runtime/tests/document-chunks.test.mjs probes/sites-runtime/tests/synthetic-chunk-result.test.mjs
-node probes/sites-runtime/scripts/make-transfer-fixture.mjs
+npm ci --prefix legacy/sites-runtime --ignore-scripts --no-audit --no-fund
+node --test legacy/sites-runtime/tests/document-chunks.test.mjs legacy/sites-runtime/tests/synthetic-chunk-result.test.mjs
+node legacy/sites-runtime/scripts/make-transfer-fixture.mjs
 ```
 
 마지막 명령은 작업 환경 안의 `outputs/synthetic-transfer/`에 새 합성 HWP를 만들고 경로, 크기, 해시만 출력한다. 13,312바이트와 SHA-256 `58ed8fc70a3f6c497f6450e617b9a7f54b8abbb389991feeb75f7582468eee66`을 확인한다. 로컬 PC 절대 경로나 `testdocs/`는 사용하지 않는다.
@@ -48,7 +48,7 @@ node probes/sites-runtime/scripts/make-transfer-fixture.mjs
 
 ## 조각 bundle과 회수 도구
 
-[save-chunk-result.mjs](../../probes/sites-runtime/scripts/save-chunk-result.mjs)는 한 JSON bundle을 stdin으로 받는다. 호출 인수로 입력/출력 경로, URL, 토큰을 받지 않는다. bundle은 작업의 ignored 파일 영역에만 보관한다. JSON은 최대 256 KiB, 응답은 최대 32개다. 1,024바이트 조각의 고정 fixture 13개와 첫 응답의 정확한 재시도가 들어갈 수 있다.
+[save-chunk-result.mjs](../../legacy/sites-runtime/scripts/save-chunk-result.mjs)는 한 JSON bundle을 stdin으로 받는다. 호출 인수로 입력/출력 경로, URL, 토큰을 받지 않는다. bundle은 작업의 ignored 파일 영역에만 보관한다. JSON은 최대 256 KiB, 응답은 최대 32개다. 1,024바이트 조각의 고정 fixture 13개와 첫 응답의 정확한 재시도가 들어갈 수 있다.
 
 ```json
 {
@@ -70,8 +70,8 @@ node probes/sites-runtime/scripts/make-transfer-fixture.mjs
 Cloud의 Bash에서 작업 루트 기준으로 실행한다:
 
 ```sh
-node probes/sites-runtime/scripts/save-chunk-result.mjs < outputs/source-chunks.json
-node probes/sites-runtime/scripts/save-chunk-result.mjs < outputs/edited-chunks.json
+node legacy/sites-runtime/scripts/save-chunk-result.mjs < outputs/source-chunks.json
+node legacy/sites-runtime/scripts/save-chunk-result.mjs < outputs/edited-chunks.json
 ```
 
 라이브러리는 문서, 버전, 해시, 길이를 고정하고, 조각별 해시, 정규 base64, 순서, 누락, 겹침, 재시도를 검사한다. 전체 해시와 실제 HWP 엔진 재열기를 확인한 뒤 알려진 합성 원본 또는 편집 결과를 독립 생성해 전체 바이트를 비교한다. 다른 문서는 유효한 HWP여도 거부한다. 성공한 완성본만 `outputs/synthetic-chunks/retrieved-<UUID>.hwp`로 게시한다.

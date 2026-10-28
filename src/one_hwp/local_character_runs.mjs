@@ -1,5 +1,5 @@
 /** Expand the verified model runs without repeated upstream offset scans. */
-import {GuardError} from '../../probes/sites-runtime/guard/records.mjs';
+import {GuardError} from './guard/records.mjs';
 export function modelCharacterIds(block,code='TEXT_STYLE_MISMATCH'){
  const count=[...block.text].length,ids=block.style.char_shape_ids;
  if(!Array.isArray(ids)||!ids.length||block.style.profile)throw new GuardError(code);

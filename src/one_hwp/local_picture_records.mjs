@@ -1,5 +1,5 @@
 /** Selected paragraph/object rewrites; all other raw records remain exact. */
-import {GuardError,parseRecords} from '../../probes/sites-runtime/guard/records.mjs';
+import {GuardError,parseRecords} from './guard/records.mjs';
 import {packLocalBodyRewrite} from './local_body_write.mjs';
 const fail=code=>{throw new GuardError(code);},view=b=>new DataView(b.buffer,b.byteOffset,b.byteLength);
 export const pictureAnchor=Uint8Array.from([11,0,32,111,115,103,0,0,0,0,0,0,0,0,11,0]);

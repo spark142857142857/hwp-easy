@@ -1,12 +1,12 @@
 /** Local structural edits. Kept separate from the submitted remote text profile. */
 import {createLocalEngineApi as createEngineApi} from './local_api.mjs';
-import { readHwp } from '../../probes/sites-runtime/guard/container.mjs';
-import { GuardError, parseRecords } from '../../probes/sites-runtime/guard/records.mjs';
-import { canonicalRecord, textControlBytes } from '../../probes/sites-runtime/guard/preservation.mjs';
-import { mapRawTargets } from '../../probes/sites-runtime/engine/document.mjs';
+import { readHwp } from './guard/container.mjs';
+import { GuardError, parseRecords } from './guard/records.mjs';
+import { canonicalRecord, textControlBytes } from './guard/preservation.mjs';
+import { mapRawTargets } from './engine/document.mjs';
 import { expectedEditedBlock } from './text_font_selection.mjs';
-import { packStructuralBodyRepairs } from '../../probes/sites-runtime/engine/structural-body-repair.mjs';
-import { pageNumberPreservationProfile } from '../../probes/sites-runtime/guard/page-number.mjs';
+import { packStructuralBodyRepairs } from './engine/structural-body-repair.mjs';
+import { pageNumberPreservationProfile } from './guard/page-number.mjs';
 import { prepareTableChange } from './local_table.mjs';
 import { prepareFormatChange } from './local_format.mjs';
 import { prepareMergedTableChange } from './local_merged_table.mjs';

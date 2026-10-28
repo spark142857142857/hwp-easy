@@ -4,8 +4,8 @@ import {fileURLToPath} from 'node:url';
 import {spawnSync} from 'node:child_process';
 import {HwpDocument,initSync} from '@rhwp/core';
 import {Resvg,initWasm} from '@resvg/resvg-wasm';
-import {readHwp} from '../../probes/sites-runtime/guard/container.mjs';
-import {GuardError,parseRecords} from '../../probes/sites-runtime/guard/records.mjs';
+import {readHwp} from './guard/container.mjs';
+import {GuardError,parseRecords} from './guard/records.mjs';
 import {patchLocalPackedStreams} from './local_container_write.mjs';
 import {renderLocalPreview} from './local_render_view.mjs';
 

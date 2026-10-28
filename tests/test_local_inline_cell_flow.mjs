@@ -1,4 +1,4 @@
-import {assertPlannedEdit} from '../scripts/local-plan-proof.mjs';
+import {assertPlannedEdit} from '../scripts/lib/local-plan-proof.mjs';
 import test from 'node:test';import assert from 'node:assert/strict';import fs from 'node:fs';import path from 'node:path';import os from 'node:os';
 import {initializeLocal,runLocal} from '../src/one_hwp/local_runner.mjs';
 import {inlineCellFixture,inlineCellProfiles} from './local_inline_cell_fixtures.mjs';

@@ -1,8 +1,8 @@
-import {assertPlannedEdit} from '../scripts/local-plan-proof.mjs';
+import {assertPlannedEdit} from '../scripts/lib/local-plan-proof.mjs';
 import test from 'node:test';import assert from 'node:assert/strict';import fs from 'node:fs';import os from 'node:os';import path from 'node:path';
 import {initializeLocal,runLocal} from '../src/one_hwp/local_runner.mjs';
 import {tableReflowFixture,tableAnswer,multipleRootFixture,hostTablesFixture} from './local_table_reflow_fixtures.mjs';
-import {readHwp} from '../probes/sites-runtime/guard/container.mjs';import {parseRecords} from '../probes/sites-runtime/guard/records.mjs';
+import {readHwp} from '../src/one_hwp/guard/container.mjs';import {parseRecords} from '../src/one_hwp/guard/records.mjs';
 import {HwpDocument} from '@rhwp/core';import {inspectLocalComplex} from '../src/one_hwp/local_complex.mjs';import {tableReflowContexts} from '../src/one_hwp/local_table_reflow.mjs';import {view} from '../src/one_hwp/local_complex_records.mjs';import {publishVerifiedPatch} from '../src/one_hwp/local_verified_patch.mjs';
 import {complexFooterFixture} from './local_footer_fixtures.mjs';
 initializeLocal(fs.readFileSync(new URL('../node_modules/@rhwp/core/rhwp_bg.wasm',import.meta.url)));

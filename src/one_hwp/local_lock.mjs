@@ -3,7 +3,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
 import {createHash,randomUUID} from 'node:crypto';
-import {GuardError} from '../../probes/sites-runtime/guard/records.mjs';
+import {GuardError} from './guard/records.mjs';
 const busy=()=>{throw new GuardError('DOCUMENT_BUSY');};
 const host=createHash('sha256').update(os.hostname()).digest('hex').slice(0,24);
 const ownerPattern=/^([a-f0-9]{24})-([1-9][0-9]*)-([a-f0-9-]{36})\.owner$/;

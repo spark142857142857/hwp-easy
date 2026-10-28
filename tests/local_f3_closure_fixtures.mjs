@@ -1,6 +1,6 @@
 /** Reproducible, synthetic F3 acceptance corpus. No user document contents. */
 import {HwpDocument} from '@rhwp/core';
-import {parseRecords} from '../probes/sites-runtime/guard/records.mjs';
+import {parseRecords} from '../src/one_hwp/guard/records.mjs';
 import {nestedRenderFixture} from './local_nested_render_fixtures.mjs';
 import {cellWrapRenderFixture,cellWrapBefore} from './local_cell_wrap_render_fixtures.mjs';
 import {mixedRenderFixture} from './local_nested_mixed_fixtures.mjs';

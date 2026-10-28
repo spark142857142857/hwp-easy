@@ -10,22 +10,28 @@
 
 ```bash
 npm ci --ignore-scripts --no-audit --no-fund
-npm --prefix probes/sites-runtime ci --ignore-scripts --no-audit --no-fund
 python -m venv .venv
 ```
 
 Linux와 macOS는 `.venv/bin/python`, Windows는 `.venv/Scripts/python.exe`를 사용합니다. 해당 Python으로 `-m pip install -e ".[native,mcp]"`를 실행합니다. 실제 한글 대조를 하는 Windows 개발 환경에만 별도의 COM 의존성이 필요합니다.
+
+이전 원격 서버의 검사를 실행할 때만 [legacy 안내](../legacy/README.md)의 추가 의존성을 설치합니다. 로컬 빌드와 회귀는 루트 의존성으로 실행합니다.
 
 ## 변경 위치
 
 | 영역 | 경로 |
 | --- | --- |
 | 엔진과 로컬 편집 | `src/one_hwp/*.mjs` |
-| 독립 검사 | `probes/sites-runtime/guard/`, `scripts/check-*.py` |
+| 공통 판독과 엔진 계약 | `src/one_hwp/guard/`, `src/one_hwp/engine/` |
+| 독립 검사 | `scripts/check/independent/` |
 | 스킬과 요청 계약 | `plugins/hwp-easy/skills/edit-local-hwp/` |
 | 앱별 설치와 복귀 | `packages/hwp-easy/lib/` |
-| 빌드와 배포 | `scripts/package_local_plugin.mjs`, `prepare_distribution.mjs`, `archive_distribution.py` |
+| 빌드와 배포 | `scripts/build/` |
+| 배치와 실제 한글 대조 | `scripts/check/native/`, `scripts/render/` |
+| 이전 원격 서버 | `legacy/sites-runtime/` |
 | 회귀와 합성 입력 | `tests/` |
+
+전체 개발 도구의 역할과 기본 명령은 [scripts 안내](../scripts/README.md)에 정리합니다.
 
 실행 요청 스키마는 [스킬의 요청 참조](../plugins/hwp-easy/skills/edit-local-hwp/references/requests.md), 편집 조건은 [편집 참조](../plugins/hwp-easy/skills/edit-local-hwp/references/editing.md)를 기준으로 관리합니다. 사용자 안내에 내부 요청을 중복해서 옮기지 않습니다.
 
@@ -33,9 +39,10 @@ Linux와 macOS는 `.venv/bin/python`, Windows는 `.venv/Scripts/python.exe`를 �
 
 ```bash
 npm run test:engine
+npm run test:structure
 node --test tests/test_local_f4.mjs tests/test_local_drawing_render.mjs
 node --test tests/test_distribution_install.mjs tests/test_agent_skill_install.mjs tests/test_unified_install.mjs
-node scripts/check-repository.mjs
+node scripts/check/check-repository.mjs
 ```
 
 변경한 기능의 관련 회귀와 실제 패키지 검사를 실행합니다. 공통 비교나 저장처럼 영향이 넓은 변경은 검사 범위를 넓힙니다. 새 문서는 스테이징한 뒤 링크 검사를 실행해야 포함됩니다. 개인 문서는 테스트 입력으로 커밋하거나 CI에 올리지 않습니다.
@@ -49,18 +56,18 @@ GitHub Actions는 [Source checks](../.github/workflows/checks.yml)의 수동 실
 메타데이터와 npm 버전을 같이 올리고 공통 실행기를 한 번 빌드합니다.
 
 ```bash
-node scripts/package_local_plugin.mjs
-python scripts/archive_local_plugin.py
-node scripts/package_agent_skills.mjs outputs/plugin-package/hwp-easy outputs/agent-packages
-python scripts/archive_agent_skills.py outputs/agent-packages
-node scripts/prepare_distribution.mjs outputs/plugin-package/hwp-easy outputs/release-check/marketplace
+node scripts/build/package_local_plugin.mjs
+python scripts/build/archive_local_plugin.py
+node scripts/build/package_agent_skills.mjs outputs/plugin-package/hwp-easy outputs/agent-packages
+python scripts/build/archive_agent_skills.py outputs/agent-packages
+node scripts/build/prepare_distribution.mjs outputs/plugin-package/hwp-easy outputs/release-check/marketplace
 ```
 
 생성 대상은 새 폴더를 사용합니다. 배포 폴더에서 `npm pack --ignore-scripts`로 TGZ를 만들고 별도 경로에 풉니다. 이전 버전의 마켓플레이스를 준비해 신규 설치와 업데이트 및 복귀를 검사합니다.
 
 ```bash
-node scripts/check-unified-install.mjs <unpacked-npm-folder> <previous-marketplace> <fresh-report-folder>
-python scripts/archive_distribution.py <marketplace> <npm-tgz> <plugin-zip> <fresh-assets-folder> --agent-packages outputs/agent-packages
+node scripts/check/install/check-unified-install.mjs <unpacked-npm-folder> <previous-marketplace> <fresh-report-folder>
+python scripts/build/archive_distribution.py <marketplace> <npm-tgz> <plugin-zip> <fresh-assets-folder> --agent-packages outputs/agent-packages
 ```
 
 앱별 실행기와 WASM 해시를 대조하고 독립 판독으로 같은 파일 저장과 정확한 복구를 확인합니다. 필요하면 `check-installed-plugin.mjs`와 `check-installed-plugin.py`로 현재 설치본도 검사합니다.

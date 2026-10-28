@@ -1,6 +1,6 @@
 /** Publish exact raw changes and independently reread every resulting stream. */
 import {deflateRawSync} from 'node:zlib';
-import {readHwp} from '../../probes/sites-runtime/guard/container.mjs';
+import {readHwp} from './guard/container.mjs';
 import {patchLocalPackedStreams} from './local_container_write.mjs';
 import {encodeRecords,equalBytes,view,fail} from './local_complex_records.mjs';
 export function publishVerifiedPatch(source,state,section,records,docInfo=state.raw.streams.get('DocInfo')){

@@ -27,4 +27,4 @@ where = ["src"]
 include = ["one_hwp*"]
 
 [tool.setuptools.package-data]
-one_hwp = ["*.mjs"]
+one_hwp = ["*.mjs", "engine/*.mjs", "guard/*.mjs"]

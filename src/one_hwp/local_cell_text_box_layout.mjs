@@ -1,5 +1,5 @@
 /** Cell display bounds are observations, never stored minimum-height clipping proof. */
-import {GuardError} from '../../probes/sites-runtime/guard/records.mjs';
+import {GuardError} from './guard/records.mjs';
 import {view,fail} from './local_complex_records.mjs';
 import {layoutObjectIdentity} from './local_layout_identity.mjs';
 import {textBoxGeometry} from './local_text_box_geometry.mjs';

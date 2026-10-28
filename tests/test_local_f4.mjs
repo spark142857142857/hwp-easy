@@ -5,7 +5,7 @@ import {editLocalBatch} from '../src/one_hwp/local_batch.mjs';
 import {digest} from '../src/one_hwp/local_file.mjs';
 import {f4GroupFixture,f4CellFixture,f4NestedBoxFixture,f4FieldFixture,f4Inspect,f4Target,f4Patch} from './local_f4_fixtures.mjs';
 import {fieldFixture} from './local_complex_fixtures.mjs';
-import {readHwp} from '../probes/sites-runtime/guard/container.mjs';
+import {readHwp} from '../src/one_hwp/guard/container.mjs';
 import {view,encodeRecords,equal} from '../src/one_hwp/local_complex_records.mjs';
 initializeLocal(fs.readFileSync(new URL('../node_modules/@rhwp/core/rhwp_bg.wasm',import.meta.url)));
 const edit=(bytes,ops)=>editLocalBatch(HwpDocument,bytes,digest(bytes),ops);

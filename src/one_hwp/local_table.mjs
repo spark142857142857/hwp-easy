@@ -1,5 +1,5 @@
 /** Explicit row/column changes for plain rectangular tables; raw guards stay mandatory. */
-import { GuardError } from '../../probes/sites-runtime/guard/records.mjs';
+import { GuardError } from './guard/records.mjs';
 const fail=code=>{throw new GuardError(code);};
 const equal=(a,b)=>JSON.stringify(a)===JSON.stringify(b);
 const view=b=>new DataView(b.buffer,b.byteOffset,b.byteLength);

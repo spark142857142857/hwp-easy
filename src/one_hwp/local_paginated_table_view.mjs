@@ -2,8 +2,8 @@
  * The tall page is disposable. Its bytes never enter a writer or target model.
  */
 import {deflateRawSync} from 'node:zlib';
-import {readHwp} from '../../probes/sites-runtime/guard/container.mjs';
-import {parseRecords,GuardError} from '../../probes/sites-runtime/guard/records.mjs';
+import {readHwp} from './guard/container.mjs';
+import {parseRecords,GuardError} from './guard/records.mjs';
 import {inspectLocalComplex} from './local_complex.mjs';
 import {view,encodeRecords} from './local_complex_records.mjs';
 import {patchLocalPackedStreams} from './local_container_write.mjs';

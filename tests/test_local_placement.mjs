@@ -1,8 +1,8 @@
-import {assertPlannedEdit} from '../scripts/local-plan-proof.mjs';
+import {assertPlannedEdit} from '../scripts/lib/local-plan-proof.mjs';
 import test from 'node:test';import assert from 'node:assert/strict';import fs from 'node:fs';import path from 'node:path';import os from 'node:os';
 import {HwpDocument} from '@rhwp/core';import {initializeLocal,runLocal} from '../src/one_hwp/local_runner.mjs';
 import {floatingFixture,fixedHeightFixture} from './local_reflow_fixtures.mjs';import {placementFixture} from './local_placement_fixtures.mjs';
-import {readHwp} from '../probes/sites-runtime/guard/container.mjs';import {parseRecords} from '../probes/sites-runtime/guard/records.mjs';
+import {readHwp} from '../src/one_hwp/guard/container.mjs';import {parseRecords} from '../src/one_hwp/guard/records.mjs';
 import {analyzeRenderedLayout,captureRenderedLayout} from '../src/one_hwp/local_rendered_layout.mjs';
 import {view,encodeRecords} from '../src/one_hwp/local_complex_records.mjs';
 import {packLocalBodyRewrite} from '../src/one_hwp/local_body_write.mjs';

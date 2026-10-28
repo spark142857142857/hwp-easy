@@ -1,7 +1,7 @@
 /** Automatic column flow from sequential disposable single-column pages. */
 import {deflateRawSync} from 'node:zlib';
-import {readHwp} from '../../probes/sites-runtime/guard/container.mjs';
-import {parseRecords,GuardError} from '../../probes/sites-runtime/guard/records.mjs';
+import {readHwp} from './guard/container.mjs';
+import {parseRecords,GuardError} from './guard/records.mjs';
 import {inspectLocalComplex} from './local_complex.mjs';
 import {view,encodeRecords} from './local_complex_records.mjs';
 import {projectSvgText,hideSvgTableBorders} from './local_svg_geometry.mjs';

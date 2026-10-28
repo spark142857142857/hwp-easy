@@ -9,7 +9,7 @@ import {invalidateSectionLayout} from './local_layout_cache.mjs';
 import {createNaturalTextMeasurer} from './local_font_measure.mjs';
 import {tableParagraphHeight as paragraphHeight} from './local_table_text_metrics.mjs';
 import {tableHostParagraphHeight,inlineTableHostObject} from './local_table_host_controls.mjs';
-import {GuardError} from '../../probes/sites-runtime/guard/records.mjs';
+import {GuardError} from './guard/records.mjs';
 import {flowTableFloating,bodyFloatingObjects} from './local_table_floating.mjs';
 import {hostRoots,rootForest,normalizeTableHosts} from './local_table_hosts.mjs';
 import {digest as digestForHost} from './local_file.mjs';

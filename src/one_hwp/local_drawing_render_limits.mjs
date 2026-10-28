@@ -1,6 +1,6 @@
 /** Known omissions in the pinned renderer, reported without inventing coordinates. */
-import {readHwp} from '../../probes/sites-runtime/guard/container.mjs';
-import {parseRecords,GuardError} from '../../probes/sites-runtime/guard/records.mjs';
+import {readHwp} from './guard/container.mjs';
+import {parseRecords,GuardError} from './guard/records.mjs';
 import {textTokens,fail} from './local_complex_records.mjs';
 import {groupGeometry} from './local_complex_group.mjs';
 

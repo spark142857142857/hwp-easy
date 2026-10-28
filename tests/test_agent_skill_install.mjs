@@ -4,7 +4,7 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import os from 'node:os';
 import {createHash} from 'node:crypto';
-import {inspectSkill,installSkill,updateSkill} from '../scripts/install_agent_skill.mjs';
+import {inspectSkill,installSkill,updateSkill} from '../scripts/install/install_agent_skill.mjs';
 
 const sha=value=>createHash('sha256').update(value).digest('hex');
 async function fixture(t) {

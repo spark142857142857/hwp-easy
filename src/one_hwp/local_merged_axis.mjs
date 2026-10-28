@@ -1,6 +1,6 @@
 /** Row/column changes preserve surviving merged cells, with explicit geometry repairs. */
-import {GuardError,parseRecords} from '../../probes/sites-runtime/guard/records.mjs';
-import {packStructuralBodyRepairs} from '../../probes/sites-runtime/engine/structural-body-repair.mjs';
+import {GuardError,parseRecords} from './guard/records.mjs';
+import {packStructuralBodyRepairs} from './engine/structural-body-repair.mjs';
 const fail=code=>{throw new GuardError(code);},equal=(a,b)=>JSON.stringify(a)===JSON.stringify(b);
 const view=b=>new DataView(b.buffer,b.byteOffset,b.byteLength),copy=o=>structuredClone(o);
 const tableRecord=r=>r.tag===77||r.tag===71&&Buffer.from(r.payload.subarray(0,4)).toString('ascii')===' lbt';

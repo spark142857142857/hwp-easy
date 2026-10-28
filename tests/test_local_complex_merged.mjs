@@ -1,7 +1,7 @@
-import {assertPlannedEdit} from '../scripts/local-plan-proof.mjs';
+import {assertPlannedEdit} from '../scripts/lib/local-plan-proof.mjs';
 import test from 'node:test';import assert from 'node:assert/strict';import fs from 'node:fs';import os from 'node:os';import path from 'node:path';
 import {initializeLocal,runLocal} from '../src/one_hwp/local_runner.mjs';import {nestedFixture} from './local_complex_fixtures.mjs';import {fixture} from './rhwp_fixtures.mjs';import {progressiveJpeg} from './local_image_fixtures.mjs';import {digest} from '../src/one_hwp/local_file.mjs';
-import {readHwp} from '../probes/sites-runtime/guard/container.mjs';import {parseRecords} from '../probes/sites-runtime/guard/records.mjs';import {publishRawBody,view} from '../src/one_hwp/local_complex_records.mjs';
+import {readHwp} from '../src/one_hwp/guard/container.mjs';import {parseRecords} from '../src/one_hwp/guard/records.mjs';import {publishRawBody,view} from '../src/one_hwp/local_complex_records.mjs';
 initializeLocal(fs.readFileSync(new URL('../node_modules/@rhwp/core/rhwp_bg.wasm',import.meta.url)));
 function workspace(t,bytes){const dir=fs.mkdtempSync(path.join(os.tmpdir(),'hwp-complex-merged-'));t.after(()=>{assert.equal(path.dirname(dir),os.tmpdir());assert.ok(path.basename(dir).startsWith('hwp-complex-merged-'));fs.rmSync(dir,{recursive:true,force:true});});const source=path.join(dir,'synthetic.hwp');fs.writeFileSync(source,bytes);return {source,dir};}
 const read=source=>runLocal({action:'read',source,max_chars:64000,max_blocks:128});

@@ -1,6 +1,6 @@
 /** Horizontal text scene in transformed bounds. Private bytes never reach storage. */
-import {readHwp} from '../../probes/sites-runtime/guard/container.mjs';
-import {parseRecords} from '../../probes/sites-runtime/guard/records.mjs';
+import {readHwp} from './guard/container.mjs';
+import {parseRecords} from './guard/records.mjs';
 import {view,encodeRecords,fail} from './local_complex_records.mjs';
 import {packLocalBodyRewrite} from './local_body_write.mjs';
 import {groupGeometry} from './local_complex_group.mjs';

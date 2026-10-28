@@ -6,7 +6,7 @@ import {openLocalRenderView,renderLocalPreview} from '../src/one_hwp/local_rende
 import {captureRenderedLayout,analyzeRenderedLayout} from '../src/one_hwp/local_rendered_layout.mjs';
 import {inspectLocalComplex,editLocalComplex} from '../src/one_hwp/local_complex.mjs';
 import {view,encodeRecords} from '../src/one_hwp/local_complex_records.mjs';
-import {parseRecords} from '../probes/sites-runtime/guard/records.mjs';
+import {parseRecords} from '../src/one_hwp/guard/records.mjs';
 import {publishVerifiedPatch} from '../src/one_hwp/local_verified_patch.mjs';
 import {mixedRenderFixture} from './local_nested_mixed_fixtures.mjs';
 import {tableAnswer} from './local_table_reflow_fixtures.mjs';

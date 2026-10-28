@@ -299,7 +299,7 @@ Codex Desktop의 실제 native `hwp_import` 파일 인수로 13,312바이트의 
 
 ### 큰 HWP의 버전 고정 조각 회수
 
-Cloud의 작은 고정 합성 파일 왕복에는 [합성 전용 client 회수 도구](../../../probes/sites-runtime/scripts/save-chunk-result.mjs)와 [실행 절차](../cloud-client.md)를 사용할 수 있다. 이 개발 helper는 알려진 합성 원본/편집본만 받아 실제 재열기와 독립 바이트 재현 뒤 새 로컬 HWP로 게시한다. 임의 개인 문서 저장이나 실제 Cloud, 앱 첨부 UI 인증을 수행하는 기능은 아니다.
+Cloud의 작은 고정 합성 파일 왕복에는 [합성 전용 client 회수 도구](../../../legacy/sites-runtime/scripts/save-chunk-result.mjs)와 [실행 절차](../cloud-client.md)를 사용할 수 있다. 이 개발 helper는 알려진 합성 원본/편집본만 받아 실제 재열기와 독립 바이트 재현 뒤 새 로컬 HWP로 게시한다. 임의 개인 문서 저장이나 실제 Cloud, 앱 첨부 UI 인증을 수행하는 기능은 아니다.
 
 `hwp_download`에 `delivery: chunk`, 기존 `document_id`, `version_id`, 조회된 전체 `expected_sha256`, `offset: 0`을 지정한다. 선택 `max_bytes`는 1,024~65,536바이트이며 기본 65,536이다. 마지막 조각은 더 짧을 수 있다. 선택 버전의 전체 바이트는 기존 저장 한도인 4 MiB 이하여야 한다.
 
@@ -307,7 +307,7 @@ Cloud의 작은 고정 합성 파일 왕복에는 [합성 전용 client 회수 �
 
 텍스트/structuredContent에는 전체 크기, 해시, 조각 offset, 크기, 해시와 `next_offset`, `transfer_complete`를 반환한다. 실제 base64는 별도 `application/octet-stream` resource에만 있다. `chunk_is_complete_hwp: false`이며 마지막 조각의 `transfer_complete: true`도 클라이언트가 앞 조각을 모두 받아 검증했다는 인증이 아니다. `.bin` resource 식별자는 공개 URL, 재조회 API, HWP 첨부가 아니다.
 
-클라이언트는 처음 선택한 문서, 버전, 전체 해시, 크기를 고정하고 `next_offset`을 끝까지 따라간다. 현재 버전이 다른 작업으로 갱신돼도 처음의 불변 버전을 계속 사용하고 최신 버전과 섞지 않는다. [참조 재조립 라이브러리](../../../probes/sites-runtime/host/document-chunks.mjs)의 `createHwpChunkCollector`는 파일/네트워크 접근 없이 bounded 메모리만 사용한다.
+클라이언트는 처음 선택한 문서, 버전, 전체 해시, 크기를 고정하고 `next_offset`을 끝까지 따라간다. 현재 버전이 다른 작업으로 갱신돼도 처음의 불변 버전을 계속 사용하고 최신 버전과 섞지 않는다. [참조 재조립 라이브러리](../../../legacy/sites-runtime/host/document-chunks.mjs)의 `createHwpChunkCollector`는 파일/네트워크 접근 없이 bounded 메모리만 사용한다.
 
 정확한 직전 조각 재시도는 허용하지만 다른 문서, 버전, 크기, 해시, 누락, 중복 범위, 순서 변경, 손상/비정규 base64는 거부하며 실패 뒤 조회 위치를 진행시키지 않는다. `finalize`는 모든 바이트, 전체 SHA-256 및 필수 독립 엔진 재열기를 확인한 후에만 완성 바이트를 반환한다. 개인 원본 덮어쓰기나 로컬 자동 저장은 수행하지 않는다. 서버를 넘어간 조각의 회수, 삭제는 보장할 수 없고 클라이언트의 임시 바이트 정리와 저장 권한은 별도 책임이다.
 
@@ -321,7 +321,7 @@ Cloud의 작은 고정 합성 파일 왕복에는 [합성 전용 client 회수 �
 
 ## 고정 합성 파일 전달 진단
 
-일반 업로드를 켜지 않고 실제 클라이언트 전송을 단계별로 시험하기 위한 개발용 예외다. `hwp_transfer_probe`에는 **오직** `scripts/make-transfer-fixture.mjs`가 새로 만든 개인정보 없는 합성 파일을 전달한다. 일반 사용자에게 CLI 실행을 요구하는 제품 기능이 아니다. 서버가 고정한 13,312바이트와 SHA-256이 모두 일치해야 하며, 파일 이름, MIME, 클라이언트가 제시한 해시는 허가 근거가 아니다. [구현](../../../probes/sites-runtime/host/synthetic-transfer.mjs)
+일반 업로드를 켜지 않고 실제 클라이언트 전송을 단계별로 시험하기 위한 개발용 예외다. `hwp_transfer_probe`에는 **오직** `scripts/make-transfer-fixture.mjs`가 새로 만든 개인정보 없는 합성 파일을 전달한다. 일반 사용자에게 CLI 실행을 요구하는 제품 기능이 아니다. 서버가 고정한 13,312바이트와 SHA-256이 모두 일치해야 하며, 파일 이름, MIME, 클라이언트가 제시한 해시는 허가 근거가 아니다. [구현](../../../legacy/sites-runtime/host/synthetic-transfer.mjs)
 
 별도 `HWP_EASY_SYNTHETIC_FILE_ORIGINS`가 없거나 유효하지 않으면 `file_host_confirmation_required`를 반환한다. 이때 공개 HTTPS origin만 반환하고 임시 URL의 경로, query, file ID, 파일 이름은 반환하거나 저장하지 않는다. 네트워크 요청, 바이트 수신, DB/R2 저장도 없다. 응답의 `candidate_file_origin`은 신뢰되지 않은 descriptor의 관찰값이며, 그 자체를 근거로 자동 허용하지 않는다. 실제 전달 호스트를 확인한 뒤 정확한 origin만 별도로 구성한다. 일반 업로드의 allowlist와 플래그는 이 설정과 독립이다.
 
@@ -339,7 +339,7 @@ Cloud의 작은 고정 합성 파일 왕복에는 [합성 전용 client 회수 �
 
 ## 고정 합성 브라우저 다운로드
 
-`GET /diagnostics/download`는 고정 합성 결과만 내려받는 개발용 화면이고, `GET /diagnostics/synthetic-result.hwp`는 해당 바이너리를 제공한다. 두 경로 모두 Sites의 실제 사용자 ID, 이메일 헤더를 요구한다. 서비스 자격만으로 신원을 대체하지 않는다. [구현](../../../probes/sites-runtime/host/synthetic-download.mjs)
+`GET /diagnostics/download`는 고정 합성 결과만 내려받는 개발용 화면이고, `GET /diagnostics/synthetic-result.hwp`는 해당 바이너리를 제공한다. 두 경로 모두 Sites의 실제 사용자 ID, 이메일 헤더를 요구한다. 서비스 자격만으로 신원을 대체하지 않는다. [구현](../../../legacy/sites-runtime/host/synthetic-download.mjs)
 
 입력 경로, 문서 ID, 업로드, query, Range는 받지 않고, GET 이외 방법을 거부한다. 기존 고정 fixture를 메모리에서 생성해 문단과 셀 편집, 내용, 레코드 보존 및 재열기를 검사한다. 결과는 정확히 13,312바이트와 SHA-256 `1d3f1472a2637a5fed2672109de946843acd07034756a4273b7fcd43ef159286`이어야 한다. 다르면 다운로드를 거부한다. D1/R2 읽기, 쓰기나 외부 파일 fetch는 없고, 일반 업로드와 MCP 도구 계약도 변경하지 않는다. attachment, private no-store, nosniff, 수동 콘텐츠 제한 헤더를 제공한다.
 
@@ -383,7 +383,7 @@ Node 505개, 실제 compiled Worker/D1/R2/WASM에서 합성 문서 5개의 응�
 
 ## 저장된 버전의 보기 화면
 
-`GET /documents/{document_id}/versions/{version_id}/view`는 실제 D1/R2의 선택 버전을 사용자 소유권으로 조회하는 읽기 전용 화면이다. `page`는 0부터 시작하는 단일 정수 query이고, 중복, 다른 query와 잘못된 값을 거부한다. 다운로드와 SVG 링크는 모두 그 불변 버전에 묶고, 현재 저장본 여부는 저장소의 명시적 `current_version`으로 표시한다. 이전 저장본을 열어도 복구나 편집을 실행하지 않는다. [구현](../../../probes/sites-runtime/host/document-viewer.mjs)
+`GET /documents/{document_id}/versions/{version_id}/view`는 실제 D1/R2의 선택 버전을 사용자 소유권으로 조회하는 읽기 전용 화면이다. `page`는 0부터 시작하는 단일 정수 query이고, 중복, 다른 query와 잘못된 값을 거부한다. 다운로드와 SVG 링크는 모두 그 불변 버전에 묶고, 현재 저장본 여부는 저장소의 명시적 `current_version`으로 표시한다. 이전 저장본을 열어도 복구나 편집을 실행하지 않는다. [구현](../../../legacy/sites-runtime/host/document-viewer.mjs)
 
 화면은 선택한 저장본의 상태와 저장 시각을 한국 시간으로 보여주고, 이전 저장본에서는 현재 저장본으로 이동하는 링크를 제공한다. 버전 목록은 현재 저장본을 먼저 표시하고 나머지는 저장 시각 내림차순으로 정렬한다. 같은 시각의 저장본은 ID를 함께 보여 구분하며, 시각 순서를 실제 편집, 복구 순번으로 해석하지 않는다. 문서와 버전의 ID, 파일 크기와 전체 해시는 접힌 파일 정보에서 확인한다. 저장 이유를 기록하지 않는 현재 스키마에서 가져오기, 편집, 복구라는 이름을 추측하지 않는다.
 
@@ -391,7 +391,7 @@ HWP 다운로드는 기존 보호된 바이너리 경로를 사용한다. SVG는
 
 `/diagnostics/stored-document`는 일반 업로드와 별도의 합성 시험 진입점이다. GET은 생성 없이 버튼만 보여준다. 명시적인 POST에는 동일 origin, 제한된 form 본문, 요청 UUID와 고정 생성 확인을 요구한다. 서버가 고정한 합성 편집 HWP 한 개만 저장하며, 개인 파일, 바이트, 경로, 문서, 소유자 인수를 받지 않는다. 동일 요청 재시도는 같은 문서를 반환한다.
 
-생성한 문서는 직접 삭제할 때까지 보관하고, 실패 후 새 요청으로 맹목적으로 반복 생성하지 않는다. 일반 업로드, 파일 호스트 설정, 기존 자동 정리 workflow는 변경하지 않는다. [합성 생성 경로](../../../probes/sites-runtime/host/stored-synthetic.mjs)
+생성한 문서는 직접 삭제할 때까지 보관하고, 실패 후 새 요청으로 맹목적으로 반복 생성하지 않는다. 일반 업로드, 파일 호스트 설정, 기존 자동 정리 workflow는 변경하지 않는다. [합성 생성 경로](../../../legacy/sites-runtime/host/stored-synthetic.mjs)
 
 시험 생성 GET에만 `Referrer-Policy: same-origin`을 사용한다. `no-referrer`에서는 기본 HTML form POST의 `Origin`이 `null`이 되어 엄격한 출처 검사를 통과하지 못한다. 외부 사이트에는 referrer를 보내지 않고, 문서 보기, 바이너리, SVG의 기존 정책은 유지한다. `null`, 누락, 다른 origin은 계속 거부한다. [브라우저의 Origin 처리](https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Headers/Referrer-Policy#effect_on_the_origin_header)
 

@@ -1,8 +1,8 @@
 /** Local complex character formatting: patch definitions and selected raw runs. */
 import {deflateRawSync} from 'node:zlib';
-import CFB from '../../probes/sites-runtime/node_modules/cfb/cfb.js';
-import {readCfb,readHwp} from '../../probes/sites-runtime/guard/container.mjs';
-import {parseRecords} from '../../probes/sites-runtime/guard/records.mjs';
+import CFB from 'cfb';
+import {readCfb,readHwp} from './guard/container.mjs';
+import {parseRecords} from './guard/records.mjs';
 import {validateFormatProperties,patchCharacterShape,fontFaceRecord} from './local_format.mjs';
 import {fail,view,equal,equalBytes,encodeRecords} from './local_complex_records.mjs';
 

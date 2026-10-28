@@ -1,7 +1,7 @@
 /** Reflow grouped rectangle text horizontally in its transformed bounds.
  * This facade has no authoring/export methods. Source records stay immutable.
  */
-import {GuardError} from '../../probes/sites-runtime/guard/records.mjs';
+import {GuardError} from './guard/records.mjs';
 import {inspectLocalComplex} from './local_complex.mjs';
 import {view,fail} from './local_complex_records.mjs';
 import {composeAffine as mul,affineBounds} from './local_drawing_tree.mjs';

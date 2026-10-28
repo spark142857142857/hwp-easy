@@ -1,6 +1,6 @@
 /** Requested formatting, with raw definition patches and complete non-target preservation. */
-import {GuardError,parseRecords} from '../../probes/sites-runtime/guard/records.mjs';
-import {canonicalRecord,textControlBytes} from '../../probes/sites-runtime/guard/preservation.mjs';
+import {GuardError,parseRecords} from './guard/records.mjs';
+import {canonicalRecord,textControlBytes} from './guard/preservation.mjs';
 import {modelCharacterIds} from './local_character_runs.mjs';
 import {verifyPlainCharacterRuns} from './local_text.mjs';
 // FACE_NAME default aliases from pinned npm source e8800c8, serializer/doc_info.rs (MIT).

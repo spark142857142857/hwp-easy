@@ -2,7 +2,7 @@ import test from 'node:test';import assert from 'node:assert/strict';import fs f
 import {HwpDocument} from '@rhwp/core';
 import {initializeLocal,runLocal} from '../src/one_hwp/local_runner.mjs';
 import {fieldFixture,nestedFixture,groupFixture,checkedExport} from './local_complex_fixtures.mjs';
-import {readHwp} from '../probes/sites-runtime/guard/container.mjs';import {parseRecords} from '../probes/sites-runtime/guard/records.mjs';
+import {readHwp} from '../src/one_hwp/guard/container.mjs';import {parseRecords} from '../src/one_hwp/guard/records.mjs';
 initializeLocal(fs.readFileSync(new URL('../node_modules/@rhwp/core/rhwp_bg.wasm',import.meta.url)));
 function workspace(t,bytes){const dir=fs.mkdtempSync(path.join(os.tmpdir(),'hwp-complex-'));t.after(()=>{assert.equal(path.dirname(dir),os.tmpdir());assert.ok(path.basename(dir).startsWith('hwp-complex-'));fs.rmSync(dir,{recursive:true,force:true});});const source=path.join(dir,'synthetic.hwp');fs.writeFileSync(source,bytes);return {source,dir};}
 const read=source=>runLocal({action:'read',source,max_chars:64000});

@@ -1,7 +1,7 @@
 /** Reorder complete body groups without rewriting their content or definitions. */
 import {createLocalEngineApi as createEngineApi} from './local_api.mjs';
-import {readHwp} from '../../probes/sites-runtime/guard/container.mjs';
-import {GuardError,parseRecords} from '../../probes/sites-runtime/guard/records.mjs';
+import {readHwp} from './guard/container.mjs';
+import {GuardError,parseRecords} from './guard/records.mjs';
 import {packLocalBodyRewrite} from './local_body_write.mjs';
 import {recordsByBlock,preservableStructuralProfile,verifyListCounts} from './local_structure.mjs';
 const fail=code=>{throw new GuardError(code);},equal=(a,b)=>JSON.stringify(a)===JSON.stringify(b);

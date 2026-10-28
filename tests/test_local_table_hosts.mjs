@@ -2,7 +2,7 @@ import test from 'node:test';import assert from 'node:assert/strict';import fs f
 import {HwpDocument} from '@rhwp/core';import {initializeLocal,runLocal} from '../src/one_hwp/local_runner.mjs';
 import {inspectLocalComplex,editLocalComplex} from '../src/one_hwp/local_complex.mjs';import {tableAnswer,tableReflowFixture,hostTablesFixture} from './local_table_reflow_fixtures.mjs';
 import {view} from '../src/one_hwp/local_complex_records.mjs';import {publishVerifiedPatch} from '../src/one_hwp/local_verified_patch.mjs';
-import {digest} from '../src/one_hwp/local_file.mjs';import {assertPlannedEdit} from '../scripts/local-plan-proof.mjs';
+import {digest} from '../src/one_hwp/local_file.mjs';import {assertPlannedEdit} from '../scripts/lib/local-plan-proof.mjs';
 initializeLocal(fs.readFileSync(new URL('../node_modules/@rhwp/core/rhwp_bg.wasm',import.meta.url)));
 const read=source=>runLocal({action:'read',source,max_chars:64000,max_blocks:128}),flow=s=>({type:'reflow_table',...Object.fromEntries(['target_id','expected_old','expected_tables'].map(k=>[k,s.table_reflow[0][k]]))});
 const raw=bytes=>inspectLocalComplex(HwpDocument,bytes,{includeDocumentInfo:false,verifyCharacterModel:false});

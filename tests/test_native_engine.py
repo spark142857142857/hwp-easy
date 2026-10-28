@@ -44,7 +44,7 @@ def real_trailer_fixture():
     """Extend only stream padding of a generated HWP, using Node's stdlib."""
     script = (
         'import {fixture} from "./tests/rhwp_fixtures.mjs";'
-        'import {withCheckedDeflateTrailers} from "./probes/sites-runtime/tests/trailer-fixtures.mjs";'
+        'import {withCheckedDeflateTrailers} from "./tests/fixtures/trailer-fixtures.mjs";'
         'const bytes=withCheckedDeflateTrailers(fixture());'
         'process.stdout.write(Buffer.from(bytes).toString("base64"));'
     )

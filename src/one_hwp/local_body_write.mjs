@@ -1,6 +1,6 @@
 /** Local allocation fallback, preserving every packed non-body stream exactly. */
 import {deflateRawSync} from 'node:zlib';
-import {packLocalBodyRewrite as boundedRewrite} from '../../probes/sites-runtime/engine/structural-body-repair.mjs';
+import {packLocalBodyRewrite as boundedRewrite} from './engine/structural-body-repair.mjs';
 import {patchLocalPackedStreams} from './local_container_write.mjs';
 export function packLocalBodyRewrite(source,raw,bodies){
  try{return boundedRewrite(source,raw,bodies);}

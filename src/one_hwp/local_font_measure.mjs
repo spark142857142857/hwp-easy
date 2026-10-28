@@ -1,6 +1,6 @@
 /** Disposable source-font measurements. No scratch bytes reach a writer. */
-import {parseRecords} from '../../probes/sites-runtime/guard/records.mjs';
-import {readCfb,readHwp} from '../../probes/sites-runtime/guard/container.mjs';
+import {parseRecords} from './guard/records.mjs';
+import {readCfb,readHwp} from './guard/container.mjs';
 import {patchLocalPackedStreams} from './local_container_write.mjs';
 import {view,fail,encodeRecords} from './local_complex_records.mjs';
 

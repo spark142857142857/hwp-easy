@@ -8,7 +8,7 @@ import {view} from '../src/one_hwp/local_complex_records.mjs';
 import {publishVerifiedPatch} from '../src/one_hwp/local_verified_patch.mjs';
 import {editLocalComplex} from '../src/one_hwp/local_complex.mjs';
 import {digest} from '../src/one_hwp/local_file.mjs';
-import {parseRecords} from '../probes/sites-runtime/guard/records.mjs';
+import {parseRecords} from '../src/one_hwp/guard/records.mjs';
 import {definitionBytes} from '../src/one_hwp/local_complex_format.mjs';
 export const floatingProfiles=[{name:'floating-picture',objects:['picture']},{name:'floating-box',objects:['box']},{name:'floating-both',objects:['picture','box']},{name:'deep-floating',depth:3,objects:['box','picture']},{name:'floating-footer',footer:true,objects:['picture','box']},{name:'floating-page-boundary',lines:36,objects:['box','picture']},{name:'floating-page-packing',lines:8,objects:['picture','picture','picture','picture'],pictureHeight:22000}];
 export const samePageProfiles=[{name:'space-short-picture',lines:8,objects:['picture'],samePage:true},{name:'space-short-both',lines:8,samePage:true},{name:'space-deep-both',depth:3,lines:8,samePage:true},{name:'space-medium',lines:20,samePage:true},{name:'space-footer',lines:16,footer:true,samePage:true},{name:'space-body-prefix',lines:8,prefixLines:10,samePage:true},{name:'space-too-full',lines:30},{name:'space-explicit-break',lines:8,explicitBreak:true}];

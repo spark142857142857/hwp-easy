@@ -30,8 +30,8 @@ docs/local/
 *.tar
 *.tar.gz
 *.zip
-build/
-dist/
+/build/
+/dist/
 src/*.egg-info/
 .one-hwp-*/
 *.log

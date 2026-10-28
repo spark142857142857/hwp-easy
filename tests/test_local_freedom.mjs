@@ -1,7 +1,7 @@
 import test from 'node:test';import assert from 'node:assert/strict';import fs from 'node:fs';import path from 'node:path';import os from 'node:os';
 import {HwpDocument} from '@rhwp/core';import {initializeLocal,runLocal} from '../src/one_hwp/local_runner.mjs';
 import {groupFixture,fieldFixture,nestedFixture,checkedExport,commonSizedGroupFixture,pageBreakFieldFixture} from './local_complex_fixtures.mjs';
-import {readHwp} from '../probes/sites-runtime/guard/container.mjs';import {parseRecords} from '../probes/sites-runtime/guard/records.mjs';
+import {readHwp} from '../src/one_hwp/guard/container.mjs';import {parseRecords} from '../src/one_hwp/guard/records.mjs';
 import {progressiveJpeg} from './local_image_fixtures.mjs';import {digest} from '../src/one_hwp/local_file.mjs';
 import {inspectLocalComplex} from '../src/one_hwp/local_complex.mjs';
 initializeLocal(fs.readFileSync(new URL('../node_modules/@rhwp/core/rhwp_bg.wasm',import.meta.url)));

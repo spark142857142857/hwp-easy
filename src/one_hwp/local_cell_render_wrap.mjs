@@ -2,7 +2,7 @@
  * Pinned, document-bound base advances exclude renderer justification stretch.
  */
 import {view} from './local_complex_records.mjs';
-import {parseRecords} from '../../probes/sites-runtime/guard/records.mjs';
+import {parseRecords} from './guard/records.mjs';
 import {createNaturalTextMeasurer} from './local_font_measure.mjs';
 import {renderTableKey} from './local_render_table_identity.mjs';
 const same=(a,b)=>JSON.stringify(a)===JSON.stringify(b);

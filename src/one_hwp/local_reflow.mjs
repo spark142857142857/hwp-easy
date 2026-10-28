@@ -1,6 +1,6 @@
 /** Selected automatic flow settings; raw content and opaque controls stay intact. */
 import {deflateRawSync} from 'node:zlib';
-import {parseRecords} from '../../probes/sites-runtime/guard/records.mjs';
+import {parseRecords} from './guard/records.mjs';
 import {inspectLocalComplex} from './local_complex.mjs';
 import {standardBlockId} from './local_complex_table.mjs';
 import {definitionBytes} from './local_complex_format.mjs';
