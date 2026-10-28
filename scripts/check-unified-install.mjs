@@ -6,10 +6,12 @@ import {spawnSync} from 'node:child_process';
 import {fileURLToPath} from 'node:url';
 import {createAgentPackage} from '../packages/hwp-easy/lib/agent-package.mjs';
 import {installSkill,inspectSkill} from '../packages/hwp-easy/lib/agent-skill.mjs';
+import {inspectPlugin} from '../packages/hwp-easy/lib/plugin.mjs';
 
 const [packageArg,oldArg,reportArg]=process.argv.slice(2);
 assert.ok(packageArg&&oldArg&&reportArg,'Usage: node check-unified-install.mjs <unpacked-npm-folder> <old-marketplace> <fresh-report-folder>');
 const root=fileURLToPath(new URL('..',import.meta.url)),pkg=path.resolve(packageArg),old=path.resolve(oldArg),report=path.resolve(reportArg);
+const oldVersion=(await inspectPlugin(path.join(old,'plugins/hwp-easy'))).version;
 await fs.mkdir(report);
 const run=(exe,args,timeout=240000)=>{
  const r=spawnSync(exe,args,{encoding:'utf8',shell:false,windowsHide:true,timeout,env:process.env});
@@ -29,14 +31,14 @@ for(const client of ['claude-code','cursor']) {
  assert.equal(invoke('install',client,freshRoot).status,'UNCHANGED');
  const prior=path.join(report,client,'old-package');await createAgentPackage(path.join(old,'plugins/hwp-easy'),client,prior);
  const updateRoot=path.join(report,client,'update-skills');await installSkill(prior,client,updateRoot);
- const updated=invoke('update',client,updateRoot);assert.equal(updated.previous_version,'0.2.19');
+ const updated=invoke('update',client,updateRoot);assert.equal(updated.previous_version,oldVersion);
  document(updated.skill_path,client+'-updated-document');
- assert.equal(invoke('rollback',client,updateRoot).version,'0.2.19');
+ assert.equal(invoke('rollback',client,updateRoot).version,oldVersion);
  assert.equal(invoke('rollback',client,updateRoot).version,check.version);
  assert.deepEqual(await fs.readdir(updateRoot),['hwp-easy']);
  await inspectSkill(updated.skill_path,client);
  clients.push({client,version:check.version,runner_sha256:check.runner_sha256,wasm_sha256:check.wasm_sha256,
-  fresh_install:true,update_from_0_2_19:true,plugin_rollback_and_redo:true,same_file_save_restore_and_independent_reader:true});
+  fresh_install:true,update_from_version:oldVersion,plugin_rollback_and_redo:true,same_file_save_restore_and_independent_reader:true});
 }
 const codexReport=JSON.parse(run(process.execPath,[path.join(root,'scripts/check-distribution-install.mjs'),pkg,old,path.join(report,'codex')],360000));
 assert.equal(codexReport.status,'PASS');

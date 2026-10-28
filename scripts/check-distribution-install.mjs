@@ -13,6 +13,7 @@ const root=fileURLToPath(new URL('..',import.meta.url)),pkg=path.resolve(package
 await fs.mkdir(report);
 const codex=await findCodex(),cli=path.join(pkg,'bin/hwp-easy.mjs');
 const selected=await inspectPlugin(path.join(pkg,'plugins/hwp-easy'));
+const oldVersion=(await inspectPlugin(path.join(old,'plugins/hwp-easy'))).version;
 const execute=(executable,args,env={})=>{
   const result=spawnSync(executable,args,{shell:false,windowsHide:true,encoding:'utf8',timeout:120000,env:{...process.env,...env}});
   assert.equal(result.error,undefined);return result;
@@ -47,9 +48,9 @@ finally {await fs.rename(paused,pkg);}
 
 const updateHome=await prepare('update'),oldRun=codexRunner(codex,updateHome);
 await oldRun(['plugin','marketplace','add',old,'--json']);await oldRun(['plugin','add','hwp-easy@hwp-easy','--json']);
-const upgraded=installer('update','update');assert.equal(upgraded.previous_version,'0.2.19');assert.equal(upgraded.version,selected.version);
+const upgraded=installer('update','update');assert.equal(upgraded.previous_version,oldVersion);assert.equal(upgraded.version,selected.version);
 const documentUpdate=checkDocument(upgraded,'update-document');
-assert.equal(installer('rollback','update').version,'0.2.19');
+assert.equal(installer('rollback','update').version,oldVersion);
 assert.equal(installer('rollback','update').version,selected.version);
 assert.match(await fs.readFile(path.join(updateHome,'config.toml'),'utf8'),/hide_agent_reasoning = true/);
 
@@ -59,10 +60,10 @@ const wrapper=path.join(report,'fault-injected-codex.mjs'),marker=path.join(repo
 await fs.writeFile(marker,'one failure');
 await fs.writeFile(wrapper,`import fs from 'node:fs';import {spawnSync} from 'node:child_process';\nconst args=process.argv.slice(2);\nif(args[0]==='plugin'&&args[1]==='add'&&fs.existsSync(${JSON.stringify(marker)})){fs.unlinkSync(${JSON.stringify(marker)});console.error('injected failure');process.exit(24);}\nconst r=spawnSync(${JSON.stringify(codex)},args,{shell:false,windowsHide:true,stdio:'inherit'});process.exit(r.status??1);\n`);
 assert.match(installer('update','failure',['--codex',wrapper],true),/previous HWP Easy installation restored/);
-assert.equal(installer('status','failure').version,'0.2.19');
+assert.equal(installer('status','failure').version,oldVersion);
 assert.match(await fs.readFile(path.join(failHome,'config.toml'),'utf8'),/hide_agent_reasoning = true/);
 const result={status:'PASS',version:selected.version,actual_codex_executable:codex,isolated_codex_homes:true,
-  fresh_install:true,idempotent_install:true,previous_0_2_19_updated:true,plugin_rollback_and_redo:true,
+  fresh_install:true,idempotent_install:true,update_from_version:oldVersion,plugin_rollback_and_redo:true,
   injected_real_cli_install_failure_recovered:true,unrelated_setting_retained:true,npm_source_removal_survived:true,
   fresh_installed_document:documentFresh,updated_installed_document:documentUpdate,
   global_codex_configuration_changed:false,claude_code_or_cursor_changed:false,github_actions_run:false,computer_use_calls:0,

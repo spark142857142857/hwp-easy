@@ -8,7 +8,7 @@ on:
         description: Verification scope (all or a focused table feature)
         type: choice
         default: all
-        options: [all, table-flow, table-text, table-metrics, table-controls, table-floating, table-compact, package-balance, render-view, placement-balance, font-balance]
+        options: [all, table-flow, table-text, table-metrics, table-controls, table-floating, table-compact, package-balance, render-view, placement-balance, font-balance, windows-layout]
 
 permissions:
   contents: read
@@ -233,20 +233,16 @@ jobs:
         run: python scripts/check-local-reflow.py
 
   local-floating:
-    if: ${{ inputs.scope == 'all' || inputs.scope == 'table-floating' || inputs.scope == 'render-view' }}
+    if: ${{ inputs.scope == 'all' || inputs.scope == 'table-floating' || inputs.scope == 'render-view' || inputs.scope == 'windows-layout' }}
     name: Floating placement packages / ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
-    # Windows reached the new render corpus after 16m31s of existing work.
-    # Keep every test; bound Linux as before and allow measured Windows work.
-    timeout-minutes: ${{ matrix.timeout_minutes }}
+    # Windows reached the final mixed-host cases at the previous 22m limit.
+    # The focused scope finishes only the two cancelled Windows layout jobs.
+    timeout-minutes: ${{ matrix.os == 'windows-latest' && 30 || 18 }}
     strategy:
       fail-fast: false
       matrix:
-        include:
-          - os: ubuntu-latest
-            timeout_minutes: 18
-          - os: windows-latest
-            timeout_minutes: 22
+        os: ${{ fromJSON(inputs.scope == 'windows-layout' && '["windows-latest"]' || '["ubuntu-latest","windows-latest"]') }}
     steps:
       - name: Check out source
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
@@ -308,8 +304,7 @@ jobs:
       - name: Independently verify floating table flow and recovery
         run: python scripts/check-local-table-floating.py
 
-      # This job has measured headroom; the text/control job is close to its
-      # eight-minute budget. Keep existing tests, job count and limits intact.
+      # Keep this corpus outside the near-full text/control job.
       - name: Verify mixed host and column render save/recovery through package
         run: node scripts/check-local-nested-forest.mjs outputs/local-nested-mixed mixed
       - name: Independently verify mixed/column source preservation
@@ -497,19 +492,15 @@ jobs:
 
 
   local-large-text:
-    if: ${{ inputs.scope == 'all' || inputs.scope == 'render-view' || inputs.scope == 'placement-balance' || inputs.scope == 'font-balance' }}
+    if: ${{ inputs.scope == 'all' || inputs.scope == 'render-view' || inputs.scope == 'placement-balance' || inputs.scope == 'font-balance' || inputs.scope == 'windows-layout' }}
     name: Large text and general placement / ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
-    # Both checks finished near the old 12-minute boundary; allow runner cleanup.
-    timeout-minutes: 18
+    # Windows reached ancestor alignment at the previous 18m limit.
+    timeout-minutes: ${{ matrix.os == 'windows-latest' && 30 || 18 }}
     strategy:
       fail-fast: false
       matrix:
-        include:
-          - os: ubuntu-latest
-            python: '3.11'
-          - os: windows-latest
-            python: '3.12'
+        os: ${{ fromJSON(inputs.scope == 'windows-layout' && '["windows-latest"]' || '["ubuntu-latest","windows-latest"]') }}
     steps:
       - name: Check out source
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
@@ -518,7 +509,7 @@ jobs:
       - name: Set up Python independent reader
         uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7
         with:
-          python-version: ${{ matrix.python }}
+          python-version: ${{ matrix.os == 'windows-latest' && '3.12' || '3.11' }}
       - name: Install only the independent HWP reader
         run: python -m pip install olefile==0.47
       - name: Set up pinned local host
