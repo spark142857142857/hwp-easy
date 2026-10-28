@@ -129,7 +129,7 @@ jobs:
       - name: Install independent OLE reader
         run: python -m pip install olefile==0.47
       - name: Verify explicit-only installation, shared engine and same-file recovery
-        run: node --test tests/test_agent_skill_install.mjs
+        run: node --test tests/test_agent_skill_install.mjs tests/test_distribution_install.mjs tests/test_unified_install.mjs
       - name: Node package local plugin
         run: node scripts/package_local_plugin.mjs
       - name: Node package agent skills

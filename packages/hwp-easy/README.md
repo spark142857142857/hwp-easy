@@ -9,9 +9,9 @@ Local HWP reading and editing for Codex, Claude Code and Cursor. Every client us
 Node.js 22 이상이 필요합니다. 사용하는 앱에 맞는 명령을 선택합니다.
 
 ```bash
-npx hwp-easy@0.5.1 install --client codex
-npx hwp-easy@0.5.1 install --client claude-code
-npx hwp-easy@0.5.1 install --client cursor
+npx hwp-easy@0.5.2 install --client codex
+npx hwp-easy@0.5.2 install --client claude-code
+npx hwp-easy@0.5.2 install --client cursor
 ```
 
 한 명령은 선택한 앱의 HWP Easy만 설치합니다. `--client`를 생략하면 기존 방식대로 Codex를 선택합니다. 공개 패키지 설치에는 npm 로그인이나 2FA가 필요하지 않습니다.
@@ -35,9 +35,9 @@ Codex는 초기 실행을 마친 Codex와 플러그인 명령을 지원하는 Co
 이미 설치돼 있다면 `install` 대신 `update`를 사용합니다. 아래 명령의 앱 이름을 실제 사용하는 앱으로 바꿉니다.
 
 ```bash
-npx hwp-easy@0.5.1 status --client claude-code
-npx hwp-easy@0.5.1 update --client claude-code
-npx hwp-easy@0.5.1 rollback --client claude-code
+npx hwp-easy@0.5.2 status --client claude-code
+npx hwp-easy@0.5.2 update --client claude-code
+npx hwp-easy@0.5.2 rollback --client claude-code
 ```
 
 업데이트는 이전 설치를 스킬 발견 경로 밖에 보관합니다. `rollback`은 보관한 직전 플러그인 또는 스킬로 복귀하며 HWP 문서를 되돌리는 명령이 아닙니다. 문서 복구는 HWP Easy 스킬에 요청합니다. 설치 실패 시 기존 설치를 복원하고, 복원이 실패하면 보관 경로를 안내합니다.
