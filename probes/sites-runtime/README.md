@@ -2,14 +2,14 @@
 
 합성 HWP로 엔진과 독립 레코드 검사, D1/R2 저장, 사용자별 접근 제어를 시험하는 Worker다. 개발용 검사와 소유자 전용 배포의 소스를 포함한다. 일반 사용자는 [사용 안내](../../docs/quick-start.md)를 참고한다.
 
-업로드는 기본적으로 꺼져 있다. 사용자가 요청한 소유자 전용 배포에서 파일 가져오기를 열고 Codex Desktop의 업로드부터 편집, 저장, 재시도까지 확인했다. 표시 이름은 `HWP Easy`다. 자세한 조건은 [원격 문서 도구](../../docs/remote-documents.md), 실제 연결 상태는 [연결 검증 기록](../../docs/codex-cloud.md#현재-연결-검증-상태)에 있다.
+업로드는 기본적으로 꺼져 있다. 사용자가 요청한 소유자 전용 배포에서 파일 가져오기를 열고 Codex Desktop의 업로드부터 편집, 저장, 재시도까지 확인했다. 표시 이름은 `HWP Easy`다. 자세한 조건은 [원격 문서 도구](../../docs/archive/remote/documents.md), 실제 연결 상태는 [연결 검증 기록](../../docs/archive/cloud.md#현재-연결-검증-상태)에 있다.
 
 ## 확인한 범위
 
 - Node와 browser ESM은 공통 `src/one_hwp/rhwp_api.mjs`를 사용한다. 고정 `@rhwp/core` 0.8.6을 precompiled WASM module로 실행하며 런타임에서 bytes를 컴파일하지 않는다.
 - 합성 HWP의 본문, 표 읽기, 국소 편집, HWP 출력, 재열기, 비대상 보존, SVG 생성 및 같은 버전의 이어 읽기를 검사한다. 긴 문단 입력을 짧게 교체한 뒤 렌더링하는 진단은 긴 원본 렌더링을 입증하지 않는다.
 - 모델과 독립적으로 CFB, bounded raw-DEFLATE, 본문/DocInfo 레코드를 검사한다. 미지원 tag, 잘못된 체인, 비대상 레코드 손실을 거부한다. 이는 좁은 지원 profile이며 범용 복구 parser나 시각 배치 인증이 아니다.
-- 확인된 단일 구역의 `pgnp`를 보존 전용으로 허용한다. 해당 문단은 읽기 전용이고 다른 지원 대상만 편집한다. 합성 네 형태, 잘못된 구조/연결, 저장 시 제어 변조 거부와 실제 workerd/D1/R2의 편집, 다운로드, 재열기, 이전 버전 불변을 시험했다. 읽기 완료와 편집 계약을 분리하며 로컬 stdio 차단, 다중 구역, 시각 배치의 미검증은 유지한다. [계약](../../docs/remote-documents.md#쪽-번호-보존-전용-편집)
+- 확인된 단일 구역의 `pgnp`를 보존 전용으로 허용한다. 해당 문단은 읽기 전용이고 다른 지원 대상만 편집한다. 합성 네 형태, 잘못된 구조/연결, 저장 시 제어 변조 거부와 실제 workerd/D1/R2의 편집, 다운로드, 재열기, 이전 버전 불변을 시험했다. 읽기 완료와 편집 계약을 분리하며 로컬 stdio 차단, 다중 구역, 시각 배치의 미검증은 유지한다. [계약](../../docs/archive/remote/documents.md#쪽-번호-보존-전용-편집)
 - 실제 workerd/D1/R2에서 저장, 재시작, 현재/이전 버전 조회, 조건부 저장, 재시도, 복구, 기록된 버전 삭제를 시험한다. 실패는 명시적으로 주입하며 신원 헤더, 파일 네트워크는 모의다. 실제 OAuth 격리, 운영 장애/삭제 인증으로 간주하지 않는다.
 - 소유자 전용 Sites의 고정 엔진/저장 진단과 실제 Desktop, ChatGPT Work Cloud 사용자 연결의 합성 도구 왕복을 확인했다. 익명, 임의 신원, 서비스 자격의 사용자 문서/MCP 접근은 거부한다. 서비스 자격 진단은 사용자 MCP 연결 검증이 아니다.
 - 실제 native 도구의 고정 합성 파일 전달, embedded HWP 회수와 별도 로그인 Chrome의 합성 저장 버전 다운로드를 확인했다. 저장소 Codex Cloud에서도 고정 합성 입력, 편집, 바이트 회수, 복구를 확인했다. 운영 버전 46의 혼합 서식 치환은 본문, 일반 셀, 병합 셀의 실제 저장, 회수, 복구와 독립 바이트 검사까지 통과했다. 일반 사용자 문서, 두 OAuth 사용자, Cloud 결과 첨부 UI, 시각 배치는 미검증이며 Dots는 MVP에서 제외한다. 개별 배포, 인증 이력은 ignored 로컬 기록에 보관한다.
@@ -22,15 +22,15 @@
 
 `hwp_read`는 보이지 않는 별도 글자 서식과 검증되지 않은 텍스트 레코드 구조 등 지원하지 않는 대상에 `editable: false`, `edit_restrictions`의 고정 코드, 한국어 사유를 표시한다. 검증된 기존 빈 셀 문단은 `empty_cell_fill_supported`로 구분하고, 텍스트 레코드 한 개의 정확한 추가를 검사한 뒤 채운다. 새 셀, 문단, 서식 생성은 아니다.
 
-다른 대상은 그대로 조회할 수 있으며 `editable: true`만으로 저장 성공을 보장하지 않는다. 제한 대상의 계획, 편집은 저장 전에 거부한다. 여러 대상의 실패 요청을 임의로 분할 저장하지 않는다. [대상별 제한 계약](../../docs/remote-documents.md#조회-단계의-대상별-편집-제한), [빈 셀 채우기](../../docs/remote-documents.md#기존-빈-셀의-텍스트-채우기)
+다른 대상은 그대로 조회할 수 있으며 `editable: true`만으로 저장 성공을 보장하지 않는다. 제한 대상의 계획, 편집은 저장 전에 거부한다. 여러 대상의 실패 요청을 임의로 분할 저장하지 않는다. [대상별 제한 계약](../../docs/archive/remote/documents.md#조회-단계의-대상별-편집-제한), [빈 셀 채우기](../../docs/archive/remote/documents.md#기존-빈-셀의-텍스트-채우기)
 
-셀 목록의 0 word 보완 후 기본 압축이 후보 CFB의 기존 할당에 맞지 않으면 같은 raw 바이트를 level 9로 한 번만 다시 압축한다. 할당 수, 저장 종류, 내용 보존 조건은 그대로이며 여전히 맞지 않으면 저장하지 않는다. 합성 8×2 표의 경계 사례를 Node와 실제 workerd/D1/R2에서 검사한다. [셀 목록 보존 계약](../../docs/remote-documents.md#셀-목록의-0-값-보존)
+셀 목록의 0 word 보완 후 기본 압축이 후보 CFB의 기존 할당에 맞지 않으면 같은 raw 바이트를 level 9로 한 번만 다시 압축한다. 할당 수, 저장 종류, 내용 보존 조건은 그대로이며 여전히 맞지 않으면 저장하지 않는다. 합성 8×2 표의 경계 사례를 Node와 실제 workerd/D1/R2에서 검사한다. [셀 목록 보존 계약](../../docs/archive/remote/documents.md#셀-목록의-0-값-보존)
 
-원격 조회의 `cell_text_clear_supported`는 검증된 기존 일반 텍스트 셀을 비울 수 있는 원본 구조 자격이다. 정확한 텍스트 레코드 제거와 원래 문단과 셀, 서식의 보존을 검사하고, 채우기와 결합해도 전체 요청이 유효할 때만 저장한다. 고정 합성 workflow는 채운 셀을 다시 비우고 재열기, 복구한다. Python 로컬 stdio의 기본 차단은 바꾸지 않는다. [셀 비우기 계약](../../docs/remote-documents.md#기존-셀의-텍스트-비우기)
+원격 조회의 `cell_text_clear_supported`는 검증된 기존 일반 텍스트 셀을 비울 수 있는 원본 구조 자격이다. 정확한 텍스트 레코드 제거와 원래 문단과 셀, 서식의 보존을 검사하고, 채우기와 결합해도 전체 요청이 유효할 때만 저장한다. 고정 합성 workflow는 채운 셀을 다시 비우고 재열기, 복구한다. Python 로컬 stdio의 기본 차단은 바꾸지 않는다. [셀 비우기 계약](../../docs/archive/remote/documents.md#기존-셀의-텍스트-비우기)
 
 동기 라이브러리 `snapshot.plan`은 대상, 이전 값만 확인하며 `serialization_checked: false`다. writer가 셀 LIST_HEADER offset 6–7의 0 word를 `0x0400`으로 기본화하는 사례는 나머지 헤더, 모델 좌표, 문단 수가 일치할 때만 원래 두 바이트를 유지한다. 기존 CFB 할당을 넘으면 거부하며, 보완 후 전체 모델과 raw 검사는 필수다.
 
-다른 메타데이터 손실은 계획, 편집에서 계속 거부하고 D1/R2를 유지한다. 원문과 개인 문서 경로를 회귀 fixture로 사용하지 않는다. [정확한 보존 계약](../../docs/remote-documents.md#셀-목록의-0-값-보존)
+다른 메타데이터 손실은 계획, 편집에서 계속 거부하고 D1/R2를 유지한다. 원문과 개인 문서 경로를 회귀 fixture로 사용하지 않는다. [정확한 보존 계약](../../docs/archive/remote/documents.md#셀-목록의-0-값-보존)
 
 ## 재현 방법
 
@@ -47,15 +47,15 @@ npm test
 
 `npm run test:recovery`는 복구 자료의 읽기 전용 사전 검사와 별도 로컬 D1/R2 복구 시험을 실행한다. 모의 두 소유자, 문서 2개, 버전 4개, 완료된 삭제 1건을 사용하며, 원래 runtime을 닫고 새 저장 위치로 복사한 뒤 다시 시작해 HWP, 이력, 이름, 재시도, 삭제 차단을 확인한다. 선택적인 객체 목록 점검은 R2 목록을 세 페이지로 읽어 기록된 파일 4개와 미게시 파일 1개를 구분하고, 모든 DB 기록과 파일 5개의 크기, 해시가 그대로임을 확인한다.
 
-목록 누락, 중복, 크기 불일치, 잘못된 페이지 이동은 거부하며 이름, 소유자, 객체 키, 본문은 보고하지 않는다. 사용자 파일 경로나 인수를 받지 않고 네트워크 호출, 운영 백업/복원, 미게시 파일 삭제를 하지 않는다. 사전 검사 helper는 배포 Worker나 MCP 도구에 연결하지 않는다. [복구 범위와 운영 조건](../../docs/durable-storage.md#독립-로컬-저장소의-합성-복구-시험)
+목록 누락, 중복, 크기 불일치, 잘못된 페이지 이동은 거부하며 이름, 소유자, 객체 키, 본문은 보고하지 않는다. 사용자 파일 경로나 인수를 받지 않고 네트워크 호출, 운영 백업/복원, 미게시 파일 삭제를 하지 않는다. 사전 검사 helper는 배포 Worker나 MCP 도구에 연결하지 않는다. [복구 범위와 운영 조건](../../docs/archive/remote/storage.md#독립-로컬-저장소의-합성-복구-시험)
 
 `build.mjs`는 ESM, WASM, 검증된 라이선스 고지를 `dist/server`에, migration을 `dist/.openai/drizzle`에 작성한다. pako 3.0.2는 bounded raw-DEFLATE runtime이다. cfb는 합성 fixture writer, Drizzle은 스키마/migration 생성, Miniflare, esbuild는 시험/빌드에만 사용한다. 이들은 배포 Worker의 별도 runtime 의존성이 아니다. [외부 구성요소 고지](../../THIRD_PARTY_NOTICES.md)
 
-복구 전용 검사는 선택적 AES-256-GCM 파일 암호화와 잘못된 키, 변조 거부도 포함한다. 임시 키는 메모리에만 두고 암호화 파일을 기록한 뒤 원래 저장소를 닫아, 실제 재읽기 자료만으로 독립 로컬 저장소를 복원, 재시작한다. 평문 복구 파일의 기존 읽기 계약은 별도 단위 검사로 유지한다. 암호화 helper는 호출자가 별도로 보관한 무작위 32바이트 키를 받는 라이브러리이며 사용자 암호 입력, 키 보관, 운영 내보내기, 복원 명령은 제공하지 않는다. [암호화 파일과 검증 경계](../../docs/durable-storage.md#복구-파일의-선택적-암호화와-변조-확인)
+복구 전용 검사는 선택적 AES-256-GCM 파일 암호화와 잘못된 키, 변조 거부도 포함한다. 임시 키는 메모리에만 두고 암호화 파일을 기록한 뒤 원래 저장소를 닫아, 실제 재읽기 자료만으로 독립 로컬 저장소를 복원, 재시작한다. 평문 복구 파일의 기존 읽기 계약은 별도 단위 검사로 유지한다. 암호화 helper는 호출자가 별도로 보관한 무작위 32바이트 키를 받는 라이브러리이며 사용자 암호 입력, 키 보관, 운영 내보내기, 복원 명령은 제공하지 않는다. [암호화 파일과 검증 경계](../../docs/archive/remote/storage.md#복구-파일의-선택적-암호화와-변조-확인)
 
 복구 HWP 사전 검사는 파일 인증, 해시 검사 뒤 각 버전의 전체 읽기를 복원 쓰기보다 먼저 실행한다. 인증된 파일에 해시가 맞는 가짜 HWP가 들어 있어도 새 D1/R2가 비어 있는 동안 거부하며, 지원되지 않는 머리말 등은 부분 내용 확인으로 집계한다. 한 번에 128버전, 버전별 400,000 UTF-16 단위, 합산 2,000,000단위, 512 읽기 페이지를 넘으면 작업량 거부로 구분한다.
 
-반환 메타데이터는 동결하고 바이트는 사본으로 돌려준다. `npm run test:recovery`에 실제 엔진 검사를 포함하며 운영 복원, 자동 인증 갱신, 조판 성공을 인증하지 않는다. [HWP 재열기 사전 검사](../../docs/durable-storage.md#복원-전-모든-hwp-버전의-재열기-검사)
+반환 메타데이터는 동결하고 바이트는 사본으로 돌려준다. `npm run test:recovery`에 실제 엔진 검사를 포함하며 운영 복원, 자동 인증 갱신, 조판 성공을 인증하지 않는다. [HWP 재열기 사전 검사](../../docs/archive/remote/storage.md#복원-전-모든-hwp-버전의-재열기-검사)
 
 ### 개발용 Sites 배포 파일 포장
 
@@ -73,7 +73,7 @@ archive 루트에는 `.openai/hosting.json`, `.openai/drizzle/**`와 `dist/serve
 
 `hwp_transfer_probe`는 일반 업로드와 별도로 고정 합성 HWP만 시험한다. 서버 지문, 13,312바이트 제한, 별도 `HWP_EASY_SYNTHETIC_FILE_ORIGINS`, 사용자 인증을 모두 요구한다. 별도 호스트가 없으면 origin만 검사하고 다운로드하지 않는다. 후보 origin은 허가 근거가 아니며 자동 허용하지 않는다.
 
-지문을 통과하면 조회, 편집, 기본 저장, 재열기, 복구와 생성 범위 정리를 수행하고 편집된 HWP를 MCP embedded resource로 반환한다. 로컬 모의 전달, 실패 및 결과 재현 검사는 실제 native/Cloud/Dots의 첨부, 다운로드 UI 완료를 뜻하지 않는다. 개발용 파일 생성, 회수 helper는 새 ignored 합성 파일만 만들고 기존 파일을 덮어쓰지 않는다. [전송 계약과 한계](../../docs/remote-documents.md#고정-합성-파일-전달-진단)
+지문을 통과하면 조회, 편집, 기본 저장, 재열기, 복구와 생성 범위 정리를 수행하고 편집된 HWP를 MCP embedded resource로 반환한다. 로컬 모의 전달, 실패 및 결과 재현 검사는 실제 native/Cloud/Dots의 첨부, 다운로드 UI 완료를 뜻하지 않는다. 개발용 파일 생성, 회수 helper는 새 ignored 합성 파일만 만들고 기존 파일을 덮어쓰지 않는다. [전송 계약과 한계](../../docs/archive/remote/documents.md#고정-합성-파일-전달-진단)
 
 업로드가 꺼진 `hwp_import`의 거부는 `isError: true`와 첫 오류 text를 유지한다. 안전한 descriptor에만 공개 origin 피드백을 추가하고 signed URL, 파일명, ID, 내용을 반환하지 않는다. 이 거부 경로에서는 네트워크, 바이트 수신, 저장을 수행하지 않는다. 명시적으로 업로드와 정확한 파일 호스트를 설정한 소유자 전용 시험에서는 일반 가져오기 도구로 합성 파일을 수신, 검증, 저장했다. 새 도구의 반영 지연을 숨은 쓰기로 우회하지 않는다.
 
@@ -81,15 +81,15 @@ archive 루트에는 `.openai/hosting.json`, `.openai/drizzle/**`와 `dist/serve
 
 저장 결과의 명시적 `hwp_download delivery: chunk`는 4 MiB 이하 불변 버전에서 최대 64 KiB씩 회수한다. 조각은 `application/octet-stream`이며 HWP 완성본이 아니다. 참조 collector로 같은 문서, 버전, 전체 해시, 크기의 연속 조각을 검증하고 전체 SHA-256, 독립 HWP 재열기까지 통과해야 완성 바이트를 받는다. 기존 브라우저 링크와 256 KiB 전체 embedded는 유지한다.
 
-workflow의 **명시적** `diagnostic: large_chunks`만 큰 합성 파일 6조각을 서버 내부에서 검사한다. 실제 native 확장 진단의 응답 시간 초과 사례는 성공, 정리 완료로 집계하지 않고 자동 재시도하지 않는다. 기본 작은 검사는 유지하며 native 클라이언트 조각 전송, PC 자동 저장, Cloud/Dots 완료를 뜻하지 않는다. [결과 반환 계약](../../docs/remote-documents.md#큰-hwp의-버전-고정-조각-회수)
+workflow의 **명시적** `diagnostic: large_chunks`만 큰 합성 파일 6조각을 서버 내부에서 검사한다. 실제 native 확장 진단의 응답 시간 초과 사례는 성공, 정리 완료로 집계하지 않고 자동 재시도하지 않는다. 기본 작은 검사는 유지하며 native 클라이언트 조각 전송, PC 자동 저장, Cloud/Dots 완료를 뜻하지 않는다. [결과 반환 계약](../../docs/archive/remote/documents.md#큰-hwp의-버전-고정-조각-회수)
 
 `/diagnostics/stored-document`는 GET에서 생성하지 않고, 동일 origin의 명시적 POST에서 서버 지문이 고정된 합성 HWP 한 개만 D1/R2에 보관한다. 시험 form GET에만 same-origin referrer 정책을 사용해 기본 POST의 출처를 유지하며 null, 누락, 다른 출처는 거부한다. 이후 `/documents/{id}/versions/{version}/view`는 저장된 선택 버전의 HWP, 수동 SVG, 페이지와 이전 버전 링크를 표시한다. 읽기는 저장, 복구, 자동 삭제를 하지 않는다.
 
 `check-document-viewer.mjs`는 모의 신원의 실제 workerd/D1/R2/WASM으로 재시도, 읽기 불변, MCP 편집, 재시작, 명시적 삭제 후 접근 차단을 시험한다. 별도로 실제 한 사용자의 Chrome 합성 문서 저장 → Codex Desktop native MCP 문단과 셀 편집 → 새 버전 SVG 표시, 이전/현재 HWP 다운로드, 해시, 재열기를 실증했다. 일반 파일, 두 OAuth 사용자 격리, Cloud/Dots, 서식 정확성의 인증은 아니다.
 
-[저장 버전 화면](../../docs/remote-documents.md#저장된-버전의-보기-화면)
+[저장 버전 화면](../../docs/archive/remote/documents.md#저장된-버전의-보기-화면)
 
-브라우저 진단은 `/diagnostics/download`와 `/diagnostics/synthetic-result.hwp`만 제공한다. 사용자 인증 뒤 고정 편집 결과를 생성, 지문 검사하며 D1/R2와 외부 파일 호스트를 사용하지 않는다. `check-synthetic-download.mjs`는 실제 workerd/WASM을 저장소 binding 없이 시험하지만 신원은 모의다. 실제 Chrome 클릭, 수신 검증은 별도 기록으로 구분한다. 이 화면을 일반 저장 버전의 다운로드 UI로 소개하지 않는다. [진단 경계](../../docs/remote-documents.md#고정-합성-브라우저-다운로드)
+브라우저 진단은 `/diagnostics/download`와 `/diagnostics/synthetic-result.hwp`만 제공한다. 사용자 인증 뒤 고정 편집 결과를 생성, 지문 검사하며 D1/R2와 외부 파일 호스트를 사용하지 않는다. `check-synthetic-download.mjs`는 실제 workerd/WASM을 저장소 binding 없이 시험하지만 신원은 모의다. 실제 Chrome 클릭, 수신 검증은 별도 기록으로 구분한다. 이 화면을 일반 저장 버전의 다운로드 UI로 소개하지 않는다. [진단 경계](../../docs/archive/remote/documents.md#고정-합성-브라우저-다운로드)
 
 Site 원본은 별도 checkout으로 관리한다. 실제 `.openai/hosting.json`은 그 checkout에만 있으며 project ID, D1/R2, MCP capability를 유지한다. 저장소의 probe에는 Site ID나 자격을 넣지 않는다. 공통 `rhwp_api.mjs`와 fixture를 Site의 `src/one_hwp`에 복사하고 상대 import만 조정한 뒤 정확한 소스를 Sites 워크플로로 push, 포장, 비공개 게시한다.
 
@@ -108,7 +108,7 @@ Windows 포장 때 워크플로 프로세스에만 Git Bash PATH와 `TAR_OPTIONS
 
 이 조건 전에는 `cloud_documents_enabled`, `document_upload_supported`, `independent_preservation_guard_ported`, `storage_contract_verified`, `user_isolation_verified`, `layout_verified`, `total_isolate_memory_measured`를 모두 `false`로 유지한다. 별도 외부 호스팅으로의 변경은 사용자와 확인한다.
 
-새 Codex Cloud 작업의 연결과 파일 회수는 Sites 서버의 실행과 별도다. [Codex Cloud 지원 기준](../../docs/codex-cloud.md)의 실제 클라이언트 검증을 통과하기 전에는 클라우드 세션에서 사용자 문서를 처리할 수 있다고 표시하지 않는다. 앱 설명의 친절한 안내 문구는 핵심 작업 흐름 검증 후 마무리한다.
+새 Codex Cloud 작업의 연결과 파일 회수는 Sites 서버의 실행과 별도다. [Codex Cloud 지원 기준](../../docs/archive/cloud.md)의 실제 클라이언트 검증을 통과하기 전에는 클라우드 세션에서 사용자 문서를 처리할 수 있다고 표시하지 않는다. 앱 설명의 친절한 안내 문구는 핵심 작업 흐름 검증 후 마무리한다.
 
 ## 공개 플러그인의 도메인 확인
 
