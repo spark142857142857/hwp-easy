@@ -21097,7 +21097,8 @@ var fail14 = (code) => {
 };
 var view14 = (b) => new DataView(b.buffer, b.byteOffset, b.byteLength);
 var equalBytes3 = (a, b) => a.length === b.length && a.every((v, i) => v === b[i]);
-var equal10 = (a, b) => JSON.stringify(a) === JSON.stringify(b);
+var comparableJson = (value) => JSON.stringify(value, (_key, item) => item && typeof item === "object" && !Array.isArray(item) ? Object.fromEntries(Object.keys(item).sort().map((key4) => [key4, item[key4]])) : item);
+var equal10 = (a, b) => comparableJson(a) === comparableJson(b);
 function encodeRecords(records) {
   return Buffer.concat(records.map((r) => {
     const wide = r.payload.length >= 4095, b = Buffer.alloc((wide ? 8 : 4) + r.payload.length);
@@ -28853,8 +28854,8 @@ function prepareObjectField(state, rs, p, field, op) {
   if (!p.text_range_editable || field && !field.editable) fail14("FIELD_TARGET_REQUIRED");
   if (op.type === "update_field") {
     if (!field || !equal10(Object.keys(op).sort(), ["type", "target_id", "expected_old", "expected_metadata", "props"].sort())) fail14("INVALID_OPERATION");
-    const old = { name: field.name, guide: field.guide, command: field.command };
-    if (!equal10(op.expected_metadata, old)) fail14("EXPECTED_FIELD_METADATA_MISMATCH");
+    const old = { name: field.name, guide: field.guide, command: field.command }, expected = op.expected_metadata;
+    if (!expected || typeof expected !== "object" || !equal10(Object.keys(expected).sort(), Object.keys(old).sort()) || Object.keys(old).some((k) => expected[k] !== old[k])) fail14("EXPECTED_FIELD_METADATA_MISMATCH");
     if (!op.props || !Object.keys(op.props).length || Object.keys(op.props).some((k) => !["name", "guide", "command"].includes(k)) || field.field_type === "clickhere" && Object.hasOwn(op.props, "command") || field.field_type !== "clickhere" && Object.hasOwn(op.props, "guide")) fail14("INVALID_FIELD_METADATA");
     const wanted = { ...old, ...op.props };
     Object.values(wanted).forEach((s) => text4(s));

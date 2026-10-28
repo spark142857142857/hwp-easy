@@ -1,6 +1,6 @@
 {
   "package": "hwp-easy",
-  "version": "0.5.1",
+  "version": "0.5.2",
   "runtime": "Node >=22; bundled JS and WASM; no npm or Python at execution time",
   "local_cfb_writer": {
     "name": "cfb",
@@ -33,7 +33,7 @@
   },
   "engine": "@rhwp/core 0.8.6",
   "wasm_sha256": "8000e4ce320b7994dca6bcd58be0c862144c7b805576504e523a420439da658b",
-  "runner_sha256": "a98648ea6c4e3be181b40c32c8c3d3597ec67fbde1025c287b6061b2ab0fb173",
+  "runner_sha256": "fcb97619d81eb83dd77a056f5321da9868855305ace05ff5b2e0439d3084457f",
   "global_registration_changed": false,
   "remote_deployment_changed": false,
   "portal_submission": "NOT_RUN",

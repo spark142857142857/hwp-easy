@@ -1,6 +1,6 @@
 {
   "name": "hwp-easy",
-  "version": "0.5.1",
+  "version": "0.5.2",
   "description": "HWP 파일을 읽고 편집하는 로컬 도구. Codex, Claude Code와 Cursor용 통합 설치 도우미.",
   "type": "module",
   "bin": {
