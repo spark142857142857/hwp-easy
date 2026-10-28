@@ -21,19 +21,19 @@ HWP Easy는 Codex, Claude Code와 Cursor에서 HWP 파일을 읽고 편집하는
 
 ## 설치
 
-현재 공통 배포 버전은 **0.5.1**입니다. Node.js 22 이상을 준비하고 사용하는 앱의 명령을 선택합니다.
+현재 공통 배포 버전은 **0.5.2**입니다. Node.js 22 이상을 준비하고 사용하는 앱의 명령을 선택합니다.
 
 | 앱 | 설치 명령 | 설치 형식 |
 | --- | --- | --- |
-| Codex | `npx hwp-easy@0.5.1 install --client codex` | 로컬 플러그인 |
-| Claude Code | `npx hwp-easy@0.5.1 install --client claude-code` | 개인 스킬 |
-| Cursor | `npx hwp-easy@0.5.1 install --client cursor` | 개인 스킬 |
+| Codex | `npx hwp-easy@0.5.2 install --client codex` | 로컬 플러그인 |
+| Claude Code | `npx hwp-easy@0.5.2 install --client claude-code` | 개인 스킬 |
+| Cursor | `npx hwp-easy@0.5.2 install --client cursor` | 개인 스킬 |
 
 한 명령은 선택한 앱만 설치합니다. 이미 설치했다면 `install` 대신 `update`를 사용합니다. Codex에는 플러그인 명령을 지원하는 Codex CLI가 필요하며, 다른 두 앱의 설치에는 필요하지 않습니다. 공개 패키지 설치에는 npm 계정이나 2FA가 필요하지 않습니다.
 
 설치 후 앱을 다시 열고 Codex에서는 스킬 메뉴에서 **HWP Easy**를 선택하고 Claude Code와 Cursor에서는 `/hwp-easy`를 호출합니다. 세 앱은 같은 엔진과 기능 범위를 사용하며 설치된 사본은 각각 유지됩니다.
 
-[npm 패키지](https://www.npmjs.com/package/hwp-easy)와 [GitHub 릴리스](https://github.com/spark142857142857/hwp-easy/releases/tag/hwp-easy-local-v0.5.1)를 제공합니다. ZIP 설치와 업데이트 및 이전 버전 복귀는 [설치 안내](docs/distribution.md)를 따릅니다. OpenAI 공개 디렉터리 게시는 별도 절차이며 아직 완료하지 않았습니다.
+[npm 패키지](https://www.npmjs.com/package/hwp-easy)와 [GitHub 릴리스](https://github.com/spark142857142857/hwp-easy/releases/tag/hwp-easy-local-v0.5.2)를 제공합니다. ZIP 설치와 업데이트 및 이전 버전 복귀는 [설치 안내](docs/distribution.md)를 따릅니다. OpenAI 공개 디렉터리 게시는 별도 절차이며 아직 완료하지 않았습니다.
 
 ## 사용법
 
@@ -81,9 +81,7 @@ GitHub와 npm은 같은 빌드에서 배포합니다. npm에는 공통 엔진을
 
 ## 프로젝트 상태
 
-0.5.1의 세 앱 신규 설치와 구버전 업데이트, 설치 실패 복구와 이전 버전 복귀를 검증했습니다. 설치된 실행기의 합성 HWP 편집과 같은 파일 저장 및 정확한 복구, Claude Code와 Cursor CLI의 실제 모델 호출을 확인했습니다. [통합 배포 검증](docs/unified-release-0.5.1.md)에 실제 검사와 미검증 항목을 구분했습니다.
-
-후속 Codex 새 채팅 검증에서 JSON 객체 항목 순서에 따른 잘못된 편집 거부를 발견해 소스에서 수정했습니다. 공개 및 설치본 0.5.1에는 아직 반영하지 않았습니다. [조건부 통과와 수정 검증](docs/local-install-0.5.1.md)을 따르며 다음 작업은 패치 배포입니다.
+0.5.2는 필드와 그룹의 기대값 비교에서 항목 순서 오류를 수정했습니다. 세 앱의 실제 설치본과 공개 패키지에서 편집과 같은 파일 저장 및 복구를 확인했습니다. CI와 실제 모델 호출 및 배치 대조의 버전별 근거는 [검증 기록](docs/verification.md)에 정리합니다.
 
 OpenAI 디렉터리는 스킬 전용 접수 제한으로 보류합니다. 원격 0.1.9와 Windows COM 프로토타입은 [이전 구현](docs/README.md#보관-자료)으로 보관합니다. 앞으로의 작업은 [remaining-work](docs/remaining-work.md)에서 관리합니다.
 

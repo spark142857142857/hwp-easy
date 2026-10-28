@@ -21,19 +21,19 @@ Support depends on document structure. Unverified structures may be read-only or
 
 ## Installation
 
-The common release is **0.5.1**. Install Node.js 22+ and choose your client.
+The common release is **0.5.2**. Install Node.js 22+ and choose your client.
 
 | Client | Install command | Format |
 | --- | --- | --- |
-| Codex | `npx hwp-easy@0.5.1 install --client codex` | Local plugin |
-| Claude Code | `npx hwp-easy@0.5.1 install --client claude-code` | Personal skill |
-| Cursor | `npx hwp-easy@0.5.1 install --client cursor` | Personal skill |
+| Codex | `npx hwp-easy@0.5.2 install --client codex` | Local plugin |
+| Claude Code | `npx hwp-easy@0.5.2 install --client claude-code` | Personal skill |
+| Cursor | `npx hwp-easy@0.5.2 install --client cursor` | Personal skill |
 
 Each command changes only the selected client's HWP Easy installation. Use `update` for an existing installation. Only the Codex target requires a Codex CLI with plugin commands. Public installation requires no npm account or 2FA.
 
 Restart the app, then explicitly select **HWP Easy** in Codex or invoke `/hwp-easy` in Claude Code and Cursor. All three clients use the same engine and feature scope; installed copies remain independent.
 
-Get the [npm package](https://www.npmjs.com/package/hwp-easy) or [GitHub release](https://github.com/spark142857142857/hwp-easy/releases/tag/hwp-easy-local-v0.5.1). See [installation and updates](docs/distribution.md) for ZIP installation and rollback. OpenAI public-directory publication is separate and has not occurred.
+Get the [npm package](https://www.npmjs.com/package/hwp-easy) or [GitHub release](https://github.com/spark142857142857/hwp-easy/releases/tag/hwp-easy-local-v0.5.2). See [installation and updates](docs/distribution.md) for ZIP installation and rollback. OpenAI public-directory publication is separate and has not occurred.
 
 ## Usage
 
@@ -81,9 +81,7 @@ Source lives on `main`; the complete distribution lives on `distribution`. See t
 
 ## Project status
 
-Checks on 0.5.1 cover installation for all three clients, updates from older versions, recovery from injected failures and installation rollback. Installed runners passed synthetic HWP editing, same-file saves and byte-exact restoration. Actual Claude Code and Cursor CLI model calls were also checked. The [unified release report](docs/unified-release-0.5.1.md) records the evidence and unverified environments.
-
-A subsequent fresh Codex chat exposed false edit refusals caused by JSON object member order. The source fix is tested but has not been released or installed. See the [conditional results and fix verification](docs/local-install-0.5.1.md); distributing the patch is the next task.
+Version 0.5.2 fixes false refusals caused by JSON object member order. Installed runtimes and public packages passed editing, same-file saves and restoration. The [verification record](docs/verification.md) distinguishes CI, model calls and layout checks by version.
 
 OpenAI directory submission is blocked by the skills-only intake restriction. Remote 0.1.9 and the Windows COM prototype remain [archived implementations](docs/README.md#보관-자료). See [remaining work](docs/remaining-work.md).
 
